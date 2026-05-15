@@ -12,6 +12,9 @@ __pycache__/
 venv/
 env/
 
+# Power BI
+*.pbix
+
 # Modeles IA (trop lourds pour GitHub)
 voicebank_ia/modeles_sauvegardes/
 voicebank_ia/graphiques_ia/
@@ -23,6 +26,11 @@ output_voicebank/
 node_modules/
 build/
 .npm
+
+
+# Data
+*.csv
+*.xlsx
 
 # OS
 .DS_Store

@@ -1,0 +1,154 @@
+
+<h2 class="sr-only">Rapport synthèse du dataset VoiceBank Analytics généré avec succès</h2>
+
+<div style="padding: 1rem 0;">
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin-bottom: 1.5rem;">
+    <div style="background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 1rem; text-align: center;">
+      <p style="font-size: 13px; color: var(--color-text-secondary); margin: 0 0 4px;">Clients</p>
+      <p style="font-size: 26px; font-weight: 500; margin: 0; color: var(--color-text-primary);">45 211</p>
+      <p style="font-size: 12px; color: var(--color-text-secondary); margin: 4px 0 0;">18 pays représentés</p>
+    </div>
+    <div style="background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 1rem; text-align: center;">
+      <p style="font-size: 13px; color: var(--color-text-secondary); margin: 0 0 4px;">Transactions</p>
+      <p style="font-size: 26px; font-weight: 500; margin: 0; color: var(--color-text-primary);">1 296 675</p>
+      <p style="font-size: 12px; color: var(--color-text-secondary); margin: 4px 0 0;">26.65% internationales</p>
+    </div>
+    <div style="background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 1rem; text-align: center;">
+      <p style="font-size: 13px; color: var(--color-text-secondary); margin: 0 0 4px;">Crédits</p>
+      <p style="font-size: 26px; font-weight: 500; margin: 0; color: var(--color-text-primary);">20 000</p>
+      <p style="font-size: 12px; color: var(--color-text-secondary); margin: 4px 0 0;">10.15% défaut/retard</p>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 16px; margin-bottom: 1.5rem;">
+
+    <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem;">
+      <p style="font-size: 13px; font-weight: 500; color: var(--color-text-secondary); margin: 0 0 12px;">Clients par pays de résidence</p>
+      <div style="position: relative; height: 220px;">
+        <canvas id="chartPays" role="img" aria-label="Répartition des clients par pays de résidence"></canvas>
+      </div>
+    </div>
+
+    <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem;">
+      <p style="font-size: 13px; font-weight: 500; color: var(--color-text-secondary); margin: 0 0 12px;">Statut des crédits</p>
+      <div style="position: relative; height: 220px;">
+        <canvas id="chartCredits" role="img" aria-label="Répartition des statuts de crédits"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem; margin-bottom: 1.5rem;">
+    <p style="font-size: 13px; font-weight: 500; color: var(--color-text-secondary); margin: 0 0 12px;">Composition du dataset — sources Kaggle vs générées</p>
+    <div style="position: relative; height: 180px;">
+      <canvas id="chartSources" role="img" aria-label="Composition du dataset par source de données"></canvas>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px;">
+    <div style="background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 0.75rem; text-align: center;">
+      <p style="font-size: 11px; color: var(--color-text-secondary); margin: 0 0 2px;">Résidents Cameroun</p>
+      <p style="font-size: 18px; font-weight: 500; margin: 0; color: var(--color-text-primary);">25 118</p>
+      <p style="font-size: 11px; color: var(--color-text-secondary); margin: 2px 0 0;">55.6%</p>
+    </div>
+    <div style="background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 0.75rem; text-align: center;">
+      <p style="font-size: 11px; color: var(--color-text-secondary); margin: 0 0 2px;">Diaspora</p>
+      <p style="font-size: 18px; font-weight: 500; margin: 0; color: var(--color-text-primary);">20 093</p>
+      <p style="font-size: 11px; color: var(--color-text-secondary); margin: 2px 0 0;">44.4%</p>
+    </div>
+    <div style="background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 0.75rem; text-align: center;">
+      <p style="font-size: 11px; color: var(--color-text-secondary); margin: 0 0 2px;">Transactions frauduleuses</p>
+      <p style="font-size: 18px; font-weight: 500; margin: 0; color: var(--color-text-primary);">7 506</p>
+      <p style="font-size: 11px; color: var(--color-text-secondary); margin: 2px 0 0;">0.58%</p>
+    </div>
+    <div style="background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 0.75rem; text-align: center;">
+      <p style="font-size: 11px; color: var(--color-text-secondary); margin: 0 0 2px;">Txn internationales</p>
+      <p style="font-size: 18px; font-weight: 500; margin: 0; color: var(--color-text-primary);">345 545</p>
+      <p style="font-size: 11px; color: var(--color-text-secondary); margin: 2px 0 0;">26.65%</p>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+const textColor = isDark ? '#b4b2a9' : '#888780';
+
+new Chart(document.getElementById('chartPays'), {
+  type: 'bar',
+  data: {
+    labels: ['Cameroun','France','États-Unis','Canada','Royaume-Uni','Belgique','Côte d\'Ivoire','Nigeria','Gabon','Autres'],
+    datasets: [{
+      label: 'Clients',
+      data: [25118, 5451, 2310, 1888, 1377, 1245, 890, 870, 840, 5222],
+      backgroundColor: '#185FA5',
+      borderRadius: 3,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: textColor, font: { size: 10 } }, grid: { display: false } },
+      y: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' } }
+    }
+  }
+});
+
+new Chart(document.getElementById('chartCredits'), {
+  type: 'doughnut',
+  data: {
+    labels: ['En cours','Remboursé','En retard','Défaut'],
+    datasets: [{
+      data: [16973, 1513, 763, 751],
+      backgroundColor: ['#185FA5','#1D9E75','#BA7517','#A32D2D'],
+      borderWidth: 0,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: { color: textColor, font: { size: 11 }, boxWidth: 10, padding: 10 }
+      }
+    }
+  }
+});
+
+new Chart(document.getElementById('chartSources'), {
+  type: 'bar',
+  data: {
+    labels: ['Clients','Transactions','Crédits'],
+    datasets: [
+      {
+        label: 'Kaggle (réelles)',
+        data: [45211 - 38000, 1296675 - 1000000, 20000 - 14000],
+        backgroundColor: '#1D9E75',
+        borderRadius: 3,
+      },
+      {
+        label: 'Générées',
+        data: [38000, 1000000, 14000],
+        backgroundColor: '#185FA5',
+        borderRadius: 3,
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    indexAxis: 'y',
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: { color: textColor, font: { size: 11 }, boxWidth: 10, padding: 10 }
+      }
+    },
+    scales: {
+      x: { stacked: true, ticks: { color: textColor, font: { size: 10 } }, grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' } },
+      y: { stacked: true, ticks: { color: textColor, font: { size: 11 } }, grid: { display: false } }
+    }
+  }
+});
+</script>

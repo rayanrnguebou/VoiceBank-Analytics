@@ -1,0 +1,282 @@
+
+<h2 class="sr-only">Guide complet Power BI connecté à PostgreSQL VoiceBank</h2>
+
+<div style="padding: 1rem 0;">
+
+  <div style="display: flex; gap: 8px; margin-bottom: 1.5rem; flex-wrap: wrap;">
+    <button onclick="showStep(1)" id="btn1" style="font-size:12px; padding: 6px 12px; border-radius: var(--border-radius-md); border: 2px solid var(--color-border-info); background: var(--color-background-info); color: var(--color-text-info); cursor:pointer; font-weight:500;">① Connexion</button>
+    <button onclick="showStep(2)" id="btn2" style="font-size:12px; padding: 6px 12px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary); cursor:pointer;">② Importer les vues</button>
+    <button onclick="showStep(3)" id="btn3" style="font-size:12px; padding: 6px 12px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary); cursor:pointer;">③ Modèle de données</button>
+    <button onclick="showStep(4)" id="btn4" style="font-size:12px; padding: 6px 12px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary); cursor:pointer;">④ Visuels</button>
+    <button onclick="showStep(5)" id="btn5" style="font-size:12px; padding: 6px 12px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary); cursor:pointer;">⑤ Publier</button>
+  </div>
+
+  <!-- ÉTAPE 1 : Connexion -->
+  <div id="step1">
+    <p style="font-size:13px; color: var(--color-text-secondary); margin-bottom: 14px;">Avant tout, installe le driver PostgreSQL pour Power BI si ce n'est pas déjà fait.</p>
+
+    <div style="background: var(--color-background-warning); border: 0.5px solid var(--color-border-warning); border-radius: var(--border-radius-md); padding: 10px 14px; font-size: 12px; color: var(--color-text-warning); margin-bottom: 14px;">
+      <i class="ti ti-alert-triangle" aria-hidden="true"></i> <strong>Prérequis :</strong> Télécharge et installe le driver Npgsql depuis :
+      <div style="font-family: var(--font-mono); margin-top:6px; font-size:11px;">https://github.com/npgsql/npgsql/releases</div>
+      <div style="margin-top:4px; font-size:11px;">Cherche le fichier <strong>Npgsql-x.x.x.msi</strong> → installe → redémarre Power BI</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 12px 14px; display:flex; gap: 12px;">
+        <div style="min-width:26px; height:26px; border-radius:50%; background: var(--color-background-info); color: var(--color-text-info); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600;">1</div>
+        <div>
+          <p style="font-size:13px; font-weight:500; margin: 0 0 4px;">Ouvre Power BI Desktop</p>
+          <p style="font-size:12px; color: var(--color-text-secondary); margin:0;">Clique sur <strong>Obtenir les données</strong> → cherche <strong>PostgreSQL</strong></p>
+        </div>
+      </div>
+      <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 12px 14px; display:flex; gap: 12px;">
+        <div style="min-width:26px; height:26px; border-radius:50%; background: var(--color-background-info); color: var(--color-text-info); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600;">2</div>
+        <div>
+          <p style="font-size:13px; font-weight:500; margin: 0 0 8px;">Remplis les champs de connexion</p>
+          <table style="width:100%; font-size:12px; border-collapse: collapse; font-family: var(--font-mono);">
+            <tr style="border-bottom: 0.5px solid var(--color-border-tertiary);">
+              <td style="padding: 6px 8px; color: var(--color-text-secondary);">Serveur</td>
+              <td style="padding: 6px 8px; font-weight:500;">localhost</td>
+            </tr>
+            <tr style="border-bottom: 0.5px solid var(--color-border-tertiary);">
+              <td style="padding: 6px 8px; color: var(--color-text-secondary);">Base de données</td>
+              <td style="padding: 6px 8px; font-weight:500;">voicebank_db</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 8px; color: var(--color-text-secondary);">Mode</td>
+              <td style="padding: 6px 8px; font-weight:500;">Importation</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+      <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 12px 14px; display:flex; gap: 12px;">
+        <div style="min-width:26px; height:26px; border-radius:50%; background: var(--color-background-info); color: var(--color-text-info); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600;">3</div>
+        <div>
+          <p style="font-size:13px; font-weight:500; margin: 0 0 4px;">Identifiants</p>
+          <table style="width:100%; font-size:12px; border-collapse: collapse; font-family: var(--font-mono);">
+            <tr style="border-bottom: 0.5px solid var(--color-border-tertiary);">
+              <td style="padding: 6px 8px; color: var(--color-text-secondary);">Utilisateur</td>
+              <td style="padding: 6px 8px; font-weight:500;">voicebank_user</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 8px; color: var(--color-text-secondary);">Mot de passe</td>
+              <td style="padding: 6px 8px; font-weight:500;">voicebank2024</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ÉTAPE 2 : Importer les vues -->
+  <div id="step2" style="display:none;">
+    <p style="font-size:13px; color: var(--color-text-secondary); margin-bottom: 14px;">Une fois connecté, le navigateur de tables s'ouvre. Sélectionne ces éléments dans le schéma <strong>voicebank</strong> :</p>
+
+    <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;">
+
+      <p style="font-size:12px; font-weight:500; color: var(--color-text-secondary); margin:0;">Tables à importer :</p>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-info); border-radius: var(--border-radius-md); padding: 10px 12px; display:flex; align-items:center; gap:8px;">
+          <i class="ti ti-table" style="color: var(--color-text-info); font-size:15px;" aria-hidden="true"></i>
+          <div>
+            <p style="font-size:12px; font-weight:500; font-family: var(--font-mono); margin:0;">clients</p>
+            <p style="font-size:11px; color: var(--color-text-secondary); margin:0;">45 211 lignes</p>
+          </div>
+        </div>
+        <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-info); border-radius: var(--border-radius-md); padding: 10px 12px; display:flex; align-items:center; gap:8px;">
+          <i class="ti ti-table" style="color: var(--color-text-info); font-size:15px;" aria-hidden="true"></i>
+          <div>
+            <p style="font-size:12px; font-weight:500; font-family: var(--font-mono); margin:0;">transactions</p>
+            <p style="font-size:11px; color: var(--color-text-secondary); margin:0;">1 296 675 lignes</p>
+          </div>
+        </div>
+        <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-info); border-radius: var(--border-radius-md); padding: 10px 12px; display:flex; align-items:center; gap:8px;">
+          <i class="ti ti-table" style="color: var(--color-text-info); font-size:15px;" aria-hidden="true"></i>
+          <div>
+            <p style="font-size:12px; font-weight:500; font-family: var(--font-mono); margin:0;">credits</p>
+            <p style="font-size:11px; color: var(--color-text-secondary); margin:0;">20 000 lignes</p>
+          </div>
+        </div>
+      </div>
+
+      <p style="font-size:12px; font-weight:500; color: var(--color-text-secondary); margin:8px 0 0;">Vues à importer (déjà agrégées → rapides) :</p>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-success); border-radius: var(--border-radius-md); padding: 10px 12px; display:flex; align-items:center; gap:8px;">
+          <i class="ti ti-eye" style="color: var(--color-text-success); font-size:15px;" aria-hidden="true"></i>
+          <p style="font-size:11px; font-family: var(--font-mono); margin:0;">v_dashboard_global</p>
+        </div>
+        <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-success); border-radius: var(--border-radius-md); padding: 10px 12px; display:flex; align-items:center; gap:8px;">
+          <i class="ti ti-eye" style="color: var(--color-text-success); font-size:15px;" aria-hidden="true"></i>
+          <p style="font-size:11px; font-family: var(--font-mono); margin:0;">v_clients_par_banque</p>
+        </div>
+        <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-success); border-radius: var(--border-radius-md); padding: 10px 12px; display:flex; align-items:center; gap:8px;">
+          <i class="ti ti-eye" style="color: var(--color-text-success); font-size:15px;" aria-hidden="true"></i>
+          <p style="font-size:11px; font-family: var(--font-mono); margin:0;">v_transactions_mensuelles</p>
+        </div>
+        <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-success); border-radius: var(--border-radius-md); padding: 10px 12px; display:flex; align-items:center; gap:8px;">
+          <i class="ti ti-eye" style="color: var(--color-text-success); font-size:15px;" aria-hidden="true"></i>
+          <p style="font-size:11px; font-family: var(--font-mono); margin:0;">v_portefeuille_credit</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="background: var(--color-background-info); border: 0.5px solid var(--color-border-info); border-radius: var(--border-radius-md); padding: 10px 14px; font-size: 12px; color: var(--color-text-info);">
+      <i class="ti ti-info-circle" aria-hidden="true"></i> Clique sur <strong>Transformer les données</strong> (pas Charger directement) pour vérifier les types avant import.
+    </div>
+  </div>
+
+  <!-- ÉTAPE 3 : Modèle de données -->
+  <div id="step3" style="display:none;">
+    <p style="font-size:13px; color: var(--color-text-secondary); margin-bottom: 14px;">Dans l'onglet <strong>Modèle</strong> de Power BI, crée les relations entre les tables :</p>
+
+    <div style="background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 1.25rem; margin-bottom: 14px;">
+      <div style="display: flex; flex-direction: column; gap: 16px; align-items: center;">
+
+        <div style="background: var(--color-background-primary); border: 2px solid var(--color-border-info); border-radius: var(--border-radius-md); padding: 10px 20px; text-align:center;">
+          <p style="font-size:12px; font-weight:600; font-family: var(--font-mono); margin:0; color: var(--color-text-info);">clients</p>
+          <p style="font-size:11px; color: var(--color-text-secondary); margin:2px 0 0;">id_client (PK)</p>
+        </div>
+
+        <div style="display: flex; gap: 40px; align-items: flex-start;">
+          <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+            <div style="width:1px; height:30px; background: var(--color-border-secondary);"></div>
+            <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 10px 16px; text-align:center;">
+              <p style="font-size:12px; font-weight:500; font-family: var(--font-mono); margin:0;">transactions</p>
+              <p style="font-size:11px; color: var(--color-text-secondary); margin:2px 0 0;">id_client (FK) → 1:N</p>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+            <div style="width:1px; height:30px; background: var(--color-border-secondary);"></div>
+            <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 10px 16px; text-align:center;">
+              <p style="font-size:12px; font-weight:500; font-family: var(--font-mono); margin:0;">credits</p>
+              <p style="font-size:11px; color: var(--color-text-secondary); margin:2px 0 0;">id_client (FK) → 1:N</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-size:13px; color: var(--color-text-secondary); margin-bottom: 10px;">Pour créer une relation :</p>
+    <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 12px 14px; font-size:12px; line-height:1.8; color: var(--color-text-secondary);">
+      Onglet <strong style="color: var(--color-text-primary);">Modèle</strong> → glisse <code>clients.id_client</code> vers <code>transactions.id_client</code> → Power BI crée la relation automatiquement → répète pour <code>credits</code>
+    </div>
+  </div>
+
+  <!-- ÉTAPE 4 : Visuels -->
+  <div id="step4" style="display:none;">
+    <p style="font-size:13px; color: var(--color-text-secondary); margin-bottom: 14px;">Voici les <strong>6 visuels clés</strong> à créer pour le dashboard VoiceBank :</p>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+
+      <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 12px 14px;">
+        <p style="font-size:12px; font-weight:500; margin:0 0 6px; display:flex; align-items:center; gap:6px;">
+          <i class="ti ti-chart-bar" style="color: var(--color-text-info);" aria-hidden="true"></i> KPI Cards
+        </p>
+        <p style="font-size:11px; color: var(--color-text-secondary); margin:0;">Total clients · Volume transactions · Taux fraude · Encours crédit</p>
+        <p style="font-size:11px; color: var(--color-text-info); margin:6px 0 0;">Source : v_dashboard_global</p>
+      </div>
+
+      <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 12px 14px;">
+        <p style="font-size:12px; font-weight:500; margin:0 0 6px; display:flex; align-items:center; gap:6px;">
+          <i class="ti ti-chart-line" style="color: var(--color-text-success);" aria-hidden="true"></i> Courbe transactions / mois
+        </p>
+        <p style="font-size:11px; color: var(--color-text-secondary); margin:0;">Volume mensuel avec courbe de fraudes superposée</p>
+        <p style="font-size:11px; color: var(--color-text-info); margin:6px 0 0;">Source : v_transactions_mensuelles</p>
+      </div>
+
+      <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 12px 14px;">
+        <p style="font-size:12px; font-weight:500; margin:0 0 6px; display:flex; align-items:center; gap:6px;">
+          <i class="ti ti-chart-donut" style="color: var(--color-text-warning);" aria-hidden="true"></i> Répartition clients
+        </p>
+        <p style="font-size:11px; color: var(--color-text-secondary); margin:0;">Camembert Local vs Diaspora par pays de résidence</p>
+        <p style="font-size:11px; color: var(--color-text-info); margin:6px 0 0;">Source : clients</p>
+      </div>
+
+      <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 12px 14px;">
+        <p style="font-size:12px; font-weight:500; margin:0 0 6px; display:flex; align-items:center; gap:6px;">
+          <i class="ti ti-map" style="color: var(--color-text-warning);" aria-hidden="true"></i> Carte géographique
+        </p>
+        <p style="font-size:11px; color: var(--color-text-secondary); margin:0;">Bulles sur carte par ville — volume transactions</p>
+        <p style="font-size:11px; color: var(--color-text-info); margin:6px 0 0;">Source : transactions</p>
+      </div>
+
+      <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 12px 14px;">
+        <p style="font-size:12px; font-weight:500; margin:0 0 6px; display:flex; align-items:center; gap:6px;">
+          <i class="ti ti-shield-exclamation" style="color: #A32D2D;" aria-hidden="true"></i> Fraudes par banque
+        </p>
+        <p style="font-size:11px; color: var(--color-text-secondary); margin:0;">Barres comparatives taux de fraude par banque</p>
+        <p style="font-size:11px; color: var(--color-text-info); margin:6px 0 0;">Source : v_clients_par_banque</p>
+      </div>
+
+      <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 12px 14px;">
+        <p style="font-size:12px; font-weight:500; margin:0 0 6px; display:flex; align-items:center; gap:6px;">
+          <i class="ti ti-coin" style="color: var(--color-text-success);" aria-hidden="true"></i> Portefeuille crédit
+        </p>
+        <p style="font-size:11px; color: var(--color-text-secondary); margin:0;">Statuts crédits · Taux défaut · Encours par type</p>
+        <p style="font-size:11px; color: var(--color-text-info); margin:6px 0 0;">Source : v_portefeuille_credit</p>
+      </div>
+
+    </div>
+
+    <div style="margin-top: 12px; background: var(--color-background-info); border: 0.5px solid var(--color-border-info); border-radius: var(--border-radius-md); padding: 10px 14px; font-size: 12px; color: var(--color-text-info);">
+      <i class="ti ti-bulb" aria-hidden="true"></i> Ajoute des <strong>Slicers</strong> (filtres interactifs) pour : Banque · Ville · Période · Pays de résidence — ça rend le dashboard vraiment dynamique.
+    </div>
+  </div>
+
+  <!-- ÉTAPE 5 : Publier -->
+  <div id="step5" style="display:none;">
+    <p style="font-size:13px; color: var(--color-text-secondary); margin-bottom: 14px;">Une fois le dashboard terminé, publie-le sur <strong>Power BI Service</strong> pour obtenir un lien URL à intégrer dans VoiceBank :</p>
+
+    <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px;">
+      <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 12px 14px; display:flex; gap:12px;">
+        <div style="min-width:26px; height:26px; border-radius:50%; background: var(--color-background-info); color: var(--color-text-info); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600;">1</div>
+        <div>
+          <p style="font-size:13px; font-weight:500; margin:0 0 4px;">Fichier → Publier → Power BI Service</p>
+          <p style="font-size:12px; color: var(--color-text-secondary); margin:0;">Connexion avec ton compte Microsoft gratuit (compte étudiant parfait)</p>
+        </div>
+      </div>
+      <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 12px 14px; display:flex; gap:12px;">
+        <div style="min-width:26px; height:26px; border-radius:50%; background: var(--color-background-info); color: var(--color-text-info); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600;">2</div>
+        <div>
+          <p style="font-size:13px; font-weight:500; margin:0 0 4px;">Récupère le lien du rapport</p>
+          <p style="font-size:12px; color: var(--color-text-secondary); margin:0;">Sur Power BI Service → <strong>Fichier → Incorporer le rapport → Site web ou portail</strong> → copie l'URL</p>
+        </div>
+      </div>
+      <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 12px 14px; display:flex; gap:12px;">
+        <div style="min-width:26px; height:26px; border-radius:50%; background: var(--color-background-info); color: var(--color-text-info); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600;">3</div>
+        <div>
+          <p style="font-size:13px; font-weight:500; margin:0 0 4px;">Ce lien → bouton dans VoiceBank</p>
+          <p style="font-size:12px; color: var(--color-text-secondary); margin:0 0 8px;">Dans l'interface React, le bouton ouvrira directement ce rapport :</p>
+          <div style="background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 8px 12px; font-family: var(--font-mono); font-size:11px;">
+            window.open("https://app.powerbi.com/...", "_blank")
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background: var(--color-background-success); border: 0.5px solid var(--color-border-success); border-radius: var(--border-radius-md); padding: 10px 14px; font-size: 13px; color: var(--color-text-success);">
+      <i class="ti ti-circle-check" aria-hidden="true"></i> Dashboard Power BI publié + bouton intégré → Phase 2 complète ! On passe aux modèles IA 🚀
+    </div>
+  </div>
+
+</div>
+
+<script>
+function showStep(n) {
+  [1,2,3,4,5].forEach(i => {
+    document.getElementById('step'+i).style.display = i===n ? 'block' : 'none';
+    const btn = document.getElementById('btn'+i);
+    if (i===n) {
+      btn.style.border = '2px solid var(--color-border-info)';
+      btn.style.background = 'var(--color-background-info)';
+      btn.style.color = 'var(--color-text-info)';
+      btn.style.fontWeight = '500';
+    } else {
+      btn.style.border = '0.5px solid var(--color-border-tertiary)';
+      btn.style.background = 'transparent';
+      btn.style.color = 'var(--color-text-primary)';
+      btn.style.fontWeight = '400';
+    }
+  });
+}
+</script>

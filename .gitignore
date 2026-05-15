@@ -1,0 +1,34 @@
+# Environnement
+.env
+.env.local
+.env.production
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+
+# Modeles IA (trop lourds pour GitHub)
+voicebank_ia/modeles_sauvegardes/
+voicebank_ia/graphiques_ia/
+
+# Donnees (trop lourdes pour GitHub)
+output_voicebank/
+
+# Node
+node_modules/
+build/
+.npm
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp

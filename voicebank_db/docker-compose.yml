@@ -1,0 +1,72 @@
+version: "3.9"
+
+# ╔══════════════════════════════════════════════════════╗
+# ║   VOICEBANK ANALYTICS — Infrastructure Base de données ║
+# ║   Auteur : Nguebou Temgoua Rayan                     ║
+# ╚══════════════════════════════════════════════════════╝
+
+services:
+
+  # ─────────────────────────────────────────
+  # PostgreSQL — Base de données principale
+  # ─────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: voicebank_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: voicebank_db
+      POSTGRES_USER: voicebank_user
+      POSTGRES_PASSWORD: voicebank2024
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d   # scripts SQL exécutés au démarrage
+    networks:
+      - voicebank_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voicebank_user -d voicebank_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────
+  # pgAdmin — Interface graphique PostgreSQL
+  # ─────────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: voicebank_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: rayan@voicebank.cm
+      PGADMIN_DEFAULT_PASSWORD: voicebank2024
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json  # connexion auto
+    networks:
+      - voicebank_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+# ─────────────────────────────────────────
+# Volumes persistants
+# ─────────────────────────────────────────
+volumes:
+  postgres_data:
+    name: voicebank_postgres_data
+  pgadmin_data:
+    name: voicebank_pgadmin_data
+
+# ─────────────────────────────────────────
+# Réseau interne
+# ─────────────────────────────────────────
+networks:
+  voicebank_network:
+    name: voicebank_network
+    driver: bridge

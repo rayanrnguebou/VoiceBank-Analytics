@@ -111,7 +111,7 @@ def transcrire_avec_groq(chemin_audio: str) -> str:
 whisper_model = True  # Indique que la transcription est disponible
 print("OK Whisper via Groq API configure" if GROQ_KEY else "WARN: GROQ_API_KEY non definie")
 
-charger_whisper()
+# charger_whisper()
 
 # ════════════════════════════════════════
 # GEMINI

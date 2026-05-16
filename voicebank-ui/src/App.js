@@ -22,7 +22,7 @@ import {
 // ════════════════════════════════════════
 
 // const API          = "http://localhost:8000";
-const API = process.env.REACT_APP_API_URL || "http://localhost:8000";
+const API = (process.env.REACT_APP_API_URL || "http://localhost:8000").replace(/\/$/, "");
 const POWER_BI_URL = "https://app.powerbi.com/Redirect?action=OpenApp&appId=717f0c68-b0c5-414c-bc70-284cbb74faba&ctid=2cbedfc8-117c-4769-8801-ad6ec8ca9c7e&experience=power-bi";
 const COULEURS     = ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#06B6D4","#F97316","#84CC16","#EC4899","#14B8A6"];
 const CLE_STORAGE  = "voicebank_historique";

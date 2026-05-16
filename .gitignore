@@ -24,7 +24,6 @@ output_voicebank/
 
 # Node
 node_modules/
-build/
 .npm
 
 # Executables

@@ -39,7 +39,8 @@ DB_URL      = os.getenv("DATABASE_URL",
 GEMINI_KEY  = os.getenv("GEMINI_API_KEY", "")
 # MODELS_DIR  = "../voicebank_ia/modeles_sauvegardes"
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
-MODELS_DIR = os.path.join(BASE_DIR, "..", "voicebank_ia", "modeles_sauvegardes")
+MODELS_DIR = os.path.join(BASE_DIR, "voicebank_ia", "modeles_sauvegardes")
+print(f"INFO: Chemin modeles = {MODELS_DIR}")
 SEUIL_RAG   = 0.45    # score de similarite minimum pour utiliser une correction
 
 # ════════════════════════════════════════

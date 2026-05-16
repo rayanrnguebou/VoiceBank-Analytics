@@ -15,6 +15,9 @@ RUN apt-get update && apt-get install -y \
 # Mettre à jour pip + installer setuptools (requis par openai-whisper)
 RUN pip install --upgrade pip setuptools wheel
 
+RUN pip install --no-cache-dir \
+    "openai-whisper @ git+https://github.com/openai/whisper.git@v20240930"
+
 # Copier et installer les dépendances Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

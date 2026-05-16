@@ -15,12 +15,11 @@ from datetime import datetime
 from typing import Optional
 
 # Ajoute ffmpeg local au PATH pour Whisper sous Windows
-_FFMPEG_BIN = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "voicebank_whisper", "ffmpeg-2026-05-11-git-17bc88e67f-essentials_build", "bin"))
-if os.path.isdir(_FFMPEG_BIN):
-    os.environ["PATH"] += os.pathsep + _FFMPEG_BIN
-    print(f"INFO: ffmpeg local ajouté au PATH : {_FFMPEG_BIN}")
+_FFMPEG_BIN = shutil.which("ffmpeg")
+if _FFMPEG_BIN:
+    print(f"INFO: ffmpeg disponible : {_FFMPEG_BIN}")
 else:
-    print(f"WARN: dossier ffmpeg introuvable : {_FFMPEG_BIN}")
+    print("WARN: ffmpeg introuvable dans le PATH")
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,7 +37,9 @@ load_dotenv()
 DB_URL      = os.getenv("DATABASE_URL",
               "postgresql://voicebank_user:voicebank2024@localhost:5432/voicebank_db")
 GEMINI_KEY  = os.getenv("GEMINI_API_KEY", "")
-MODELS_DIR  = "../voicebank_ia/modeles_sauvegardes"
+# MODELS_DIR  = "../voicebank_ia/modeles_sauvegardes"
+BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
+MODELS_DIR = os.path.join(BASE_DIR, "..", "voicebank_ia", "modeles_sauvegardes")
 SEUIL_RAG   = 0.45    # score de similarite minimum pour utiliser une correction
 
 # ════════════════════════════════════════
@@ -91,19 +92,24 @@ def charger_modeles():
 charger_modeles()
 
 # ════════════════════════════════════════
-# WHISPER
+# WHISPER via GROQ API (remplace Whisper local)
 # ════════════════════════════════════════
 
-whisper_model = None
+GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 
-def charger_whisper():
-    global whisper_model
-    try:
-        import whisper as whisper_lib
-        whisper_model = whisper_lib.load_model("base")
-        print("OK Whisper charge")
-    except Exception as e:
-        print(f"ATTENTION Whisper non charge : {e}")
+def transcrire_avec_groq(chemin_audio: str) -> str:
+    from groq import Groq
+    client_groq = Groq(api_key=GROQ_KEY)
+    with open(chemin_audio, "rb") as f:
+        result = client_groq.audio.transcriptions.create(
+            file=(os.path.basename(chemin_audio), f.read()),
+            model="whisper-large-v3",
+            language="fr",
+        )
+    return result.text.strip()
+
+whisper_model = True  # Indique que la transcription est disponible
+print("OK Whisper via Groq API configure" if GROQ_KEY else "WARN: GROQ_API_KEY non definie")
 
 charger_whisper()
 
@@ -497,7 +503,8 @@ def health():
         "status"    : "ok" if db_ok else "degraded",
         "database"  : "connectee" if db_ok else "deconnectee",
         "gemini"    : "disponible" if gemini_client else "non configure",
-        "whisper"   : "charge" if whisper_model else "non charge",
+        #"whisper"   : "charge" if whisper_model else "non charge",
+        "whisper"   : "groq-api" if GROQ_KEY else "non configure",
         "modeles_ia": list(modeles.keys()),
         "timestamp" : datetime.now().isoformat(),
     }
@@ -771,9 +778,10 @@ async def transcrire_audio(fichier: UploadFile = File(...)):
         print(f"✓ Audio reçu ({taille} bytes) → {chemin_tmp}")
         
         # Transcrire avec verbose=False pour moins de bruit
-        result = whisper_model.transcribe(chemin_tmp, language="fr", fp16=False, verbose=False)
-        texte = result.get("text", "").strip()
-        
+       # result = whisper_model.transcribe(chemin_tmp, language="fr", fp16=False, verbose=False)
+       # texte = result.get("text", "").strip()
+        texte = transcrire_avec_groq(chemin_tmp)
+
         if not texte:
             raise Exception("Whisper n'a détecté aucun texte")
         
@@ -807,8 +815,10 @@ async def pipeline_vocal_complet(fichier: UploadFile = File(...)):
     with tempfile.NamedTemporaryFile(suffix=f".{extension}", delete=False) as f:
         f.write(contenu); chemin_tmp = f.name
     try:
-        result    = whisper_model.transcribe(chemin_tmp, language="fr", fp16=False)
-        texte     = result["text"].strip()
+        #result    = whisper_model.transcribe(chemin_tmp, language="fr", fp16=False)
+        #texte     = result["text"].strip()
+        texte = transcrire_avec_groq(chemin_tmp)
+
         sql, source, score = texte_vers_sql(texte)
         colonnes, rows     = executer_sql(sql)
         duree_ms  = int((time.time() - debut) * 1000)

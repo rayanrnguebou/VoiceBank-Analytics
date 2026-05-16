@@ -1012,19 +1012,25 @@ export default function App() {
   const [stats, setStats]           = useState(null);
   const { appeler, chargement }     = useAPI();
 
-  useEffect(() => {
+useEffect(() => {
     try {
       const saved = localStorage.getItem(CLE_STORAGE);
       if (saved) setHistorique(JSON.parse(saved));
     } catch (e) {}
 
-    appeler("get", "/dashboard").then(res => { if (res?.data) setDashboard(res.data); });
-    appeler("get", "/stats/global").then(res => { if (res?.data) setStats(res.data); });
-  }, []);
+    appeler("get", "/dashboard").then(res => {
+      if (res?.data) setDashboard(res.data);
+    });
+    appeler("get", "/stats/global").then(res => {
+      if (res?.data) setStats(res.data);
+    });
+  }, [appeler]); // ← ajoute appeler ici
 
-  useEffect(() => {
-    try { localStorage.setItem(CLE_STORAGE, JSON.stringify(historique)); } catch (e) {}
-  }, [historique]);
+useEffect(() => {
+    appeler("get", `/alertes/fraude?niveau=${filtre}&limit=8`).then(res => {
+      if (res) setAlertes(res.data);
+    });
+  }, [filtre, appeler]); // ← ajoute appeler
 
   const poserQuestion = async (texte, clearInput = true) => {
     const q = (texte || question).trim();

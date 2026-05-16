@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
+RUN pip install --upgrade pip setuptools wheel
+
 # Copier et installer les dependances Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

@@ -1,31 +1,22 @@
-# VOICEBANK ANALYTICS - Dockerfile API FastAPI
-# Auteur : Nguebou Temgoua Rayan
+# VoiceBank Analytics — API FastAPI
+# Build depuis la RACINE du dépôt : docker build -f voicebank_api/Dockerfile .
+FROM python:3.12-slim
 
-FROM python:3.10-slim
-
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 ENV=production
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    libsndfile1 \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN pip install --upgrade pip setuptools wheel
-
-# Chemin correct depuis la racine du dépôt
 COPY voicebank_api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copier l'API
-COPY voicebank_api/ .
+COPY voicebank_api/main.py ./main.py
+COPY voicebank_api/app ./app
+COPY voicebank_ia/modeles_sauvegardes ./voicebank_ia/modeles_sauvegardes
 
-# Copier les modèles IA
-COPY voicebank_ia/ ./voicebank_ia/
+# Utilisateur sans privilèges
+RUN useradd --create-home --uid 10001 voicebank && chown -R voicebank /app
+USER voicebank
 
 EXPOSE 8000
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)"
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]

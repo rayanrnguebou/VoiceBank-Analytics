@@ -1,9 +1,9 @@
-// VOICEBANK ANALYTICS — Interface React v2
+// VOICEBANK ANALYTICS — Interface React v3
 // Auteur : Nguebou Temgoua Rayan
-// Ajout : Onglet Historique avec sélection et export PDF avec diagrammes
+// v3 : connexion sécurisée, corrections de bugs, analyse de transaction IA
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import axios from "axios";
+import { http, lireSession, connexion, deconnexion, messageErreur } from "./api";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -14,18 +14,38 @@ import {
   Database, Activity, Users, CreditCard,
   ShieldAlert, TrendingUp, ExternalLink,
   Trash2, ChevronDown, ChevronUp, Download,
-  History, CheckSquare, Square, FileText
+  History, CheckSquare, Square, FileText, LogOut, Lock, AlertTriangle, X
 } from "lucide-react";
 
 // ════════════════════════════════════════
 // CONFIGURATION
 // ════════════════════════════════════════
 
-// const API          = "http://localhost:8000";
-const API = (process.env.REACT_APP_API_URL || "http://localhost:8000").replace(/\/$/, "");
-const POWER_BI_URL = "https://app.powerbi.com/Redirect?action=OpenApp&appId=717f0c68-b0c5-414c-bc70-284cbb74faba&ctid=2cbedfc8-117c-4769-8801-ad6ec8ca9c7e&experience=power-bi";
+const POWER_BI_URL = process.env.REACT_APP_POWER_BI_URL || "";
 const COULEURS     = ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#06B6D4","#F97316","#84CC16","#EC4899","#14B8A6"];
 const CLE_STORAGE  = "voicebank_historique";
+const MAX_HISTORIQUE = 30;      // entrées conservées
+const MAX_LIGNES_HISTO = 200;   // lignes de données gardées par entrée
+
+const SOURCES = {
+  rag:    { label: "RAG",    classe: "bg-emerald-100 text-emerald-700" },
+  rule:   { label: "Règle",  classe: "bg-amber-100 text-amber-700" },
+  gemini: { label: "Gemini", classe: "bg-blue-100 text-blue-700" },
+};
+
+// Historique en sessionStorage (effacé à la fermeture de l'onglet et à la déconnexion) :
+// il contient des données clients, il ne doit pas rester dans le navigateur.
+function chargerHistorique(utilisateur) {
+  try { return JSON.parse(sessionStorage.getItem(`${CLE_STORAGE}_${utilisateur}`) || "[]"); }
+  catch (e) { return []; }
+}
+function sauverHistorique(utilisateur, historique) {
+  try {
+    const compact = historique.slice(0, MAX_HISTORIQUE)
+      .map(h => ({ ...h, data: (h.data || []).slice(0, MAX_LIGNES_HISTO) }));
+    sessionStorage.setItem(`${CLE_STORAGE}_${utilisateur}`, JSON.stringify(compact));
+  } catch (e) { /* quota dépassé ou stockage indisponible */ }
+}
 
 // ════════════════════════════════════════
 // UTILITAIRES
@@ -82,12 +102,12 @@ function useAPI() {
     setChargement(true);
     setErreur(null);
     try {
-      const config = { method: methode, url: `${API}${url}`, ...options };
+      const config = { method: methode, url, ...options };
       if (data) config.data = data;
-      const res = await axios(config);
+      const res = await http(config);
       return res.data;
     } catch (e) {
-      setErreur(e.response?.data?.detail || e.message);
+      setErreur(messageErreur(e));
       return null;
     } finally {
       setChargement(false);
@@ -107,10 +127,10 @@ function PanelAlertes({ dark }) {
   const [filtre, setFiltre]   = useState("Critique");
 
   useEffect(() => {
-    appeler("get", `/alertes/fraude?niveau=${filtre}&limit=8`).then(res => {
-      if (res) setAlertes(res.data);
+    appeler("get", `/alertes/fraude?niveau=${encodeURIComponent(filtre)}&limit=8`).then(res => {
+      setAlertes(res ? res.data : []);
     });
-  }, [filtre]);
+  }, [filtre, appeler]);
 
   const couleurNiveau = {
     Critique: "text-red-500 bg-red-100",
@@ -177,7 +197,7 @@ function PanelGraphiques({ dark, stats }) {
     parMois[cle].transactions += m.nb_transactions || 0;
     parMois[cle].fraudes      += m.nb_fraudes      || 0;
   });
-  const dataMois = Object.values(parMois).slice(0, 12);
+  const dataMois = Object.values(parMois).slice(-12);  // l'API renvoie les mois en ordre chronologique
   const axisStyle = { fill: dark ? "#9CA3AF" : "#6B7280", fontSize: 11 };
 
   return (
@@ -350,7 +370,7 @@ function GraphiquePourPDF({ colonnes, data }) {
     }));
     return (
       <PieChart width={500} height={240}>
-        <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={({name}) => name.slice(0,14)}>
+        <Pie isAnimationActive={false} data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={({name}) => name.slice(0,14)}>
           {pieData.map((_, i) => <Cell key={i} fill={COULEURS[i % COULEURS.length]} />)}
         </Pie>
         <Tooltip {...tooltipStyle} />
@@ -365,7 +385,7 @@ function GraphiquePourPDF({ colonnes, data }) {
         <XAxis dataKey={cleDateKey} tick={axisStyle} tickFormatter={v => String(v).slice(0, 10)} />
         <YAxis tick={axisStyle} tickFormatter={formaterValeur} />
         <Tooltip {...tooltipStyle} formatter={formaterValeur} />
-        <Line type="monotone" dataKey={cleNum} stroke="#3B82F6" strokeWidth={2} dot={false} />
+        <Line isAnimationActive={false} type="monotone" dataKey={cleNum} stroke="#3B82F6" strokeWidth={2} dot={false} />
       </LineChart>
     );
   }
@@ -376,7 +396,7 @@ function GraphiquePourPDF({ colonnes, data }) {
         <XAxis dataKey={cleCateg} tick={axisStyle} />
         <YAxis tick={axisStyle} tickFormatter={formaterValeur} />
         <Tooltip {...tooltipStyle} formatter={formaterValeur} />
-        <Area type="monotone" dataKey={cleNum} stroke="#3B82F6" fill="#DBEAFE" strokeWidth={2} />
+        <Area isAnimationActive={false} type="monotone" dataKey={cleNum} stroke="#3B82F6" fill="#DBEAFE" strokeWidth={2} />
       </AreaChart>
     );
   }
@@ -387,7 +407,7 @@ function GraphiquePourPDF({ colonnes, data }) {
         <XAxis type="number" tick={axisStyle} tickFormatter={formaterValeur} />
         <YAxis type="category" dataKey={cleCateg} tick={axisStyle} width={110} tickFormatter={v => String(v).slice(0, 16)} />
         <Tooltip {...tooltipStyle} formatter={formaterValeur} />
-        <Bar dataKey={cleNum} radius={[0,4,4,0]}>
+        <Bar isAnimationActive={false} dataKey={cleNum} radius={[0,4,4,0]}>
           {data.slice(0,15).map((_, i) => <Cell key={i} fill={COULEURS[i % COULEURS.length]} />)}
         </Bar>
       </BarChart>
@@ -433,8 +453,8 @@ function CarteResultat({ item, dark, onSupprimer }) {
           <p className={`text-sm font-medium truncate ${dark ? "text-white" : "text-gray-900"}`}>{item.question}</p>
           <div className="flex items-center gap-2 mt-0.5">
             <span className={`text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>{item.total} résultats · {item.duree_ms}ms</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full ${item.source === "rag" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
-              {item.source === "rag" ? "RAG" : "Gemini"}
+            <span className={`text-xs px-2 py-0.5 rounded-full ${(SOURCES[item.source] || SOURCES.gemini).classe}`}>
+              {(SOURCES[item.source] || SOURCES.gemini).label}
             </span>
             <span className={`text-xs ${dark ? "text-gray-500" : "text-gray-400"}`}>{new Date(item.timestamp).toLocaleTimeString("fr")}</span>
           </div>
@@ -554,8 +574,8 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
         pdf.setFontSize(8);
         pdf.setFont("helvetica", "normal");
         pdf.setTextColor(107, 114, 128);
-        pdf.text(`📅  ${dateStr}`, margin, y);
-        pdf.text(`⏱  ${item.duree_ms} ms`, margin + 55, y);
+        pdf.text(`Date : ${dateStr}`, margin, y);
+        pdf.text(`Durée : ${item.duree_ms} ms`, margin + 55, y);
 
         const sourceBadge = item.source === "rag" ? "RAG" : item.source === "rule" ? "Règle" : "Gemini";
         pdf.setTextColor(255, 255, 255);
@@ -644,18 +664,21 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
           pdf.setTextColor(255, 255, 255);
           pdf.setFillColor(51, 65, 85);
           pdf.rect(margin, y, cW, 5.5, "F");
-          cols.forEach((c, ci) => pdf.text(String(c).slice(0, 16), margin + ci * colW + 2, y + 4));
+          const yEntete = y;
+          cols.forEach((c, ci) => pdf.text(String(c).slice(0, 16), margin + ci * colW + 2, yEntete + 4));
           y += 5.5;
 
-          previewRows.forEach((row, ri) => {
-            if (y > pageH - 12) return;
+          for (let ri = 0; ri < previewRows.length; ri++) {
+            if (y > pageH - 12) break;
+            const row = previewRows[ri];
+            const yLigne = y;
             pdf.setFillColor(ri % 2 === 0 ? 249 : 243, ri % 2 === 0 ? 250 : 244, ri % 2 === 0 ? 251 : 246);
-            pdf.rect(margin, y, cW, 5, "F");
+            pdf.rect(margin, yLigne, cW, 5, "F");
             pdf.setTextColor(31, 41, 55);
             pdf.setFont("helvetica", "normal");
-            cols.forEach((c, ci) => pdf.text(String(row[c] ?? "").slice(0, 16), margin + ci * colW + 2, y + 3.8));
+            cols.forEach((c, ci) => pdf.text(String(row[c] ?? "").slice(0, 16), margin + ci * colW + 2, yLigne + 3.8));
             y += 5;
-          });
+          }
           if (item.total > 5) {
             pdf.setFontSize(7);
             pdf.setTextColor(156, 163, 175);
@@ -691,7 +714,7 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
       pdf.save(nomFichier);
     } catch (err) {
       console.error("Erreur PDF :", err);
-      alert("Erreur lors de la génération du PDF. Vérifiez que jspdf et html2canvas sont installés :\nnpm install jspdf html2canvas");
+      alert("Erreur lors de la génération du PDF.");
     } finally {
       setGenerationPDF(false);
     }
@@ -910,61 +933,61 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
 // COMPOSANT — BOUTON MICRO
 // ════════════════════════════════════════
 
-function BoutonMicro({ onTranscription, dark }) {
+function BoutonMicro({ onTranscription, onErreur, dark }) {
   const [statut, setStatut] = useState("idle");
   const mediaRecRef         = useRef(null);
   const chunksRef           = useRef([]);
   const timerRef            = useRef(null);
 
-  const demarrer = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/ogg";
-
-      const recorder = new MediaRecorder(stream, { mimeType });
-      chunksRef.current = [];
-      recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      recorder.onstop = async () => {
-        clearTimeout(timerRef.current);
-        setStatut("processing");
-        const blob = new Blob(chunksRef.current, { type: mimeType });
-        const formData = new FormData();
-        formData.append("fichier", blob, `audio.${mimeType.includes("webm") ? "webm" : "ogg"}`);
-        try {
-          const res = await axios.post(`${API}/vocal/transcrire`, formData, {
-            headers: { "Content-Type": "multipart/form-data" }, timeout: 30000,
-          });
-          if (res.data?.texte?.trim()) onTranscription(res.data.texte.trim());
-          else alert("Aucun texte détecté. Parle plus fort ou plus clairement.");
-        } catch (e) {
-          alert(`Erreur Whisper: ${e.response?.data?.detail || e.message}`);
-        }
-        stream.getTracks().forEach(t => t.stop());
-        setStatut("idle");
-      };
-      recorder.start(100);
-      mediaRecRef.current = recorder;
-      setStatut("recording");
-      timerRef.current = setTimeout(() => arreter(), 8000);
-    } catch (e) {
-      alert("Microphone inaccessible. Autorise le micro dans ton navigateur.");
-      setStatut("idle");
-    }
-  };
-
-  const arreter = () => {
+  const arreter = useCallback(() => {
     clearTimeout(timerRef.current);
     if (mediaRecRef.current?.state === "recording") mediaRecRef.current.stop();
-    setStatut(s => s === "recording" ? "processing" : s);
+  }, []);
+
+  const demarrer = async () => {
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      onErreur("Microphone inaccessible. Autorise le micro dans ton navigateur.");
+      return;
+    }
+    const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
+      : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm"
+      : MediaRecorder.isTypeSupported("audio/ogg") ? "audio/ogg" : "audio/mp4";
+    const extension = mimeType.includes("webm") ? "webm" : mimeType.includes("ogg") ? "ogg" : "mp4";
+
+    const recorder = new MediaRecorder(stream, { mimeType });
+    chunksRef.current = [];
+    recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+    recorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      setStatut("processing");
+      const formData = new FormData();
+      formData.append("fichier", new Blob(chunksRef.current, { type: mimeType }), `audio.${extension}`);
+      try {
+        const res = await http.post("/vocal/transcrire", formData);
+        if (res.data?.texte?.trim()) onTranscription(res.data.texte.trim());
+        else onErreur("Aucun texte détecté. Parle plus fort ou plus clairement.");
+      } catch (e) {
+        onErreur(`Transcription impossible : ${messageErreur(e)}`);
+      }
+      setStatut("idle");
+    };
+    recorder.start(100);
+    mediaRecRef.current = recorder;
+    setStatut("recording");
+    timerRef.current = setTimeout(arreter, 8000);
   };
+
+  useEffect(() => () => clearTimeout(timerRef.current), []);
 
   return (
     <div className="flex flex-col items-center gap-2">
       <button
         onClick={statut === "recording" ? arreter : demarrer}
         disabled={statut === "processing"}
+        aria-label={statut === "recording" ? "Arrêter l'enregistrement" : "Poser une question à voix haute"}
         className={`relative w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg disabled:opacity-60 ${
           statut === "recording" ? "bg-red-500 hover:bg-red-600 scale-110" : "bg-blue-600 hover:bg-blue-700"
         }`}
@@ -1000,76 +1023,227 @@ function KpiCard({ titre, valeur, icone: Icone, couleur, dark }) {
 }
 
 // ════════════════════════════════════════
+// COMPOSANT — ANALYSE D'UNE TRANSACTION (modèle IA de fraude)
+// ════════════════════════════════════════
+
+function PanelAnalyse({ dark }) {
+  const { appeler, chargement, erreur } = useAPI();
+  const [ref, setRef]       = useState(null);
+  const [form, setForm]     = useState({ montant_fcfa: 250000, est_internationale: "Non" });
+  const [resultat, setResultat] = useState(null);
+
+  useEffect(() => {
+    appeler("get", "/ia/referentiel").then(res => {
+      if (!res?.data) return;
+      setRef(res.data);
+      setForm(f => ({
+        ...f,
+        type_transaction: res.data.type_transaction?.[0], canal: res.data.canal?.[0],
+        banque: res.data.banque?.[0], ville: res.data.ville?.[0],
+      }));
+    });
+  }, [appeler]);
+
+  const analyser = async (e) => {
+    e.preventDefault();
+    setResultat(null);
+    const res = await appeler("post", "/ia/analyser-transaction", { ...form, montant_fcfa: Number(form.montant_fcfa) });
+    if (res) setResultat(res);
+  };
+
+  const champ = `w-full px-3 py-2 rounded-xl border text-sm outline-none ${
+    dark ? "bg-gray-700 border-gray-600 text-white focus:border-blue-500" : "bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500"}`;
+  const etiquette = `block text-xs mb-1 ${dark ? "text-gray-400" : "text-gray-500"}`;
+  const couleurs = { Critique: "bg-red-500", "Élevé": "bg-orange-500", Moyen: "bg-yellow-500", Faible: "bg-green-500" };
+  const listes = [["type_transaction", "Type"], ["canal", "Canal"], ["banque", "Banque"], ["ville", "Ville"]];
+
+  return (
+    <div className={`rounded-2xl border p-6 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
+      <h2 className={`text-lg font-bold mb-1 ${dark ? "text-white" : "text-gray-900"}`}>Analyser une transaction</h2>
+      <p className={`text-xs mb-4 ${dark ? "text-gray-400" : "text-gray-500"}`}>Score de fraude calculé par Isolation Forest + XGBoost.</p>
+      {!ref ? (
+        <p className={`text-sm ${dark ? "text-gray-400" : "text-gray-500"}`}>{erreur || "Chargement du modèle…"}</p>
+      ) : (
+        <form onSubmit={analyser} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label>
+            <span className={etiquette}>Montant (FCFA)</span>
+            <input type="number" min="1" step="1" required value={form.montant_fcfa}
+              onChange={e => setForm({ ...form, montant_fcfa: e.target.value })} className={champ} />
+          </label>
+          {listes.map(([cle, nom]) => (
+            <label key={cle}>
+              <span className={etiquette}>{nom}</span>
+              <select value={form[cle] || ""} onChange={e => setForm({ ...form, [cle]: e.target.value })} className={champ}>
+                {(ref[cle] || []).map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </label>
+          ))}
+          <label>
+            <span className={etiquette}>Internationale</span>
+            <select value={form.est_internationale} onChange={e => setForm({ ...form, est_internationale: e.target.value })} className={champ}>
+              <option>Non</option><option>Oui</option>
+            </select>
+          </label>
+          <div className="sm:col-span-2 flex items-center gap-3">
+            <button type="submit" disabled={chargement}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl disabled:opacity-50">
+              {chargement ? "Analyse…" : "Analyser"}
+            </button>
+            {erreur && <span className="text-sm text-red-500">{erreur}</span>}
+          </div>
+        </form>
+      )}
+      {resultat && (
+        <div className={`mt-5 p-4 rounded-xl ${dark ? "bg-gray-700" : "bg-gray-50"}`}>
+          <div className="flex items-center gap-3 mb-3">
+            <span className={`text-xs font-semibold text-white px-2.5 py-1 rounded-full ${couleurs[resultat.niveau_risque] || "bg-gray-500"}`}>
+              Risque {resultat.niveau_risque}
+            </span>
+            <span className={`text-sm font-bold ${dark ? "text-white" : "text-gray-900"}`}>
+              Score : {(resultat.score_anomalie * 100).toFixed(1)} %
+            </span>
+          </div>
+          <div className={`h-2 rounded-full overflow-hidden ${dark ? "bg-gray-600" : "bg-gray-200"}`}>
+            <div className={`h-full ${couleurs[resultat.niveau_risque] || "bg-gray-500"}`} style={{ width: `${resultat.score_anomalie * 100}%` }} />
+          </div>
+          <p className={`text-xs mt-3 ${dark ? "text-gray-400" : "text-gray-500"}`}>
+            Isolation Forest : {(resultat.score_isolation_forest * 100).toFixed(0)} % · XGBoost : {(resultat.probabilite_xgboost * 100).toFixed(0)} %
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════
+// ÉCRAN DE CONNEXION
+// ════════════════════════════════════════
+
+function EcranConnexion({ onConnecte }) {
+  const [nom, setNom]       = useState("");
+  const [mdp, setMdp]       = useState("");
+  const [erreur, setErreur] = useState(null);
+  const [envoi, setEnvoi]   = useState(false);
+
+  const valider = async (e) => {
+    e.preventDefault();
+    setErreur(null);
+    setEnvoi(true);
+    try {
+      onConnecte(await connexion(nom.trim(), mdp));
+    } catch (err) {
+      setErreur(messageErreur(err));
+      setMdp("");
+    } finally {
+      setEnvoi(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
+      <form onSubmit={valider} className="w-full max-w-sm bg-gray-800 border border-gray-700 rounded-2xl p-8 shadow-xl">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
+            <Database size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-white font-bold">VoiceBank Analytics</h1>
+            <p className="text-gray-400 text-xs">Accès réservé</p>
+          </div>
+        </div>
+        <label className="block mb-4">
+          <span className="block text-xs text-gray-400 mb-1">Identifiant</span>
+          <input value={nom} onChange={e => setNom(e.target.value)} autoComplete="username" required maxLength={64}
+            className="w-full px-4 py-3 rounded-xl bg-gray-700 border border-gray-600 text-white text-sm outline-none focus:border-blue-500" />
+        </label>
+        <label className="block mb-5">
+          <span className="block text-xs text-gray-400 mb-1">Mot de passe</span>
+          <input type="password" value={mdp} onChange={e => setMdp(e.target.value)} autoComplete="current-password" required maxLength={128}
+            className="w-full px-4 py-3 rounded-xl bg-gray-700 border border-gray-600 text-white text-sm outline-none focus:border-blue-500" />
+        </label>
+        {erreur && <p role="alert" className="text-sm text-red-400 mb-4">{erreur}</p>}
+        <button type="submit" disabled={envoi}
+          className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl disabled:opacity-50">
+          <Lock size={15} /> {envoi ? "Connexion…" : "Se connecter"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════
 // APP PRINCIPALE
 // ════════════════════════════════════════
 
 export default function App() {
+  const [session, setSession] = useState(() => lireSession());
+
+  useEffect(() => {
+    const surDeconnexion = () => setSession(null);
+    window.addEventListener("voicebank:deconnexion", surDeconnexion);
+    return () => window.removeEventListener("voicebank:deconnexion", surDeconnexion);
+  }, []);
+
+  const seDeconnecter = () => {
+    if (session) sessionStorage.removeItem(`${CLE_STORAGE}_${session.utilisateur}`);
+    deconnexion();
+    setSession(null);
+  };
+
+  if (!session) return <EcranConnexion onConnecte={setSession} />;
+  return <Tableau key={session.utilisateur} session={session} onDeconnexion={seDeconnecter} />;
+}
+
+function Tableau({ session, onDeconnexion }) {
   const [dark, setDark]             = useState(true);
   const [question, setQuestion]     = useState("");
-  const [historique, setHistorique] = useState([]);
+  const [historique, setHistorique] = useState(() => chargerHistorique(session.utilisateur));
   const [dashboard, setDashboard]   = useState(null);
   const [onglet, setOnglet]         = useState("graphiques");
   const [stats, setStats]           = useState(null);
-  const { appeler, chargement }     = useAPI();
+  const [message, setMessage]       = useState(null);
+  const { appeler, chargement, erreur } = useAPI();
 
-useEffect(() => {
-    try {
-      const saved = localStorage.getItem(CLE_STORAGE);
-      if (saved) setHistorique(JSON.parse(saved));
-    } catch (e) {}
+  useEffect(() => {
+    appeler("get", "/dashboard").then(res => { if (res?.data) setDashboard(res.data); });
+    appeler("get", "/stats/global").then(res => { if (res?.data) setStats(res.data); });
+  }, [appeler]);
 
-    appeler("get", "/dashboard").then(res => {
-      if (res?.data) setDashboard(res.data);
-    });
-    appeler("get", "/stats/global").then(res => {
-      if (res?.data) setStats(res.data);
-    });
-  }, [appeler]); // ← ajoute appeler ici
+  useEffect(() => { sauverHistorique(session.utilisateur, historique); }, [historique, session.utilisateur]);
+  useEffect(() => { if (erreur) setMessage(erreur); }, [erreur]);
 
-useEffect(() => {
-    appeler("get", `/alertes/fraude?niveau=${filtre}&limit=8`).then(res => {
-      if (res) setAlertes(res.data);
-    });
-  }, [filtre, appeler]); // ← ajoute appeler
-
-  const poserQuestion = async (texte, clearInput = true) => {
-    const q = (texte || question).trim();
-    if (!q) return;
-    if (clearInput) setQuestion("");
-
+  const poserQuestion = async (texte) => {
+    const q = (texte ?? question).trim();
+    if (!q || chargement) return;
+    setQuestion("");
+    setMessage(null);
     const res = await appeler("post", "/vocal/question", { texte: q, langue: "fr" });
-    if (!res) { alert("Impossible de récupérer le résultat. Vérifie que l'API fonctionne."); return; }
-
-    const nouvelItem = {
+    if (!res) return;  // le message d'erreur est affiché via `erreur`
+    setHistorique(prev => [{
       id: Date.now(), timestamp: new Date().toISOString(),
       question: q, sql: res.sql, source: res.source,
       colonnes: res.colonnes, total: res.total,
       data: res.data, duree_ms: res.duree_ms,
-    };
-    setHistorique(prev => [nouvelItem, ...prev]);
+    }, ...prev].slice(0, MAX_HISTORIQUE));
   };
 
   const supprimerItem = (id) => setHistorique(prev => prev.filter(item => item.id !== id));
-
   const toutEffacer = () => {
-    if (window.confirm("Supprimer tout l'historique ?")) {
-      setHistorique([]);
-      localStorage.removeItem(CLE_STORAGE);
-    }
+    if (window.confirm("Supprimer tout l'historique ?")) setHistorique([]);
   };
 
   const kpis = dashboard ? [
     { titre: "Clients",        valeur: Number(dashboard.total_clients || 0).toLocaleString("fr"),       icone: Users,       couleur: "#3B82F6" },
     { titre: "Transactions",   valeur: Number(dashboard.total_transactions || 0).toLocaleString("fr"),   icone: Activity,    couleur: "#10B981" },
     { titre: "Fraudes",        valeur: Number(dashboard.total_fraudes || 0).toLocaleString("fr"),        icone: ShieldAlert, couleur: "#EF4444" },
-    { titre: "Crédits actifs", valeur: Number(dashboard.encours_credit_fcfa || 0) > 0
+    { titre: "Crédits en cours", valeur: Number(dashboard.encours_credit_fcfa || 0) > 0
         ? (Number(dashboard.encours_credit_fcfa) / 1_000_000_000).toFixed(1) + " Mds FCFA" : "--",
       icone: CreditCard, couleur: "#F59E0B" },
   ] : [];
 
   const suggestions = [
     "Top 10 clients par solde",
-    "Credits en defaut",
+    "Crédits en défaut",
     "Transactions frauduleuses par banque",
     "Alertes critiques",
     "Clients diaspora France",
@@ -1079,6 +1253,7 @@ useEffect(() => {
   const ONGLETS = [
     { id: "graphiques", label: "Graphiques" },
     { id: "alertes",    label: "Alertes" },
+    { id: "analyse",    label: "Analyse IA" },
     { id: "historique", label: `Historique${historique.length > 0 ? ` (${historique.length})` : ""}` },
   ];
 
@@ -1086,31 +1261,46 @@ useEffect(() => {
     <div className={`min-h-screen transition-colors duration-300 ${dark ? "bg-gray-900" : "bg-gray-50"}`}>
 
       {/* ── Header ───────────────────────────────────────── */}
-      <header className={`sticky top-0 z-20 border-b px-6 py-3 flex items-center justify-between backdrop-blur-md ${
+      <header className={`sticky top-0 z-20 border-b px-4 sm:px-6 py-3 flex items-center justify-between gap-2 backdrop-blur-md ${
         dark ? "bg-gray-900/90 border-gray-700" : "bg-white/90 border-gray-200"
       }`}>
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
             <Database size={15} className="text-white" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h1 className={`text-sm font-bold ${dark ? "text-white" : "text-gray-900"}`}>VoiceBank Analytics</h1>
-            <p className={`text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>Nguebou Temgoua Rayan</p>
+            <p className={`text-xs truncate ${dark ? "text-gray-400" : "text-gray-500"}`}>{session.utilisateur} · {session.role}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => window.open(POWER_BI_URL, "_blank")}
-            className="flex items-center gap-1.5 px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-medium rounded-xl transition-all">
-            <TrendingUp size={13} /> Power BI <ExternalLink size={11} />
-          </button>
-          <button onClick={() => setDark(!dark)}
+          {POWER_BI_URL && (
+            <a href={POWER_BI_URL} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-medium rounded-xl transition-all">
+              <TrendingUp size={13} /> Power BI <ExternalLink size={11} />
+            </a>
+          )}
+          <button onClick={() => setDark(!dark)} aria-label="Changer de thème"
             className={`p-2 rounded-xl transition-all ${dark ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}>
             {dark ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+          <button onClick={onDeconnexion} aria-label="Se déconnecter" title="Se déconnecter"
+            className={`p-2 rounded-xl transition-all ${dark ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}>
+            <LogOut size={15} />
           </button>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-6">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
+
+        {/* ── Message d'erreur ─────────────────────────── */}
+        {message && (
+          <div role="alert" className="mb-4 flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-sm">
+            <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+            <span className="flex-1">{message}</span>
+            <button onClick={() => setMessage(null)} aria-label="Fermer"><X size={14} /></button>
+          </div>
+        )}
 
         {/* ── KPIs ─────────────────────────────────────── */}
         {kpis.length > 0 && (
@@ -1122,7 +1312,7 @@ useEffect(() => {
         {/* ── Zone saisie ──────────────────────────────── */}
         <div className={`rounded-2xl border p-5 mb-6 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
           <div className="flex items-center gap-4 mb-4">
-            <BoutonMicro onTranscription={texte => poserQuestion(texte)} dark={dark} />
+            <BoutonMicro onTranscription={texte => poserQuestion(texte)} onErreur={setMessage} dark={dark} />
             <div className="flex-1">
               <div className="flex gap-2">
                 <input
@@ -1130,12 +1320,13 @@ useEffect(() => {
                   onChange={e => setQuestion(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && poserQuestion()}
                   placeholder="Pose ta question en français..."
-                  className={`flex-1 px-4 py-3 rounded-xl border text-sm outline-none transition-all ${
+                  maxLength={500}
+                  className={`flex-1 min-w-0 px-4 py-3 rounded-xl border text-sm outline-none transition-all ${
                     dark ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
                          : "bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500"
                   }`}
                 />
-                <button onClick={() => poserQuestion()} disabled={chargement || !question.trim()}
+                <button onClick={() => poserQuestion()} disabled={chargement || !question.trim()} aria-label="Envoyer"
                   className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all disabled:opacity-50">
                   {chargement ? <RefreshCw size={15} className="animate-spin" /> : <Send size={15} />}
                 </button>
@@ -1156,7 +1347,7 @@ useEffect(() => {
         </div>
 
         {/* ── Résultats des questions ───────────────────── */}
-        {historique.length > 0 && (
+        {historique.length > 0 ? (
           <div>
             <div className="flex items-center justify-between mb-4">
               <h2 className={`text-sm font-bold ${dark ? "text-white" : "text-gray-900"}`}>
@@ -1169,13 +1360,17 @@ useEffect(() => {
                 <Trash2 size={12} /> Tout effacer
               </button>
             </div>
-            {historique.map(item => (
+            {historique.slice(0, 5).map(item => (
               <CarteResultat key={item.id} item={item} dark={dark} onSupprimer={supprimerItem} />
             ))}
+            {historique.length > 5 && (
+              <button onClick={() => setOnglet("historique")}
+                className={`text-xs mb-2 ${dark ? "text-blue-400" : "text-blue-600"}`}>
+                Voir les {historique.length - 5} autres dans l'historique ↓
+              </button>
+            )}
           </div>
-        )}
-
-        {historique.length === 0 && (
+        ) : (
           <div className={`text-center py-16 ${dark ? "text-gray-500" : "text-gray-400"}`}>
             <Mic size={40} className="mx-auto mb-3 opacity-30" />
             <p className="text-sm">Pose une question vocale ou texte pour voir les résultats</p>
@@ -1183,38 +1378,39 @@ useEffect(() => {
           </div>
         )}
 
-        {/* ── Onglets Graphiques / Alertes / Historique ── */}
-        {dashboard && (
-          <div className="mt-8">
-            <div className="flex gap-2 mb-4">
-              {ONGLETS.map(o => (
-                <button
-                  key={o.id}
-                  onClick={() => setOnglet(o.id)}
-                  className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                    onglet === o.id
-                      ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
-                      : dark ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  {o.id === "historique" && <History size={13} className="inline mr-1.5 -mt-0.5" />}
-                  {o.label}
-                </button>
-              ))}
-            </div>
-
-            {onglet === "graphiques" && <PanelGraphiques dark={dark} stats={stats} />}
-            {onglet === "alertes"    && <PanelAlertes dark={dark} />}
-            {onglet === "historique" && (
-              <PanelHistorique
-                historique={historique}
-                dark={dark}
-                onSupprimerItem={supprimerItem}
-                onToutEffacer={toutEffacer}
-              />
-            )}
+        {/* ── Onglets ─────────────────────────────────── */}
+        <div className="mt-8">
+          <div className="flex flex-wrap gap-2 mb-4">
+            {ONGLETS.map(o => (
+              <button
+                key={o.id}
+                onClick={() => setOnglet(o.id)}
+                className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                  onglet === o.id
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+                    : dark ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {o.id === "historique" && <History size={13} className="inline mr-1.5 -mt-0.5" />}
+                {o.label}
+              </button>
+            ))}
           </div>
-        )}
+
+          {onglet === "graphiques" && (stats
+            ? <PanelGraphiques dark={dark} stats={stats} />
+            : <p className={`text-sm ${dark ? "text-gray-500" : "text-gray-400"}`}>Statistiques indisponibles.</p>)}
+          {onglet === "alertes"    && <PanelAlertes dark={dark} />}
+          {onglet === "analyse"    && <PanelAnalyse dark={dark} />}
+          {onglet === "historique" && (
+            <PanelHistorique
+              historique={historique}
+              dark={dark}
+              onSupprimerItem={supprimerItem}
+              onToutEffacer={toutEffacer}
+            />
+          )}
+        </div>
 
         {/* ── Footer ───────────────────────────────────── */}
         <footer className={`mt-12 py-6 text-center text-xs ${dark ? "text-gray-500" : "text-gray-400"}`}>

@@ -1,108 +1,81 @@
-version: "3.9"
-
-# VOICEBANK ANALYTICS - Docker Compose complet
+# VOICEBANK ANALYTICS — Docker Compose
 # Auteur : Nguebou Temgoua Rayan
-# Usage  : docker compose up -d
+# 1. cp .env.example .env   puis remplis les valeurs
+# 2. docker compose up -d --build
+# 3. Interface : http://localhost:3000   API : http://localhost:8000/health
+# pgAdmin (optionnel) : docker compose --profile admin up -d  -> http://localhost:5050
 
 services:
-
-  # ─────────────────────────────────────
-  # PostgreSQL
-  # ─────────────────────────────────────
   postgres:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     container_name: voicebank_postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: voicebank_db
-      POSTGRES_USER: voicebank_user
-      POSTGRES_PASSWORD: voicebank2024
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-voicebank_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD manquant dans .env}
+      VOICEBANK_APP_PASSWORD: ${VOICEBANK_APP_PASSWORD:?manquant}
+      VOICEBANK_READER_PASSWORD: ${VOICEBANK_READER_PASSWORD:?manquant}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"        # accessible uniquement depuis ta machine (Talend, Power BI)
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./voicebank_db/init:/docker-entrypoint-initdb.d
-    networks:
-      - voicebank_network
+      - ./voicebank_db/init:/docker-entrypoint-initdb.d:ro
+      - ./voicebank_db/securite:/voicebank_securite:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U voicebank_user -d voicebank_db"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d voicebank_db"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # ─────────────────────────────────────
-  # pgAdmin
-  # ─────────────────────────────────────
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: voicebank_pgadmin
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: rayan@voicebank.cm
-      PGADMIN_DEFAULT_PASSWORD: voicebank2024
-      PGADMIN_CONFIG_SERVER_MODE: "False"
-    ports:
-      - "5050:80"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    networks:
-      - voicebank_network
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  # ─────────────────────────────────────
-  # API FastAPI
-  # ─────────────────────────────────────
   api:
     build:
-      context: ./voicebank_api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: voicebank_api/Dockerfile
     container_name: voicebank_api
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://voicebank_user:voicebank2024@postgres:5432/voicebank_db
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      ENV: production
+      DATABASE_URL: postgresql://voicebank_app:${VOICEBANK_APP_PASSWORD}@postgres:5432/voicebank_db
+      READONLY_DATABASE_URL: postgresql://voicebank_reader:${VOICEBANK_READER_PASSWORD}@postgres:5432/voicebank_db
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant}
+      VOICEBANK_USERS: ${VOICEBANK_USERS:?VOICEBANK_USERS manquant}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
     ports:
-      - "8000:8000"
-    volumes:
-      - ./voicebank_ia/modeles_sauvegardes:/app/modeles_sauvegardes
-    networks:
-      - voicebank_network
+      - "127.0.0.1:8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
 
-  # ─────────────────────────────────────
-  # Interface React
-  # ─────────────────────────────────────
   ui:
     build:
-      context: ./voicebank_ui
-      dockerfile: Dockerfile
+      context: ./voicebank-ui
+      args:
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8000}
     container_name: voicebank_ui
     restart: unless-stopped
     ports:
-      - "3000:80"
-    networks:
-      - voicebank_network
+      - "127.0.0.1:3000:80"
     depends_on:
       - api
 
-# ─────────────────────────────────────
-# Volumes
-# ─────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:9
+    profiles: ["admin"]
+    container_name: voicebank_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@voicebank.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-}   # obligatoire si tu lances le profil admin
+    ports:
+      - "127.0.0.1:5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres_data:
     name: voicebank_postgres_data
-  pgadmin_data:
-    name: voicebank_pgadmin_data
-
-# ─────────────────────────────────────
-# Reseau
-# ─────────────────────────────────────
-networks:
-  voicebank_network:
-    name: voicebank_network
-    driver: bridge

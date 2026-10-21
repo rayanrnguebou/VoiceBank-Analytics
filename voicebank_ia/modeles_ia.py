@@ -38,7 +38,9 @@ np.random.seed(42)
 # CONFIGURATION
 # ════════════════════════════════════════════════════════
 
-DB_URL     = "postgresql://voicebank_user:voicebank2024@localhost:5432/voicebank_db"
+DB_URL     = os.environ.get("ADMIN_DATABASE_URL", "")  # ex. postgresql://voicebank_admin:MOT_DE_PASSE@localhost:5432/voicebank_db
+if not DB_URL:
+    raise SystemExit("Définis ADMIN_DATABASE_URL (compte administrateur de la base)")
 CSV_DIR    = "../output_voicebank"
 MODELS_DIR = "./modeles_sauvegardes"
 PLOTS_DIR  = "./graphiques_ia"
@@ -109,8 +111,9 @@ class DetecteurFraude:
 
         # Variables numériques
         data["montant_log"]    = np.log1p(data["montant_fcfa"])
+        # Les heures sont au format HH:MM:SS (l'ancien format %H:%M échouait -> heure toujours 12)
         data["heure_num"]      = pd.to_datetime(
-            data["heure_transaction"], format="%H:%M", errors="coerce"
+            data["heure_transaction"].astype(str), format="mixed", errors="coerce"
         ).dt.hour.fillna(12)
         data["est_nuit"]       = ((data["heure_num"] >= 22) | (data["heure_num"] <= 6)).astype(int)
         data["est_weekend"]    = pd.to_datetime(

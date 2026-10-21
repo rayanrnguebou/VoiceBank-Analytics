@@ -213,6 +213,7 @@ CREATE TABLE IF NOT EXISTS voicebank.logs_vocaux (
     requete_sql         TEXT,                              -- SQL généré par le LLM
     succes              BOOLEAN      DEFAULT TRUE,
     duree_ms            INTEGER,                           -- temps de réponse en ms
+    utilisateur         VARCHAR(64),                       -- compte ayant posé la question
     date_requete        TIMESTAMP    DEFAULT NOW()
 );
 

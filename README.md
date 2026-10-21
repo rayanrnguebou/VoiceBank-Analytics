@@ -1,42 +1,137 @@
-# VoiceBank Analytics - Interface React
-# Auteur : Nguebou Temgoua Rayan
+# VoiceBank Analytics
 
-## Installation complète
+Assistant bancaire vocal : on pose une question en français (au micro ou au clavier), l'API la
+transforme en requête SQL, l'exécute sur la base PostgreSQL et l'interface affiche le résultat
+sous forme de graphique, avec export PDF. Un modèle IA (Isolation Forest + XGBoost) note le
+risque de fraude d'une transaction.
 
-# 1. Creer le projet React
-npx create-react-app voicebank-ui
+**Auteur : Nguebou Temgoua Rayan**
+
+| Couche | Technologies |
+|---|---|
+| Interface | React 19, Tailwind, Recharts, jsPDF |
+| API | FastAPI, SQLAlchemy, sqlglot (validation SQL), JWT |
+| IA | Gemini (texte → SQL), Groq Whisper (voix → texte), scikit-learn, XGBoost |
+| Données | PostgreSQL 16 (pg_trgm pour le RAG), Power BI |
+
+## Fonctionnement
+
+```
+Voix ──Groq Whisper──▶ texte ─┐
+Texte ────────────────────────┤
+                              ▼
+          1. correction RAG quasi identique (validée par un admin)
+          2. règles locales (questions fréquentes, sans IA)
+          3. correction RAG proche
+          4. Gemini
+                              ▼
+          garde SQL : 1 seul SELECT, tables voicebank uniquement, fonctions système interdites
+                              ▼
+          exécution par un compte LECTURE SEULE, transaction READ ONLY, timeout 5 s, 1000 lignes max
+```
+
+## Démarrage rapide (Docker)
+
+```bash
+cp .env.example .env
+# Remplis .env : mots de passe, JWT_SECRET, VOICEBANK_USERS, clés Gemini / Groq
+docker compose up -d --build
+```
+
+- Interface : http://localhost:3000
+- API : http://localhost:8000/health (la doc `/docs` n'est active qu'en développement)
+- pgAdmin (optionnel) : `docker compose --profile admin up -d` puis http://localhost:5050
+
+Charger les données (CSV générés par `pipeline_voicebank.py`, dans `output_voicebank/`) :
+
+```bash
+ADMIN_DATABASE_URL=postgresql://voicebank_admin:MOT_DE_PASSE@localhost:5432/voicebank_db \
+  python voicebank_db/charger_csv_postgres.py
+```
+
+### Créer les comptes utilisateurs
+
+Les comptes sont définis dans `VOICEBANK_USERS` sous la forme `nom:role:hash_bcrypt`, séparés
+par des virgules. `role` vaut `analyste` (consultation) ou `admin` (consultation + SQL manuel +
+corrections RAG).
+
+```bash
+cd voicebank_api
+pip install bcrypt
+python -m app.outils.creer_hash        # demande le mot de passe, affiche le hash
+```
+
+Dans `.env`, mets la valeur entre **apostrophes simples** (le hash contient des `$`) :
+`VOICEBANK_USERS='rayan:admin:$2b$12$...,analyste1:analyste:$2b$12$...'`
+
+## Développement sans Docker
+
+```bash
+# API
+cd voicebank_api
+python -m venv venv && venv\Scripts\activate      # Windows (source venv/bin/activate sinon)
+pip install -r requirements-dev.txt
+copy .env.example .env                             # puis remplis-le
+uvicorn main:app --reload
+
+# Interface
 cd voicebank-ui
-
-# 2. Installer les dependances
-npm install axios recharts lucide-react
-npm install -D tailwindcss postcss autoprefixer
-npx tailwindcss init -p
-
-# 3. Remplacer les fichiers
-# Copie src/App.js        -> voicebank-ui/src/App.js
-# Copie src/index.css     -> voicebank-ui/src/index.css
-# Copie tailwind.config.js -> voicebank-ui/tailwind.config.js
-
-# 4. Lancer
+npm ci
 npm start
-# -> http://localhost:3000
+```
 
-## Prerequis
-# - API FastAPI lancee sur http://localhost:8000
-# - Docker PostgreSQL demarre
-# - Cle Gemini configuree dans .env
+Sur une base déjà existante (créée avec l'ancienne version), applique la migration de sécurité
+(elle crée les comptes `voicebank_app` et `voicebank_reader` et ajoute la colonne manquante) :
 
-## Fonctionnalites
-# - Toggle Dark / Light mode
-# - Bouton microphone (Whisper via API)
-# - Saisie texte avec suggestions rapides
-# - KPIs globaux (clients, transactions, fraudes, credits)
-# - Panel alertes fraude avec filtres
-# - Graphiques (clients par banque, transactions mensuelles)
-# - Bouton "Ouvrir Power BI" -> lien externe
-# - Indicateur RAG vs Gemini sur chaque reponse
+```bash
+psql "postgresql://ADMIN@localhost:5432/voicebank_db" -v app_pwd=XXX -v reader_pwd=YYY \
+     -f voicebank_db/securite/roles.sql
+```
 
-## Personnalisation
-# Dans App.js, ligne 13 :
-# const POWER_BI_URL = "https://app.powerbi.com/..."
-# Remplace par ton vrai lien Power BI publie
+## Tests
+
+```bash
+cd voicebank_api
+TEST_PG_ADMIN_URL=postgresql://postgres:MDP@localhost:5432/postgres pytest     # 82 tests
+cd ../voicebank-ui && CI=true npm test
+```
+
+Les tests créent une base `voicebank_test` jetable (données synthétiques), testent tous les
+endpoints, et vérifient les protections : accès sans jeton, rôle insuffisant, jetons falsifiés,
+injections SQL (19 attaques), SQL malveillant renvoyé par l'IA, empoisonnement du RAG, upload
+audio dangereux, CORS, limitation des tentatives de connexion.
+
+## Sécurité
+
+- Authentification JWT (mots de passe hachés en bcrypt), rôles `analyste` / `admin`.
+- 5 tentatives de connexion par minute et par IP ; limites sur les endpoints IA.
+- Le SQL dynamique est validé (sqlglot) **et** exécuté avec un compte PostgreSQL en lecture seule.
+- L'API se connecte avec un compte sans privilèges d'administration (`voicebank_app`).
+- CORS limité à `ALLOWED_ORIGINS`, en-têtes de sécurité, erreurs internes jamais renvoyées au client.
+- Uploads audio : extensions autorisées, 10 Mo max, aucun fichier écrit sur disque.
+- Ports Docker liés à `127.0.0.1`, conteneur API sans root, secrets uniquement dans `.env`.
+- L'historique navigateur est en `sessionStorage` (effacé à la fermeture et à la déconnexion).
+
+## Déploiement Render
+
+`render.yaml` déclare la base, l'API (Docker) et l'interface (site statique).
+
+1. Render → New → Blueprint → choisis ce dépôt.
+2. Renseigne les variables `sync: false` : `VOICEBANK_USERS`, `ALLOWED_ORIGINS` (URL de
+   l'interface), `REACT_APP_API_URL` (URL de l'API), `GEMINI_API_KEY`, `GROQ_API_KEY`.
+3. Initialise la base avec l'URL externe fournie par Render :
+   `psql URL -f voicebank_db/init/01_init_voicebank.sql -f voicebank_db/init/02_corrections_rag.sql`
+4. Si Render autorise la création de rôles, lance aussi `securite/roles.sql` et renseigne
+   `READONLY_DATABASE_URL` avec le compte `voicebank_reader`. Sinon, laisse-la vide : le SQL
+   sera exécuté en transaction READ ONLY avec le compte principal (qui n'est pas superutilisateur
+   sur Render), en plus de la garde SQL.
+
+## Structure
+
+```
+voicebank_api/      API FastAPI (app/), tests (tests/), Dockerfile
+voicebank-ui/       Interface React, Dockerfile + nginx.conf
+voicebank_db/       init/ (scripts SQL auto), securite/roles.sql, chargement des CSV
+voicebank_ia/       entraînement des modèles + modèles sauvegardés
+pipeline_voicebank.py   génération du jeu de données
+```

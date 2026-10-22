@@ -7,6 +7,7 @@ from datetime import date, datetime
 from typing import Literal
 
 from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -14,7 +15,7 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from . import config, db, fraude, nl2sql
+from . import config, db, fraude, nl2sql, transcription
 from .garde_sql import SQLRefuse, valider_sql
 from .securite import Utilisateur, admin_requis, authentifier, creer_jeton, utilisateur_courant
 
@@ -68,6 +69,7 @@ async def entetes_securite(request: Request, call_next):
 
 
 fraude.charger()
+transcription.precharger_en_arriere_plan()
 
 # ════════════════════════════════════════
 # SCHÉMAS
@@ -135,17 +137,15 @@ def _lire(sql: str, params: dict | None = None):
         raise HTTPException(503, "Base de données indisponible")
 
 
-def _transcrire(contenu: bytes, extension: str) -> str:
-    if not config.GROQ_API_KEY:
-        raise HTTPException(503, "Transcription non configurée (GROQ_API_KEY)")
-    from groq import Groq
+async def _transcrire(contenu: bytes, extension: str) -> tuple[str, str]:
+    """Groq, ou Whisper local si la clé est vide / Groq en panne. Exécuté hors de la boucle async."""
     try:
-        rep = Groq(api_key=config.GROQ_API_KEY, timeout=30).audio.transcriptions.create(
-            file=(f"audio.{extension}", contenu), model=config.GROQ_WHISPER_MODEL, language="fr")
-    except Exception as e:
-        log.warning("Erreur Groq : %s", e)
-        raise HTTPException(502, "Le service de transcription a échoué")
-    return (rep.text or "").strip()
+        texte, moteur = await run_in_threadpool(transcription.transcrire, contenu, extension)
+    except transcription.TranscriptionErreur as e:
+        raise HTTPException(e.code, e.message)
+    if not texte:
+        raise HTTPException(422, "Aucune parole détectée")
+    return texte, moteur
 
 
 EXTENSIONS_AUDIO = {"webm", "ogg", "wav", "mp3", "m4a", "mp4", "mpeg", "flac"}
@@ -199,7 +199,7 @@ def health():
     return {"status": "ok" if ok else "degraded",
             "database": "connectee" if ok else "deconnectee",
             "gemini": "disponible" if config.GEMINI_API_KEY else "non configure",
-            "whisper": "groq-api" if config.GROQ_API_KEY else "non configure",
+            "whisper": transcription.etat(),
             "modeles_ia": sorted(fraude.modeles.keys()),
             "timestamp": datetime.now().isoformat()}
 
@@ -331,10 +331,8 @@ def question_vocale(request: Request, body: QuestionVocale, u: Utilisateur = Dep
 async def transcrire_audio(request: Request, fichier: UploadFile = File(...),
                            u: Utilisateur = Depends(utilisateur_courant)):
     contenu, extension = await _lire_audio(fichier)
-    texte = _transcrire(contenu, extension)
-    if not texte:
-        raise HTTPException(422, "Aucune parole détectée")
-    return {"status": "ok", "texte": texte}
+    texte, moteur = await _transcrire(contenu, extension)
+    return {"status": "ok", "texte": texte, "moteur": moteur}
 
 
 @app.post("/vocal/pipeline-complet")
@@ -342,10 +340,9 @@ async def transcrire_audio(request: Request, fichier: UploadFile = File(...),
 async def pipeline_vocal_complet(request: Request, fichier: UploadFile = File(...),
                                  u: Utilisateur = Depends(utilisateur_courant)):
     contenu, extension = await _lire_audio(fichier)
-    texte = _transcrire(contenu, extension)
-    if not texte:
-        raise HTTPException(422, "Aucune parole détectée")
-    return {"texte_audio": texte, **_question_vers_resultat(texte, u)}
+    texte, moteur = await _transcrire(contenu, extension)
+    resultat = await run_in_threadpool(_question_vers_resultat, texte, u)
+    return {"texte_audio": texte, "moteur_transcription": moteur, **resultat}
 
 
 # ── IA fraude ─────────────────────────────────────────

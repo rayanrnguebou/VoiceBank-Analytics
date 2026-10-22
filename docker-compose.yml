@@ -45,6 +45,10 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
+      WHISPER_LOCAL: ${WHISPER_LOCAL:-auto}            # utilisé si GROQ_API_KEY est vide
+      WHISPER_LOCAL_MODELE: ${WHISPER_LOCAL_MODELE:-base}
+    volumes:
+      - whisper_modeles:/app/modeles_whisper
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -79,3 +83,5 @@ services:
 volumes:
   postgres_data:
     name: voicebank_postgres_data
+  whisper_modeles:
+    name: voicebank_whisper_modeles

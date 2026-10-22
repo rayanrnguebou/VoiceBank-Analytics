@@ -43,7 +43,7 @@ services:
       VOICEBANK_USERS: ${VOICEBANK_USERS:?VOICEBANK_USERS manquant}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
     ports:
       - "127.0.0.1:8000:8000"

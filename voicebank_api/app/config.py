@@ -47,7 +47,7 @@ SQL_MAX_LIGNES = int(_env("SQL_MAX_LIGNES", "1000"))
 
 # ── IA ────────────────────────────────────────────────────────
 GEMINI_API_KEY = _env("GEMINI_API_KEY")
-GEMINI_MODEL = _env("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = _env("GEMINI_MODEL", "gemini-3.5-flash-lite")
 GROQ_API_KEY = _env("GROQ_API_KEY")
 GROQ_WHISPER_MODEL = _env("GROQ_WHISPER_MODEL", "whisper-large-v3")
 SEUIL_RAG = float(_env("SEUIL_RAG", "0.45"))

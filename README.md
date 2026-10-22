@@ -64,6 +64,18 @@ python -m app.outils.creer_hash        # demande le mot de passe, affiche le has
 Dans `.env`, mets la valeur entre **apostrophes simples** (le hash contient des `$`) :
 `VOICEBANK_USERS='rayan:admin:$2b$12$...,analyste1:analyste:$2b$12$...'`
 
+## Clés IA (Gemini et Groq)
+
+Les deux sont facultatives : sans elles, les questions fréquentes marchent (règles locales + RAG),
+mais pas les questions libres (Gemini) ni le micro (Groq).
+
+| Service | Où créer la clé | Variable |
+|---|---|---|
+| Gemini (texte → SQL) | https://aistudio.google.com/app/apikey | `GEMINI_API_KEY` (+ `GEMINI_MODEL`, défaut `gemini-3.5-flash-lite`) |
+| Groq (voix → texte) | https://console.groq.com/keys | `GROQ_API_KEY` (+ `GROQ_WHISPER_MODEL`, défaut `whisper-large-v3`) |
+
+Vérifier les clés : `cd voicebank_api && python -m app.outils.tester_ia`
+
 ## Développement sans Docker
 
 ```bash

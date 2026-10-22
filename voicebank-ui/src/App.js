@@ -966,7 +966,8 @@ function BoutonMicro({ onTranscription, onErreur, dark }) {
       const formData = new FormData();
       formData.append("fichier", new Blob(chunksRef.current, { type: mimeType }), `audio.${extension}`);
       try {
-        const res = await http.post("/vocal/transcrire", formData);
+        // Délai long : le Whisper local peut devoir charger son modèle à la 1re utilisation
+        const res = await http.post("/vocal/transcrire", formData, { timeout: 120000 });
         if (res.data?.texte?.trim()) onTranscription(res.data.texte.trim());
         else onErreur("Aucun texte détecté. Parle plus fort ou plus clairement.");
       } catch (e) {

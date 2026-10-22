@@ -113,7 +113,7 @@ def test_analyse_transaction(client, analyste):
 
 
 def test_transcription_simulee(client, analyste):
-    with patch("app.main._transcrire", return_value="crédits en défaut"):
+    with patch("app.transcription.transcrire", return_value=("crédits en défaut", "groq")):
         r = client.post("/vocal/pipeline-complet", headers=analyste,
                         files={"fichier": ("audio.webm", b"\x1aE\xdf\xa3fake", "audio/webm")})
     assert r.status_code == 200 and r.json()["texte_audio"] == "crédits en défaut" and r.json()["total"] > 0

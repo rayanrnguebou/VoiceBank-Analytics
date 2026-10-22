@@ -76,6 +76,10 @@ mais pas les questions libres (Gemini) ni le micro (Groq).
 
 Vérifier les clés : `cd voicebank_api && python -m app.outils.tester_ia`
 
+**Micro sans clé Groq** : l'API bascule automatiquement sur le Whisper local du dossier
+`voicebank_whisper` (faster-whisper, gratuit, hors ligne après le premier téléchargement du modèle).
+Il prend aussi le relais si Groq est en panne. Détails et réglages : `voicebank_whisper/README.md`.
+
 ## Développement sans Docker
 
 ```bash
@@ -104,7 +108,7 @@ psql "postgresql://ADMIN@localhost:5432/voicebank_db" -v app_pwd=XXX -v reader_p
 
 ```bash
 cd voicebank_api
-TEST_PG_ADMIN_URL=postgresql://postgres:MDP@localhost:5432/postgres pytest     # 82 tests
+TEST_PG_ADMIN_URL=postgresql://postgres:MDP@localhost:5432/postgres pytest     # 97 tests
 cd ../voicebank-ui && CI=true npm test
 ```
 
@@ -145,5 +149,6 @@ voicebank_api/      API FastAPI (app/), tests (tests/), Dockerfile
 voicebank-ui/       Interface React, Dockerfile + nginx.conf
 voicebank_db/       init/ (scripts SQL auto), securite/roles.sql, chargement des CSV
 voicebank_ia/       entraînement des modèles + modèles sauvegardés
+voicebank_whisper/  transcription vocale locale (secours de Groq)
 pipeline_voicebank.py   génération du jeu de données
 ```

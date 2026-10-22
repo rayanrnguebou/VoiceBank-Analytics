@@ -11,9 +11,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY voicebank_api/main.py ./main.py
 COPY voicebank_api/app ./app
 COPY voicebank_ia/modeles_sauvegardes ./voicebank_ia/modeles_sauvegardes
+COPY voicebank_whisper ./voicebank_whisper
 
 # Utilisateur sans privilèges
-RUN useradd --create-home --uid 10001 voicebank && chown -R voicebank /app
+# Modèles Whisper local téléchargés au 1er démarrage dans un volume (voir docker-compose)
+ENV WHISPER_LOCAL_DOSSIER=/app/modeles_whisper HF_HOME=/app/modeles_whisper/hf
+RUN useradd --create-home --uid 10001 voicebank && mkdir -p /app/modeles_whisper && chown -R voicebank /app
 USER voicebank
 
 EXPOSE 8000

@@ -50,6 +50,12 @@ GEMINI_API_KEY = _env("GEMINI_API_KEY")
 GEMINI_MODEL = _env("GEMINI_MODEL", "gemini-3.5-flash-lite")
 GROQ_API_KEY = _env("GROQ_API_KEY")
 GROQ_WHISPER_MODEL = _env("GROQ_WHISPER_MODEL", "whisper-large-v3")
+# Whisper local (voicebank_whisper), utilisé si GROQ_API_KEY est vide ou si Groq échoue
+WHISPER_LOCAL = _env("WHISPER_LOCAL", "auto").lower()          # auto | false
+WHISPER_LOCAL_MODELE = _env("WHISPER_LOCAL_MODELE", "base")    # tiny, base, small, medium…
+WHISPER_LOCAL_DOSSIER = _env("WHISPER_LOCAL_DOSSIER") or None
+WHISPER_LOCAL_DUREE_MAX_S = float(_env("WHISPER_LOCAL_DUREE_MAX_S", "60"))
+WHISPER_LOCAL_PRECHARGER = _env("WHISPER_LOCAL_PRECHARGER", "true").lower() == "true"
 SEUIL_RAG = float(_env("SEUIL_RAG", "0.45"))
 
 

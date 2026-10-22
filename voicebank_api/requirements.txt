@@ -16,3 +16,6 @@ sqlglot==30.24.0
 PyJWT==2.15.1
 bcrypt==5.0.0
 slowapi==0.1.10
+# Whisper local (voicebank_whisper) : secours quand GROQ_API_KEY est vide
+faster-whisper==1.2.1
+av==15.1.0            # PyAV >= 16 incompatible avec faster-whisper 1.2.1 (testé)

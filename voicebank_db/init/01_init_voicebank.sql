@@ -288,11 +288,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_clients_updated_at
+CREATE OR REPLACE TRIGGER trg_clients_updated_at
     BEFORE UPDATE ON voicebank.clients
     FOR EACH ROW EXECUTE FUNCTION voicebank.update_updated_at();
 
-CREATE TRIGGER trg_credits_updated_at
+CREATE OR REPLACE TRIGGER trg_credits_updated_at
     BEFORE UPDATE ON voicebank.credits
     FOR EACH ROW EXECUTE FUNCTION voicebank.update_updated_at();
 

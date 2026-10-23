@@ -80,6 +80,23 @@ Vérifier les clés : `cd voicebank_api && python -m app.outils.tester_ia`
 `voicebank_whisper` (faster-whisper, gratuit, hors ligne après le premier téléchargement du modèle).
 Il prend aussi le relais si Groq est en panne. Détails et réglages : `voicebank_whisper/README.md`.
 
+## Reprendre une base créée avec l'ancienne version
+
+Si tu avais déjà lancé l'ancien `docker-compose` (base dans le volume `voicebank_postgres_data`),
+tes données sont conservées. Il faut seulement mettre le schéma et les comptes à niveau, une fois :
+
+```bash
+docker rm -f voicebank_postgres voicebank_pgadmin voicebank_api voicebank_ui   # anciens conteneurs (pas les données)
+docker compose up -d
+docker compose exec postgres sh /voicebank_securite/migrer.sh
+docker compose restart api
+```
+
+Le script crée le superutilisateur du `.env`, ajoute ce qui manque au schéma, crée
+`voicebank_app` / `voicebank_reader` et désactive l'ancien compte `voicebank_user`
+(dont le mot de passe était publié sur GitHub). Il peut être relancé sans risque.
+**Ne lance jamais `docker compose down -v`** : `-v` supprime le volume, donc les données.
+
 ## Développement sans Docker
 
 ```bash

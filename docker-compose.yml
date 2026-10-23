@@ -7,7 +7,7 @@
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:15-alpine   # même version que ta base existante (volume voicebank_postgres_data)
     container_name: voicebank_postgres
     restart: unless-stopped
     environment:

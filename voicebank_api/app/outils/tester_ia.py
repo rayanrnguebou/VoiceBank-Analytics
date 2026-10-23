@@ -1,13 +1,19 @@
 """Vérifie que les clés Gemini et Groq du fichier .env fonctionnent.
 
-Usage (depuis voicebank_api/) : python -m app.outils.tester_ia
+Avec Docker (recommandé)  : docker compose exec api python -m app.outils.tester_ia
+Sans Docker (voicebank_api/) : python -m app.outils.tester_ia
 N'a pas besoin de la base de données.
 """
 import os
+from pathlib import Path
 
-from dotenv import load_dotenv
-
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    racine = Path(__file__).resolve().parents[3]
+    load_dotenv()                      # voicebank_api/.env
+    load_dotenv(racine / ".env")       # .env à la racine (celui de Docker)
+except ImportError:
+    pass
 
 
 def _cle(nom):
@@ -18,7 +24,10 @@ def tester_gemini():
     cle, modele = _cle("GEMINI_API_KEY"), _cle("GEMINI_MODEL") or "gemini-3.5-flash-lite"
     if not cle:
         return "ABSENT  GEMINI_API_KEY n'est pas définie dans .env"
-    from google import genai
+    try:
+        from google import genai
+    except ImportError:
+        return "ERREUR  Bibliothèque google-genai absente : lance ce test avec Docker (voir docstring)"
     try:
         client = genai.Client(api_key=cle)
         rep = client.models.generate_content(
@@ -33,7 +42,10 @@ def tester_groq():
     cle, modele = _cle("GROQ_API_KEY"), _cle("GROQ_WHISPER_MODEL") or "whisper-large-v3"
     if not cle:
         return "ABSENT  GROQ_API_KEY n'est pas définie dans .env"
-    from groq import Groq
+    try:
+        from groq import Groq
+    except ImportError:
+        return "ERREUR  Bibliothèque groq absente : lance ce test avec Docker (voir docstring)"
     try:
         ids = {m.id for m in Groq(api_key=cle).models.list().data}
         if modele not in ids:

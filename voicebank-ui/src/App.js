@@ -9,6 +9,7 @@ import PanelAlertes from "./panneaux/Alertes";
 import PanelCredit from "./panneaux/Credit";
 import BarreLaterale, { Logo } from "./panneaux/BarreLaterale";
 import { FormulaireSignalement, EditeurCorrection, PanelApprentissage, PanelFiabilite, PanelAudit } from "./panneaux/Admin";
+import { EcranMotDePasseProvisoire, FenetreMotDePasse, PanelComptes } from "./panneaux/Comptes";
 import { lireAVoixHaute, arreterLecture } from "./ui";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -408,7 +409,8 @@ function CarteResultat({ item, dark, onSupprimer, role }) {
       {item.resume && (
         <div className={`mx-5 mb-3 flex items-start gap-2 p-3 rounded-xl border-l-4 border-laiton-400 ${dark ? "bg-foret-900/50 text-foret-50" : "bg-foret-50 text-foret-900"}`}>
           <p className="text-sm flex-1">{item.resume}</p>
-          <button onClick={() => lireAVoixHaute(item.resume)} aria-label="Lire la réponse à voix haute" title="Écouter"
+          <button onClick={() => lireAVoixHaute([item.resume, item.commentaire])} aria-label="Lire la réponse et l'analyse à voix haute"
+            title={item.commentaire ? "Écouter la réponse et l'analyse" : "Écouter"}
             className={`p-1.5 rounded-lg flex-shrink-0 ${dark ? "hover:bg-foret-800/40" : "hover:bg-foret-100"}`}>
             <Volume2 size={15} />
           </button>
@@ -1233,10 +1235,14 @@ export default function App() {
   };
 
   if (!session) return <EcranConnexion onConnecte={setSession} />;
-  return <Tableau key={session.utilisateur} session={session} onDeconnexion={seDeconnecter} />;
+  if (session.doitChangerMdp) {
+    return <EcranMotDePasseProvisoire session={session} onTermine={setSession} onDeconnexion={seDeconnecter} />;
+  }
+  return <Tableau key={session.utilisateur} session={session} onDeconnexion={seDeconnecter} onSession={setSession} />;
 }
 
-function Tableau({ session, onDeconnexion }) {
+function Tableau({ session, onDeconnexion, onSession }) {
+  const [fenetreMdp, setFenetreMdp] = useState(false);
   const [dark, setDark]             = useState(true);
   const [question, setQuestion]     = useState("");
   const [dictee, setDictee]         = useState(false);
@@ -1248,6 +1254,7 @@ function Tableau({ session, onDeconnexion }) {
   const [compteurs, setCompteurs]   = useState({ alertes: 0, signalements: 0 });
   const [stats, setStats]           = useState(null);
   const [message, setMessage]       = useState(null);
+  const [parle, setParle]           = useState(false);
   const [voix, setVoix]             = useState(() => {
     try { return localStorage.getItem("voicebank_voix") !== "non"; } catch (e) { return true; }
   });
@@ -1263,6 +1270,12 @@ function Tableau({ session, onDeconnexion }) {
       return !v;
     });
   };
+
+  useEffect(() => {
+    const surLecture = e => setParle(!!e.detail);
+    window.addEventListener("voicebank:lecture", surLecture);
+    return () => { window.removeEventListener("voicebank:lecture", surLecture); arreterLecture(); };
+  }, []);
 
   useEffect(() => {
     appeler("get", "/dashboard").then(res => { if (res?.data) setDashboard(res.data); });
@@ -1299,9 +1312,11 @@ function Tableau({ session, onDeconnexion }) {
       question: q, sql: res.sql, source: res.source,
       colonnes: res.colonnes, total: res.total,
       data: res.data, duree_ms: res.duree_ms, avertissement: res.avertissement || null,
-      resume: res.resume || null, suite: !!res.suite, question_precedente: res.question_precedente || null,
+      resume: res.resume || null, commentaire: res.commentaire || null,
+      suite: !!res.suite, question_precedente: res.question_precedente || null,
     }, ...prev].slice(0, MAX_HISTORIQUE));
-    if (voix && res.resume) lireAVoixHaute(res.resume);
+    // Le résumé (affiché) est lu en premier, puis l'analyse plus poussée (uniquement à l'oral).
+    if (voix && res.resume) lireAVoixHaute([res.resume, res.commentaire]);
   };
 
   const supprimerItem = (id) => setHistorique(prev => prev.filter(item => item.id !== id));
@@ -1337,6 +1352,7 @@ function Tableau({ session, onDeconnexion }) {
     apprentissage: { titre: "Apprentissage",           sousTitre: "Réponses signalées et corrections enregistrées" },
     fiabilite:     { titre: "Fiabilité",               sousTitre: "Taux de bonnes réponses sur les questions de référence" },
     audit:         { titre: "Audit",                   sousTitre: "Qui a fait quoi, et quand" },
+    comptes:       { titre: "Comptes",                 sousTitre: "Qui peut se connecter, avec quels droits" },
   };
   const page = PAGES[onglet] ? onglet : "assistant";
 
@@ -1346,7 +1362,11 @@ function Tableau({ session, onDeconnexion }) {
         page={page} allerA={allerA} estAdmin={estAdmin} session={session}
         nbHistorique={historique.length} compteurs={compteurs}
         ouverte={menuOuvert} onFermer={() => setMenuOuvert(false)} onDeconnexion={onDeconnexion}
+        onMotDePasse={() => setFenetreMdp(true)}
       />
+      {fenetreMdp && (
+        <FenetreMotDePasse dark={dark} session={session} onTermine={onSession} onFermer={() => setFenetreMdp(false)} />
+      )}
 
       <div className="flex-1 min-w-0 flex flex-col">
         {/* ── Barre du haut ─────────────────────────────── */}
@@ -1360,6 +1380,18 @@ function Tableau({ session, onDeconnexion }) {
             <h1 className="text-lg font-semibold leading-tight truncate">{PAGES[page].titre}</h1>
             <p className={`text-xs truncate ${dark ? "text-gray-400" : "text-gray-500"}`}>{PAGES[page].sousTitre}</p>
           </div>
+          {parle && (
+            <button onClick={arreterLecture} aria-label="Arrêter la lecture" title="Arrêter la lecture"
+              className={`flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full text-xs font-medium ${
+                dark ? "bg-laiton-400/15 text-laiton-300 hover:bg-laiton-400/25" : "bg-laiton-200/70 text-laiton-600 hover:bg-laiton-200"}`}>
+              <span className="flex items-end gap-0.5 h-3" aria-hidden="true">
+                {[0, 1, 2].map(i => <span key={i} className="w-0.5 bg-current rounded-full animate-pulse"
+                  style={{ height: `${[60, 100, 70][i]}%`, animationDelay: `${i * 150}ms` }} />)}
+              </span>
+              <span className="hidden sm:inline">Lecture</span>
+              <Square size={11} fill="currentColor" />
+            </button>
+          )}
           <button onClick={basculerVoix} aria-label={voix ? "Désactiver la réponse vocale" : "Activer la réponse vocale"}
             title={voix ? "Réponse vocale activée" : "Réponse vocale désactivée"}
             className={`p-2 rounded-lg transition-colors ${dark ? "text-gray-300 hover:bg-gray-800" : "text-gray-600 hover:bg-gray-200"}`}>
@@ -1483,6 +1515,7 @@ function Tableau({ session, onDeconnexion }) {
           {estAdmin && page === "apprentissage" && <PanelApprentissage dark={dark} onChange={rafraichirCompteurs} />}
           {estAdmin && page === "fiabilite"     && <PanelFiabilite dark={dark} />}
           {estAdmin && page === "audit"         && <PanelAudit dark={dark} />}
+          {estAdmin && page === "comptes"       && <PanelComptes dark={dark} session={session} />}
         </main>
 
         <footer className={`px-4 sm:px-8 py-4 text-xs ${dark ? "text-gray-600" : "text-gray-400"}`}>

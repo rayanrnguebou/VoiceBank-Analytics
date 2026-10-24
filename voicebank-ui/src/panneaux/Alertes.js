@@ -1,5 +1,6 @@
 // Alertes de fraude : consultation et traitement (décision + commentaire, tracés dans l'audit)
 import { useState, useEffect, useCallback } from "react";
+import { ShieldAlert, CircleCheck, CircleX } from "lucide-react";
 import { useAPI } from "../useAPI";
 import { carte, champ, titre, texteDiscret, boutonSecondaire, formaterFcfa, formaterDate } from "../ui";
 
@@ -39,7 +40,8 @@ function LigneAlerte({ a, dark, onTraitee }) {
 
       {a.traitee ? (
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${a.decision === "Fraude confirmée" ? "bg-red-500 text-white" : "bg-emerald-500 text-white"}`}>
+          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${a.decision === "Fraude confirmée" ? "bg-red-500 text-white" : "bg-emerald-500 text-white"}`}>
+            {a.decision === "Fraude confirmée" ? <CircleX size={12} /> : <CircleCheck size={12} />}
             {a.decision || "Traitée"}
           </span>
           <span className={texteDiscret(dark)}>par {a.traitee_par || "?"} · {formaterDate(a.date_traitement)}</span>
@@ -65,7 +67,7 @@ function LigneAlerte({ a, dark, onTraitee }) {
   );
 }
 
-export default function PanelAlertes({ dark }) {
+export default function PanelAlertes({ dark, onChange }) {
   const { appeler } = useAPI();
   const [alertes, setAlertes] = useState([]);
   const [niveau, setNiveau]   = useState("Critique");
@@ -82,12 +84,12 @@ export default function PanelAlertes({ dark }) {
   useEffect(() => { charger(); }, [charger]);
 
   const pastille = actif => `text-xs px-2.5 py-1 rounded-full transition-all ${actif
-    ? "bg-blue-600 text-white" : dark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`;
+    ? "bg-foret-600 text-white" : dark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`;
 
   return (
     <div className={carte(dark)}>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-        <h2 className={titre(dark)}>🚨 Alertes fraude</h2>
+        <h2 className={`${titre(dark)} flex items-center gap-2`}><ShieldAlert size={19} strokeWidth={1.75} className="text-red-500" /> Alertes fraude</h2>
         <div className="flex gap-1">
           <button className={pastille(!traitees)} onClick={() => setTraitees(false)}>À traiter</button>
           <button className={pastille(traitees)} onClick={() => setTraitees(true)}>Traitées</button>
@@ -104,7 +106,7 @@ export default function PanelAlertes({ dark }) {
       <div className="space-y-2">
         {alertes.length === 0
           ? <p className={`text-sm text-center py-4 ${dark ? "text-gray-500" : "text-gray-400"}`}>Aucune alerte {traitees ? "traitée" : "à traiter"}{niveau !== "Tous" ? ` (${niveau})` : ""}</p>
-          : alertes.map(a => <LigneAlerte key={a.id_alerte} a={a} dark={dark} onTraitee={charger} />)}
+          : alertes.map(a => <LigneAlerte key={a.id_alerte} a={a} dark={dark} onTraitee={() => { charger(); onChange && onChange(); }} />)}
       </div>
     </div>
   );

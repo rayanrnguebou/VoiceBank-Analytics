@@ -1,0 +1,314 @@
+[
+ {
+  "id": 1,
+  "categorie": "clients",
+  "question": "Combien de clients au total ?",
+  "sql_reference": "SELECT COUNT(*) FROM voicebank.clients"
+ },
+ {
+  "id": 2,
+  "categorie": "clients",
+  "question": "Nombre de clients par banque",
+  "sql_reference": "SELECT banque, COUNT(*) FROM voicebank.clients GROUP BY banque"
+ },
+ {
+  "id": 3,
+  "categorie": "clients",
+  "question": "Clients par ville",
+  "sql_reference": "SELECT ville_compte, COUNT(*) FROM voicebank.clients GROUP BY ville_compte"
+ },
+ {
+  "id": 4,
+  "categorie": "clients",
+  "question": "Top 10 clients par solde",
+  "sql_reference": "SELECT id_client, solde_fcfa FROM voicebank.clients ORDER BY solde_fcfa DESC LIMIT 10"
+ },
+ {
+  "id": 5,
+  "categorie": "clients",
+  "question": "Top 5 clients par solde",
+  "sql_reference": "SELECT id_client, solde_fcfa FROM voicebank.clients ORDER BY solde_fcfa DESC LIMIT 5"
+ },
+ {
+  "id": 6,
+  "categorie": "clients",
+  "question": "Clients diaspora France",
+  "sql_reference": "SELECT id_client FROM voicebank.clients WHERE est_diaspora = 'Oui' AND pays_residence = 'France'"
+ },
+ {
+  "id": 7,
+  "categorie": "clients",
+  "question": "Combien de clients de la diaspora par pays de résidence ?",
+  "sql_reference": "SELECT pays_residence, COUNT(*) FROM voicebank.clients WHERE est_diaspora = 'Oui' GROUP BY pays_residence"
+ },
+ {
+  "id": 8,
+  "categorie": "clients",
+  "question": "Solde moyen des clients par banque",
+  "sql_reference": "SELECT banque, AVG(solde_fcfa) FROM voicebank.clients GROUP BY banque"
+ },
+ {
+  "id": 9,
+  "categorie": "clients",
+  "question": "Nombre de comptes suspendus par banque",
+  "sql_reference": "SELECT banque, COUNT(*) FROM voicebank.clients WHERE statut_compte = 'Suspendu' GROUP BY banque"
+ },
+ {
+  "id": 10,
+  "categorie": "clients",
+  "question": "Combien de clients ont un score de risque élevé ?",
+  "sql_reference": "SELECT COUNT(*) FROM voicebank.clients WHERE score_risque = 'Élevé'"
+ },
+ {
+  "id": 11,
+  "categorie": "clients",
+  "question": "Répartition des clients par sexe",
+  "sql_reference": "SELECT sexe, COUNT(*) FROM voicebank.clients GROUP BY sexe"
+ },
+ {
+  "id": 12,
+  "categorie": "clients",
+  "question": "Âge moyen des clients",
+  "sql_reference": "SELECT AVG(age) FROM voicebank.clients"
+ },
+ {
+  "id": 13,
+  "categorie": "clients",
+  "question": "Nombre de clients actifs",
+  "sql_reference": "SELECT COUNT(*) FROM voicebank.clients WHERE statut_compte = 'Actif'"
+ },
+ {
+  "id": 14,
+  "categorie": "clients",
+  "question": "Solde total des clients à Douala",
+  "sql_reference": "SELECT SUM(solde_fcfa) FROM voicebank.clients WHERE ville_compte = 'Douala'"
+ },
+ {
+  "id": 15,
+  "categorie": "transactions",
+  "question": "Combien de transactions au total ?",
+  "sql_reference": "SELECT COUNT(*) FROM voicebank.transactions"
+ },
+ {
+  "id": 16,
+  "categorie": "transactions",
+  "question": "Volume des transactions par ville",
+  "sql_reference": "SELECT ville, SUM(montant_fcfa) FROM voicebank.transactions GROUP BY ville"
+ },
+ {
+  "id": 17,
+  "categorie": "transactions",
+  "question": "Nombre de transactions par canal",
+  "sql_reference": "SELECT canal, COUNT(*) FROM voicebank.transactions GROUP BY canal"
+ },
+ {
+  "id": 18,
+  "categorie": "transactions",
+  "question": "Montant moyen des transactions par type",
+  "sql_reference": "SELECT type_transaction, AVG(montant_fcfa) FROM voicebank.transactions GROUP BY type_transaction"
+ },
+ {
+  "id": 19,
+  "categorie": "transactions",
+  "question": "Combien de transactions internationales ?",
+  "sql_reference": "SELECT COUNT(*) FROM voicebank.transactions WHERE est_internationale = 'Oui'"
+ },
+ {
+  "id": 20,
+  "categorie": "transactions",
+  "question": "Nombre de transactions échouées",
+  "sql_reference": "SELECT COUNT(*) FROM voicebank.transactions WHERE statut = 'Échouée'"
+ },
+ {
+  "id": 21,
+  "categorie": "transactions",
+  "question": "Montant total des transactions en 2025",
+  "sql_reference": "SELECT SUM(montant_fcfa) FROM voicebank.transactions WHERE EXTRACT(YEAR FROM date_transaction) = 2025"
+ },
+ {
+  "id": 22,
+  "categorie": "transactions",
+  "question": "Nombre de transactions par banque",
+  "sql_reference": "SELECT banque, COUNT(*) FROM voicebank.transactions GROUP BY banque"
+ },
+ {
+  "id": 23,
+  "categorie": "transactions",
+  "question": "Quelle est la plus grosse transaction ?",
+  "sql_reference": "SELECT MAX(montant_fcfa) FROM voicebank.transactions"
+ },
+ {
+  "id": 24,
+  "categorie": "transactions",
+  "question": "Nombre de transactions par mois en 2025",
+  "sql_reference": "SELECT DATE_TRUNC('month', date_transaction), COUNT(*) FROM voicebank.transactions WHERE EXTRACT(YEAR FROM date_transaction) = 2025 GROUP BY 1"
+ },
+ {
+  "id": 25,
+  "categorie": "transactions",
+  "question": "Montant total des transactions par canal",
+  "sql_reference": "SELECT canal, SUM(montant_fcfa) FROM voicebank.transactions GROUP BY canal"
+ },
+ {
+  "id": 26,
+  "categorie": "credits",
+  "question": "Crédits en défaut",
+  "sql_reference": "SELECT montant_fcfa FROM voicebank.credits WHERE statut_credit = 'Défaut'"
+ },
+ {
+  "id": 27,
+  "categorie": "credits",
+  "question": "Crédits en retard",
+  "sql_reference": "SELECT montant_fcfa FROM voicebank.credits WHERE statut_credit = 'En retard'"
+ },
+ {
+  "id": 28,
+  "categorie": "credits",
+  "question": "Combien de crédits en cours ?",
+  "sql_reference": "SELECT COUNT(*) FROM voicebank.credits WHERE statut_credit = 'En cours'"
+ },
+ {
+  "id": 29,
+  "categorie": "credits",
+  "question": "Taux d'intérêt moyen par type de crédit",
+  "sql_reference": "SELECT type_credit, AVG(taux_interet_pct) FROM voicebank.credits GROUP BY type_credit"
+ },
+ {
+  "id": 30,
+  "categorie": "credits",
+  "question": "Montant total des crédits en cours par banque",
+  "sql_reference": "SELECT banque, SUM(montant_fcfa) FROM voicebank.credits WHERE statut_credit = 'En cours' GROUP BY banque"
+ },
+ {
+  "id": 31,
+  "categorie": "credits",
+  "question": "Nombre de crédits par statut",
+  "sql_reference": "SELECT statut_credit, COUNT(*) FROM voicebank.credits GROUP BY statut_credit"
+ },
+ {
+  "id": 32,
+  "categorie": "credits",
+  "question": "Score de crédit moyen des crédits en défaut",
+  "sql_reference": "SELECT AVG(score_credit) FROM voicebank.credits WHERE statut_credit = 'Défaut'"
+ },
+ {
+  "id": 33,
+  "categorie": "credits",
+  "question": "Durée moyenne des crédits",
+  "sql_reference": "SELECT AVG(duree_mois) FROM voicebank.credits"
+ },
+ {
+  "id": 34,
+  "categorie": "credits",
+  "question": "Nombre de crédits en défaut par banque",
+  "sql_reference": "SELECT banque, COUNT(*) FROM voicebank.credits WHERE statut_credit = 'Défaut' GROUP BY banque"
+ },
+ {
+  "id": 35,
+  "categorie": "credits",
+  "question": "Montant total des crédits remboursés",
+  "sql_reference": "SELECT SUM(montant_fcfa) FROM voicebank.credits WHERE statut_credit = 'Remboursé'"
+ },
+ {
+  "id": 36,
+  "categorie": "credits",
+  "question": "Crédits de plus de 50 millions en retard",
+  "sql_reference": "SELECT montant_fcfa FROM voicebank.credits WHERE statut_credit = 'En retard' AND montant_fcfa > 50000000"
+ },
+ {
+  "id": 37,
+  "categorie": "credits",
+  "question": "Mensualité moyenne par type de crédit",
+  "sql_reference": "SELECT type_credit, AVG(mensualite_fcfa) FROM voicebank.credits GROUP BY type_credit"
+ },
+ {
+  "id": 38,
+  "categorie": "fraude",
+  "question": "Transactions frauduleuses",
+  "sql_reference": "SELECT id_transaction FROM voicebank.transactions WHERE est_frauduleuse = 'Oui'"
+ },
+ {
+  "id": 39,
+  "categorie": "fraude",
+  "question": "Transactions frauduleuses par banque",
+  "sql_reference": "SELECT banque, COUNT(*) FROM voicebank.transactions WHERE est_frauduleuse = 'Oui' GROUP BY banque"
+ },
+ {
+  "id": 40,
+  "categorie": "fraude",
+  "question": "Combien de transactions frauduleuses ?",
+  "sql_reference": "SELECT COUNT(*) FROM voicebank.transactions WHERE est_frauduleuse = 'Oui'"
+ },
+ {
+  "id": 41,
+  "categorie": "fraude",
+  "question": "Quelle ville concentre le plus de fraudes ?",
+  "sql_reference": "SELECT ville FROM voicebank.transactions WHERE est_frauduleuse = 'Oui' GROUP BY ville ORDER BY COUNT(*) DESC LIMIT 1"
+ },
+ {
+  "id": 42,
+  "categorie": "fraude",
+  "question": "Alertes critiques",
+  "sql_reference": "SELECT id_alerte FROM voicebank.alertes_fraude WHERE niveau_alerte = 'Critique'"
+ },
+ {
+  "id": 43,
+  "categorie": "fraude",
+  "question": "Nombre d'alertes par niveau",
+  "sql_reference": "SELECT niveau_alerte, COUNT(*) FROM voicebank.alertes_fraude GROUP BY niveau_alerte"
+ },
+ {
+  "id": 44,
+  "categorie": "fraude",
+  "question": "Nombre d'alertes non traitées",
+  "sql_reference": "SELECT COUNT(*) FROM voicebank.alertes_fraude WHERE traitee = FALSE"
+ },
+ {
+  "id": 45,
+  "categorie": "fraude",
+  "question": "Montant total des transactions frauduleuses",
+  "sql_reference": "SELECT SUM(montant_fcfa) FROM voicebank.transactions WHERE est_frauduleuse = 'Oui'"
+ },
+ {
+  "id": 46,
+  "categorie": "fraude",
+  "question": "Nombre de fraudes par canal",
+  "sql_reference": "SELECT canal, COUNT(*) FROM voicebank.transactions WHERE est_frauduleuse = 'Oui' GROUP BY canal"
+ },
+ {
+  "id": 47,
+  "categorie": "fraude",
+  "question": "Transactions suspectes",
+  "sql_reference": "SELECT id_transaction FROM voicebank.transactions WHERE statut = 'Suspecte'"
+ },
+ {
+  "id": 48,
+  "categorie": "suite",
+  "question": "et à Douala ?",
+  "contexte": {
+   "question": "Crédits en défaut",
+   "sql": "SELECT c.id_client, c.nom, c.prenom, c.banque, cr.type_credit, cr.montant_fcfa, cr.statut_credit FROM voicebank.credits cr JOIN voicebank.clients c ON cr.id_client = c.id_client WHERE cr.statut_credit = 'Défaut' ORDER BY cr.montant_fcfa DESC"
+  },
+  "sql_reference": "SELECT cr.montant_fcfa FROM voicebank.credits cr WHERE cr.statut_credit = 'Défaut' AND cr.ville = 'Douala'"
+ },
+ {
+  "id": 49,
+  "categorie": "suite",
+  "question": "seulement BICEC",
+  "contexte": {
+   "question": "Transactions frauduleuses",
+   "sql": "SELECT id_transaction, id_client, banque, ville, montant_fcfa, date_transaction FROM voicebank.transactions WHERE est_frauduleuse = 'Oui' ORDER BY montant_fcfa DESC LIMIT 100"
+  },
+  "sql_reference": "SELECT id_transaction FROM (SELECT id_transaction, banque FROM voicebank.transactions WHERE est_frauduleuse = 'Oui' ORDER BY montant_fcfa DESC LIMIT 100) q WHERE banque = 'BICEC'"
+ },
+ {
+  "id": 50,
+  "categorie": "suite",
+  "question": "et à Yaoundé ?",
+  "contexte": {
+   "question": "Volume transactions par ville",
+   "sql": "SELECT ville, COUNT(*) AS nb_transactions, SUM(montant_fcfa) AS volume_fcfa FROM voicebank.transactions GROUP BY ville ORDER BY volume_fcfa DESC"
+  },
+  "sql_reference": "SELECT SUM(montant_fcfa) FROM voicebank.transactions WHERE ville = 'Yaoundé'"
+ }
+]

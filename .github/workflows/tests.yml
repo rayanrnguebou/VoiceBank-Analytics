@@ -1,0 +1,60 @@
+# Tests automatiques à chaque push et pull request
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: API (pytest + PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: voicebank_api/requirements*.txt
+      - name: Outils système (psql, ffmpeg pour les tests audio)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client ffmpeg
+      - name: Dépendances
+        run: pip install -r voicebank_api/requirements-dev.txt
+      - name: Tests
+        working-directory: voicebank_api
+        env:
+          TEST_PG_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: pytest -q
+
+  interface:
+    name: Interface (tests + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: voicebank-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: voicebank-ui/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm test -- --watchAll=false
+        env:
+          CI: "true"
+      - run: npm run build
+        env:
+          CI: "true"

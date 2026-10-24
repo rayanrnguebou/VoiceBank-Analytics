@@ -1,16 +1,18 @@
+/* Police : IBM Plex Sans (chiffres tabulaires pour les montants) */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Police personnalisée */
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 * {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-feature-settings: "tnum" 1;
 }
 
 code, pre {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
 }
 
 body {

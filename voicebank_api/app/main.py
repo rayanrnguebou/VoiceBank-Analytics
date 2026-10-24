@@ -3,7 +3,7 @@ Auteur : Nguebou Temgoua Rayan
 """
 import logging
 import time
-from datetime import date, datetime
+from datetime import date, datetime, time as heure_t
 from typing import Literal
 
 from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, Request, UploadFile
@@ -15,8 +15,9 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from . import config, db, fraude, nl2sql, transcription
+from . import audit, config, credit, db, evaluation, fraude, nl2sql, resume, transcription
 from .garde_sql import SQLRefuse, valider_sql
+from .masquage import masquer_ligne, masquer_lignes
 from .securite import Utilisateur, admin_requis, authentifier, creer_jeton, utilisateur_courant
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -25,7 +26,7 @@ log = logging.getLogger("voicebank")
 app = FastAPI(
     title="VoiceBank Analytics API",
     description="API bancaire vocale (texte/voix -> SQL) — Nguebou Temgoua Rayan",
-    version="3.0.0",
+    version="3.1.0",
     docs_url=None if config.EST_PROD else "/docs",
     redoc_url=None,
     openapi_url=None if config.EST_PROD else "/openapi.json",
@@ -74,6 +75,7 @@ async def entetes_securite(request: Request, call_next):
 
 
 fraude.charger()
+credit.charger()
 transcription.precharger_en_arriere_plan()
 
 # ════════════════════════════════════════
@@ -84,9 +86,16 @@ class Identifiants(BaseModel):
     mot_de_passe: str = Field(min_length=1, max_length=128)
 
 
+class ContexteQuestion(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+    sql: str = Field(min_length=1, max_length=5000)
+
+
 class QuestionVocale(BaseModel):
     texte: str = Field(min_length=2, max_length=500)
     langue: str | None = "fr"
+    contexte: ContexteQuestion | None = None      # question précédente, pour « et à Douala ? »
+    resumer: bool = True                          # résumé rédigé (lu à voix haute par l'interface)
 
 
 class RequeteSQL(BaseModel):
@@ -96,6 +105,36 @@ class RequeteSQL(BaseModel):
 class Correction(BaseModel):
     question: str = Field(min_length=2, max_length=500)
     sql_correct: str = Field(min_length=1, max_length=5000)
+    id_signalement: int | None = None
+
+
+class Signalement(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+    sql: str | None = Field(None, max_length=5000)
+    source: str | None = Field(None, max_length=20)
+    commentaire: str | None = Field(None, max_length=1000)
+
+
+class DecisionSignalement(BaseModel):
+    statut: Literal["Corrigé", "Rejeté"]
+
+
+class TraitementAlerte(BaseModel):
+    decision: Literal["Fraude confirmée", "Faux positif"]
+    commentaire: str | None = Field(None, max_length=1000)
+
+
+class DemandeCredit(BaseModel):
+    montant_fcfa: float = Field(gt=0, lt=1e13)
+    mensualite_fcfa: float = Field(ge=0, lt=1e12)
+    revenu_annuel_fcfa: float = Field(gt=0, lt=1e13)
+    score_credit: int = Field(600, ge=300, le=850)
+    taux_interet_pct: float = Field(12.0, ge=0, le=100)
+    duree_mois: int = Field(24, ge=1, le=480)
+    est_diaspora: Literal["Oui", "Non"] = "Non"
+    type_credit: str = Field(max_length=50)
+    garantie: str = Field(max_length=50)
+    banque: str = Field(max_length=60)
 
 
 class TransactionAnalyse(BaseModel):
@@ -106,6 +145,7 @@ class TransactionAnalyse(BaseModel):
     ville: str = Field(max_length=50)
     est_internationale: Literal["Oui", "Non"] = "Non"
     date_transaction: date | None = None
+    heure: heure_t | None = None
 
 
 # ════════════════════════════════════════
@@ -168,11 +208,21 @@ async def _lire_audio(fichier: UploadFile) -> tuple[bytes, str]:
     return contenu, extension
 
 
-def _question_vers_resultat(texte: str, u: Utilisateur) -> dict:
+def _colonnes_de(sql: str) -> list[str]:
+    try:
+        return db.lire(valider_sql(sql, 0), brut=True)[0]
+    except Exception:
+        return []
+
+
+def _question_vers_resultat(texte: str, u: Utilisateur, contexte: ContexteQuestion | None = None,
+                            resumer: bool = True) -> dict:
     debut = time.time()
     question = nl2sql.normaliser_question(texte)
+    ctx = contexte.model_dump() if contexte else None
     try:
-        sql, source, score, avertissement = nl2sql.texte_vers_sql(question)
+        sql, source, score, avertissement, suite = nl2sql.texte_vers_sql_avec_contexte(
+            question, ctx, lambda: _colonnes_de(ctx["sql"]))
     except nl2sql.IAIndisponible:
         _journaliser(texte, None, False, int((time.time() - debut) * 1000), u)
         raise HTTPException(503, "Je n'ai pas compris la question et l'IA est indisponible. "
@@ -182,11 +232,14 @@ def _question_vers_resultat(texte: str, u: Utilisateur) -> dict:
     except HTTPException:
         _journaliser(texte, sql, False, int((time.time() - debut) * 1000), u)
         raise
+    lignes = masquer_lignes(colonnes, lignes, u.role)
+    texte_resume, source_resume = resume.resumer(texte, colonnes, lignes) if resumer else (None, None)
     duree = int((time.time() - debut) * 1000)
     _journaliser(texte, sql, True, duree, u)
     return {"status": "ok", "question": texte, "sql": sql, "source": source,
             "score_rag": score, "avertissement": avertissement, "colonnes": colonnes, "total": len(lignes),
-            "data": lignes, "duree_ms": duree}
+            "data": lignes, "duree_ms": duree, "resume": texte_resume, "resume_source": source_resume,
+            "suite": suite, "question_precedente": ctx["question"] if suite else None}
 
 
 # ════════════════════════════════════════
@@ -205,7 +258,7 @@ def health():
             "database": "connectee" if ok else "deconnectee",
             "gemini": "disponible" if config.GEMINI_API_KEY else "non configure",
             "whisper": transcription.etat(),
-            "modeles_ia": sorted(fraude.modeles.keys()),
+            "modeles_ia": sorted(k for k in fraude.modeles if k != "meta") + (["credit"] if credit.disponible() else []),
             "timestamp": datetime.now().isoformat()}
 
 
@@ -213,9 +266,12 @@ def health():
 @limiter.limit("5/minute")
 def login(request: Request, body: Identifiants):
     u = authentifier(body.nom, body.mot_de_passe)
+    ip = get_remote_address(request)
     if not u:
-        log.warning("Échec de connexion pour '%s' depuis %s", body.nom, get_remote_address(request))
+        log.warning("Échec de connexion pour '%s' depuis %s", body.nom, ip)
+        audit.journaliser(body.nom[:64], "connexion_refusee", None, ip)
         raise HTTPException(401, "Identifiants incorrects")
+    audit.journaliser(u.nom, "connexion", {"role": u.role}, ip)
     return {"access_token": creer_jeton(u), "token_type": "bearer",
             "utilisateur": u.nom, "role": u.role, "expire_dans_min": config.JWT_DUREE_MIN}
 
@@ -264,11 +320,13 @@ def lister_clients(
         "SELECT id_client, nom, prenom, banque, ville_compte, pays_residence, est_diaspora, "
         f"solde_fcfa, score_risque, statut_compte FROM voicebank.clients WHERE {where} "
         "ORDER BY solde_fcfa DESC LIMIT :limit", params)
+    rows = masquer_lignes(list(rows[0].keys()) if rows else [], rows, u.role)
     return {"status": "ok", "total": len(rows), "data": rows}
 
 
 @app.get("/clients/{id_client}")
-def detail_client(id_client: str = Path(max_length=12), u: Utilisateur = Depends(utilisateur_courant)):
+def detail_client(request: Request, id_client: str = Path(max_length=12),
+                  u: Utilisateur = Depends(utilisateur_courant)):
     _, client = _lire("SELECT * FROM voicebank.clients WHERE id_client = :id", {"id": id_client})
     if not client:
         raise HTTPException(404, "Client introuvable")
@@ -279,7 +337,9 @@ def detail_client(id_client: str = Path(max_length=12), u: Utilisateur = Depends
     _, credits = _lire(
         "SELECT id_credit, type_credit, montant_fcfa, statut_credit, taux_interet_pct, mensualite_fcfa "
         "FROM voicebank.credits WHERE id_client = :id", {"id": id_client})
-    return {"status": "ok", "client": client[0], "transactions": transactions, "credits": credits}
+    audit.journaliser(u.nom, "consultation_client", {"id_client": id_client}, get_remote_address(request))
+    return {"status": "ok", "client": masquer_ligne(client[0], u.role), "transactions": transactions,
+            "credits": credits}
 
 
 @app.get("/transactions/recentes")
@@ -294,6 +354,30 @@ def transactions_recentes(limit: int = Query(50, ge=1, le=500), fraude_only: boo
     return {"status": "ok", "total": len(rows), "data": rows}
 
 
+@app.post("/alertes/{id_alerte}/traiter")
+def traiter_alerte(request: Request, body: TraitementAlerte, id_alerte: int = Path(ge=1),
+                   u: Utilisateur = Depends(utilisateur_courant)):
+    res = db.ecrire(
+        "UPDATE voicebank.alertes_fraude SET traitee = TRUE, decision = :d, commentaire = :c, "
+        "traitee_par = :u, date_traitement = NOW() WHERE id_alerte = :id AND traitee = FALSE",
+        {"d": body.decision, "c": body.commentaire, "u": u.nom, "id": id_alerte})
+    if res.rowcount == 0:
+        _, existe = _lire("SELECT traitee FROM voicebank.alertes_fraude WHERE id_alerte = :id", {"id": id_alerte})
+        raise HTTPException(409 if existe else 404, "Alerte déjà traitée" if existe else "Alerte introuvable")
+    audit.journaliser(u.nom, "alerte_traitee", {"id_alerte": id_alerte, "decision": body.decision},
+                      get_remote_address(request))
+    return {"status": "ok", "id_alerte": id_alerte, "decision": body.decision, "traitee_par": u.nom}
+
+
+@app.get("/alertes/stats")
+def stats_alertes(u: Utilisateur = Depends(utilisateur_courant)):
+    _, rows = _lire("SELECT COUNT(*) FILTER (WHERE NOT traitee) AS a_traiter, "
+                    "COUNT(*) FILTER (WHERE decision = 'Fraude confirmée') AS confirmees, "
+                    "COUNT(*) FILTER (WHERE decision = 'Faux positif') AS faux_positifs "
+                    "FROM voicebank.alertes_fraude")
+    return {"status": "ok", **rows[0]}
+
+
 @app.get("/alertes/fraude")
 def alertes_fraude(niveau: Literal["Faible", "Moyen", "Élevé", "Critique"] | None = None,
                    traitee: bool | None = None, limit: int = Query(50, ge=1, le=200),
@@ -305,7 +389,8 @@ def alertes_fraude(niveau: Literal["Faible", "Moyen", "Élevé", "Critique"] | N
         conditions.append("a.traitee = :traitee"); params["traitee"] = traitee
     _, rows = _lire(
         "SELECT a.id_alerte, a.id_transaction, a.id_client, a.score_anomalie, a.niveau_alerte, "
-        "a.motif, a.traitee, a.date_alerte, t.montant_fcfa, t.banque, t.ville, t.type_transaction "
+        "a.motif, a.traitee, a.decision, a.commentaire, a.traitee_par, a.date_traitement, a.date_alerte, "
+        "t.montant_fcfa, t.banque, t.ville, t.type_transaction "
         "FROM voicebank.alertes_fraude a LEFT JOIN voicebank.transactions t "
         f"ON a.id_transaction = t.id_transaction WHERE {' AND '.join(conditions)} "
         "ORDER BY a.score_anomalie DESC LIMIT :limit", params)
@@ -328,7 +413,7 @@ def portefeuille_credit(statut: Literal["En cours", "Remboursé", "En retard", "
 @app.post("/vocal/question")
 @limiter.limit("30/minute")
 def question_vocale(request: Request, body: QuestionVocale, u: Utilisateur = Depends(utilisateur_courant)):
-    return _question_vers_resultat(body.texte, u)
+    return _question_vers_resultat(body.texte, u, body.contexte, body.resumer)
 
 
 @app.post("/vocal/transcrire")
@@ -363,10 +448,82 @@ def analyser_transaction(txn: TransactionAnalyse, u: Utilisateur = Depends(utili
         raise HTTPException(503, "Modèle de fraude non chargé")
     try:
         res = fraude.analyser(txn.montant_fcfa, txn.type_transaction, txn.canal, txn.banque,
-                              txn.ville, txn.est_internationale, txn.date_transaction)
+                              txn.ville, txn.est_internationale, txn.date_transaction, txn.heure)
     except ValueError as e:
         raise HTTPException(422, str(e))
-    return {"status": "ok", **res}
+    return {"status": "ok", **res, "modele": fraude.infos_modele()}
+
+
+@app.get("/ia/modeles")
+def ia_modeles(u: Utilisateur = Depends(utilisateur_courant)):
+    return {"status": "ok", "fraude": fraude.infos_modele(), "credit_disponible": credit.disponible()}
+
+
+# ── IA score de crédit (expliqué) ─────────────────────
+
+def _credit_requis():
+    if not credit.disponible():
+        raise HTTPException(503, "Modèle de crédit non chargé")
+
+
+@app.get("/ia/credit/referentiel")
+def credit_referentiel(u: Utilisateur = Depends(utilisateur_courant)):
+    _credit_requis()
+    return {"status": "ok", "data": credit.referentiel()}
+
+
+@app.post("/ia/score-credit")
+def score_demande_credit(body: DemandeCredit, u: Utilisateur = Depends(utilisateur_courant)):
+    _credit_requis()
+    try:
+        return {"status": "ok", **credit.scorer(body.model_dump(), strict=True)}
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+
+_SQL_CREDIT = ("SELECT cr.id_credit, cr.id_client, cr.banque, cr.type_credit, cr.garantie, cr.montant_fcfa, "
+               "cr.mensualite_fcfa, cr.revenu_annuel_fcfa, cr.score_credit, cr.taux_interet_pct, cr.duree_mois, "
+               "cr.statut_credit, COALESCE(cr.est_diaspora, c.est_diaspora) AS est_diaspora "
+               "FROM voicebank.credits cr LEFT JOIN voicebank.clients c ON c.id_client = cr.id_client ")
+
+
+@app.get("/ia/score-credit/{id_credit}")
+def score_credit_existant(request: Request, id_credit: str = Path(max_length=12),
+                          u: Utilisateur = Depends(utilisateur_courant)):
+    _credit_requis()
+    _, rows = _lire(_SQL_CREDIT + "WHERE cr.id_credit = :id", {"id": id_credit})
+    if not rows:
+        raise HTTPException(404, "Crédit introuvable")
+    audit.journaliser(u.nom, "score_credit", {"id_credit": id_credit}, get_remote_address(request))
+    return {"status": "ok", "credit": rows[0], **credit.scorer(rows[0], strict=False)}
+
+
+@app.get("/ia/credits-a-risque")
+def credits_a_risque(limit: int = Query(15, ge=1, le=100), banque: str | None = Query(None, max_length=60),
+                     u: Utilisateur = Depends(utilisateur_courant)):
+    """Crédits EN COURS dont le modèle anticipe le plus fort risque de défaut."""
+    _credit_requis()
+    where, params = "WHERE cr.statut_credit = 'En cours'", {}
+    if banque:
+        where += " AND cr.banque = :banque"; params["banque"] = banque
+    _, rows = _lire(_SQL_CREDIT + where + " ORDER BY cr.date_debut DESC NULLS LAST LIMIT 5000", params)
+    scores = [{**r, **{k: v for k, v in credit.scorer(r, strict=False).items() if k != "facteurs"}} for r in rows]
+    scores.sort(key=lambda r: r["probabilite_defaut"], reverse=True)
+    return {"status": "ok", "analyses": len(rows), "data": scores[:limit]}
+
+
+# ── Signalements (réponse jugée fausse) ───────────────
+
+@app.post("/signalements")
+def signaler(request: Request, body: Signalement, u: Utilisateur = Depends(utilisateur_courant)):
+    res = db.ecrire("INSERT INTO voicebank.signalements (question, requete_sql, source, commentaire, utilisateur) "
+                    "VALUES (:q, :s, :src, :c, :u) RETURNING id_signalement",
+                    {"q": body.question, "s": body.sql, "src": body.source, "c": body.commentaire, "u": u.nom})
+    id_s = res.scalar()
+    audit.journaliser(u.nom, "signalement", {"id_signalement": id_s, "question": body.question},
+                      get_remote_address(request))
+    return {"status": "ok", "id_signalement": id_s,
+            "message": "Merci : un administrateur va vérifier et corriger cette réponse."}
 
 
 # ════════════════════════════════════════
@@ -382,7 +539,7 @@ def executer_requete(request: Request, body: RequeteSQL, u: Utilisateur = Depend
 
 
 @app.post("/vocal/corriger")
-def corriger_reponse(body: Correction, u: Utilisateur = Depends(admin_requis)):
+def corriger_reponse(request: Request, body: Correction, u: Utilisateur = Depends(admin_requis)):
     # Une correction n'est enregistrée que si elle passe la validation ET s'exécute.
     sql, _, _ = _executer_sql_valide(body.sql_correct)
     question = nl2sql.normaliser_question(body.question)
@@ -394,8 +551,84 @@ def corriger_reponse(body: Correction, u: Utilisateur = Depends(admin_requis)):
     else:
         db.ecrire("INSERT INTO voicebank.logs_corrections (question, sql_correct) VALUES (:q, :s)",
                   {"q": question, "s": sql})
-    log.info("Correction RAG enregistrée par %s", u.nom)
+    if body.id_signalement:
+        db.ecrire("UPDATE voicebank.signalements SET statut = 'Corrigé', traite_par = :u, date_traitement = NOW() "
+                  "WHERE id_signalement = :id", {"u": u.nom, "id": body.id_signalement})
+    audit.journaliser(u.nom, "correction_rag", {"question": question, "id_signalement": body.id_signalement},
+                      get_remote_address(request))
     return {"status": "ok", "message": "Correction enregistrée.", "question": question, "sql_correct": sql}
+
+
+@app.post("/rag/corrections/{id_correction}/supprimer")
+def supprimer_correction(request: Request, id_correction: int = Path(ge=1), u: Utilisateur = Depends(admin_requis)):
+    res = db.ecrire("DELETE FROM voicebank.logs_corrections WHERE id = :id RETURNING question", {"id": id_correction})
+    if not res.lignes:
+        raise HTTPException(404, "Correction introuvable")
+    audit.journaliser(u.nom, "correction_supprimee", {"id": id_correction, "question": res.scalar()},
+                      get_remote_address(request))
+    return {"status": "ok"}
+
+
+@app.get("/signalements")
+def lister_signalements(statut: Literal["Ouvert", "Corrigé", "Rejeté"] | None = "Ouvert",
+                        limit: int = Query(50, ge=1, le=200), u: Utilisateur = Depends(admin_requis)):
+    where, params = ("WHERE statut = :st", {"st": statut}) if statut else ("", {})
+    _, rows = _lire("SELECT id_signalement, question, requete_sql, source, commentaire, utilisateur, statut, "
+                    f"traite_par, date_signalement FROM voicebank.signalements {where} "
+                    "ORDER BY date_signalement DESC LIMIT :limit", params | {"limit": limit})
+    return {"status": "ok", "total": len(rows), "data": rows}
+
+
+@app.post("/signalements/{id_signalement}/traiter")
+def traiter_signalement(request: Request, body: DecisionSignalement, id_signalement: int = Path(ge=1),
+                        u: Utilisateur = Depends(admin_requis)):
+    res = db.ecrire("UPDATE voicebank.signalements SET statut = :st, traite_par = :u, date_traitement = NOW() "
+                    "WHERE id_signalement = :id", {"st": body.statut, "u": u.nom, "id": id_signalement})
+    if res.rowcount == 0:
+        raise HTTPException(404, "Signalement introuvable")
+    audit.journaliser(u.nom, "signalement_traite", {"id_signalement": id_signalement, "statut": body.statut},
+                      get_remote_address(request))
+    return {"status": "ok"}
+
+
+# ── Audit et fiabilité ─────────────────────────────────
+
+@app.get("/admin/audit")
+def journal_audit(action: str | None = Query(None, max_length=40), utilisateur: str | None = Query(None, max_length=64),
+                  limit: int = Query(100, ge=1, le=500), u: Utilisateur = Depends(admin_requis)):
+    conditions, params = ["TRUE"], {"limit": limit}
+    if action:
+        conditions.append("action = :a"); params["a"] = action
+    if utilisateur:
+        conditions.append("utilisateur = :u"); params["u"] = utilisateur
+    _, evenements = _lire("SELECT id_evenement, date_evenement, utilisateur, action, detail, adresse_ip "
+                          f"FROM voicebank.journal_audit WHERE {' AND '.join(conditions)} "
+                          "ORDER BY date_evenement DESC LIMIT :limit", params)
+    _, questions = _lire("SELECT date_requete, utilisateur, texte_original AS question, succes, duree_ms "
+                         "FROM voicebank.logs_vocaux ORDER BY date_requete DESC LIMIT 100")
+    _, synthese = _lire("SELECT utilisateur, COUNT(*) AS questions, "
+                        "ROUND(100.0 * AVG(CASE WHEN succes THEN 1 ELSE 0 END), 1) AS taux_succes "
+                        "FROM voicebank.logs_vocaux WHERE date_requete > NOW() - INTERVAL '30 days' "
+                        "GROUP BY utilisateur ORDER BY questions DESC")
+    return {"status": "ok", "evenements": evenements, "questions": questions, "synthese_30j": synthese}
+
+
+@app.post("/admin/evaluation")
+def lancer_evaluation(request: Request, u: Utilisateur = Depends(admin_requis)):
+    if not evaluation.lancer_en_arriere_plan(u.nom):
+        raise HTTPException(409, "Une évaluation est déjà en cours")
+    audit.journaliser(u.nom, "evaluation_lancee", None, get_remote_address(request))
+    return {"status": "ok", "message": "Évaluation lancée (1 à 2 minutes avec Gemini)."}
+
+
+@app.get("/admin/evaluation")
+def derniere_evaluation(u: Utilisateur = Depends(admin_requis)):
+    _, rows = _lire("SELECT id_evaluation, date_evaluation, utilisateur, nb_questions, nb_reussies, taux_reussite, "
+                    "gemini_actif, details FROM voicebank.evaluations ORDER BY date_evaluation DESC LIMIT 1")
+    _, historique = _lire("SELECT date_evaluation, taux_reussite, gemini_actif FROM voicebank.evaluations "
+                          "ORDER BY date_evaluation DESC LIMIT 10")
+    return {"status": "ok", "en_cours": evaluation.etat["en_cours"], "derniere": rows[0] if rows else None,
+            "historique": historique}
 
 
 @app.get("/rag/corrections")

@@ -7,6 +7,7 @@
 """
 from datetime import date, datetime, time
 from decimal import Decimal
+from types import SimpleNamespace
 
 from sqlalchemy import create_engine, text
 
@@ -48,9 +49,13 @@ def lire(sql: str, params: dict | None = None, brut: bool = False) -> tuple[list
     return colonnes, lignes
 
 
-def ecrire(sql: str, params: dict | None = None):
+def ecrire(sql: str, params: dict | None = None) -> SimpleNamespace:
+    """Retourne rowcount, lignes (si RETURNING) et scalar() — lus AVANT la fin de la transaction."""
     with moteur_app.begin() as conn:
-        return conn.execute(text(sql), params or {})
+        res = conn.execute(text(sql), params or {})
+        lignes = res.fetchall() if res.returns_rows else []
+        nb = res.rowcount
+    return SimpleNamespace(rowcount=nb, lignes=lignes, scalar=lambda: lignes[0][0] if lignes else None)
 
 
 def base_ok() -> bool:

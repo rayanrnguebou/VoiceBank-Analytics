@@ -30,7 +30,8 @@ def _preparer_base():
     c.cursor().execute(f"DROP DATABASE IF EXISTS {BASE} WITH (FORCE)")
     c.cursor().execute(f"CREATE DATABASE {BASE}")
     c.close()
-    url_admin = _url(urlsplit(ADMIN_URL).username or "postgres")
+    a = urlsplit(ADMIN_URL)
+    url_admin = _url(a.username or "postgres", a.password)
     init = RACINE / "voicebank_db" / "init"
     for f in ["01_init_voicebank.sql", "02_corrections_rag.sql"]:
         subprocess.run(["psql", url_admin, "-q", "-v", "ON_ERROR_STOP=1", "-f", str(init / f)],

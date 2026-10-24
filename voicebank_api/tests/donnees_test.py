@@ -50,17 +50,20 @@ def inserer(conn, n_clients=200, n_txn=2000, n_credits=300):
         c = rnd.choice(clients)
         credits.append(dict(
             id_credit=f"CRD-{i:07d}", id_client=c["id_client"], banque=c["banque"], ville=c["ville_compte"],
-            type_credit=rnd.choice(["Immobilier", "Consommation", "Auto"]),
+            type_credit=rnd.choice(["Crédit immobilier", "Crédit à la consommation", "Crédit automobile"]),
+            garantie=rnd.choice(["Caution personnelle", "Hypothèque", "Sans garantie"]),
+            revenu_annuel_fcfa=rnd.randint(1_000_000, 60_000_000),
             montant_fcfa=rnd.randint(100_000, 80_000_000), taux_interet_pct=round(rnd.uniform(5, 18), 2),
             duree_mois=rnd.choice([12, 24, 36, 60]), mensualite_fcfa=rnd.randint(10_000, 2_000_000),
             score_credit=rnd.randint(300, 850),
             statut_credit=rnd.choice(["En cours", "En cours", "Remboursé", "En retard", "Défaut"]),
             date_debut=date(2024, 1, 1) + timedelta(days=rnd.randint(0, 700))))
     conn.execute_many("""INSERT INTO voicebank.credits (id_credit, id_client, banque, ville, type_credit,
-        montant_fcfa, taux_interet_pct, duree_mois, mensualite_fcfa, score_credit, statut_credit, date_debut)
-        VALUES (%(id_credit)s, %(id_client)s, %(banque)s, %(ville)s, %(type_credit)s, %(montant_fcfa)s,
-        %(taux_interet_pct)s, %(duree_mois)s, %(mensualite_fcfa)s, %(score_credit)s, %(statut_credit)s,
-        %(date_debut)s)""", credits)
+        garantie, revenu_annuel_fcfa, montant_fcfa, taux_interet_pct, duree_mois, mensualite_fcfa,
+        score_credit, statut_credit, date_debut)
+        VALUES (%(id_credit)s, %(id_client)s, %(banque)s, %(ville)s, %(type_credit)s, %(garantie)s,
+        %(revenu_annuel_fcfa)s, %(montant_fcfa)s, %(taux_interet_pct)s, %(duree_mois)s, %(mensualite_fcfa)s,
+        %(score_credit)s, %(statut_credit)s, %(date_debut)s)""", credits)
 
     alertes = [dict(id_transaction=t["id_transaction"], id_client=t["id_client"],
                     score=round(rnd.uniform(0.5, 1), 4),

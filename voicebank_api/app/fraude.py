@@ -3,8 +3,9 @@
 Score final = 0,4 x Isolation Forest (normalisé) + 0,6 x probabilité XGBoost,
 comme lors de l'entraînement.
 """
+import json
 import logging
-from datetime import date
+from datetime import date, time
 
 import joblib
 import numpy as np
@@ -35,6 +36,8 @@ def charger():
         xgb = XGBClassifier()
         xgb.load_model(str(d / "xgb_fraude.json"))
         modeles["xgb"] = xgb
+        meta = d / "meta_fraude.json"
+        modeles["meta"] = json.loads(meta.read_text(encoding="utf-8")) if meta.exists() else {}
         log.info("Modèles IA chargés depuis %s", d)
     except Exception:
         log.exception("Modèles IA non chargés (dossier : %s)", d)
@@ -50,8 +53,21 @@ def niveau(score: float) -> str:
             else "Moyen" if score >= 0.50 else "Faible")
 
 
+def infos_modele() -> dict:
+    meta = modeles.get("meta") or {}
+    return {
+        "date_entrainement": meta.get("date_entrainement"),
+        "nb_transactions": meta.get("nb_transactions"),
+        "auc_xgboost": meta.get("auc_xgboost"),
+        "heure_prise_en_compte": bool(meta.get("heure_valide")),
+        "remarque": None if meta else ("Modèle d'origine : l'heure n'a pas été apprise. "
+                                       "Réentraîne-le avec app.outils.entrainer_fraude."),
+    }
+
+
 def analyser(montant_fcfa: float, type_transaction: str, canal: str, banque: str,
-             ville: str, est_internationale: str, jour: date | None = None) -> dict:
+             ville: str, est_internationale: str, jour: date | None = None,
+             heure: time | None = None) -> dict:
     if "iforest" not in modeles:
         raise RuntimeError("Modèles non chargés")
     enc = modeles["encoders"]
@@ -61,17 +77,19 @@ def analyser(montant_fcfa: float, type_transaction: str, canal: str, banque: str
         if val not in enc[col].classes_:
             raise ValueError(f"Valeur inconnue pour {col} : {val}")
     jour = jour or date.today()
-    # NB : à l'entraînement, l'heure n'a pas pu être lue (format HH:MM:SS vs %H:%M) et
-    # valait toujours 12. On fournit donc la même valeur pour rester cohérent avec
-    # le modèle ; il faudra réentraîner pour exploiter l'heure.
+    meta = modeles.get("meta") or {}
+    # Modèle d'origine : l'heure n'avait pas pu être lue à l'entraînement (toujours 12).
+    # On ne l'utilise que si le modèle a été réentraîné avec le script corrigé.
+    h = heure.hour if (heure and meta.get("heure_valide")) else 12
     ligne = {
-        "montant_log": np.log1p(montant_fcfa), "heure_num": 12, "est_nuit": 0,
+        "montant_log": np.log1p(montant_fcfa), "heure_num": h, "est_nuit": int(h >= 22 or h <= 6),
         "est_weekend": int(jour.weekday() >= 5),
         **{f"{c}_enc": int(enc[c].transform([v])[0]) for c, v in valeurs.items()},
     }
     X = pd.DataFrame([ligne], columns=FEATURES)
     brut_if = float(-modeles["iforest"].decision_function(modeles["scaler"].transform(X))[0])
-    score_if = min(max((brut_if - IF_MIN) / (IF_MAX - IF_MIN), 0.0), 1.0)
+    if_min, if_max = meta.get("if_min", IF_MIN), meta.get("if_max", IF_MAX)
+    score_if = min(max((brut_if - if_min) / (if_max - if_min), 0.0), 1.0)
     proba_xgb = float(modeles["xgb"].predict_proba(X)[0, 1]) if "xgb" in modeles else score_if
     score = round(0.4 * score_if + 0.6 * proba_xgb, 4)
     return {

@@ -10,8 +10,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY voicebank_api/main.py ./main.py
 COPY voicebank_api/app ./app
+COPY voicebank_api/evaluation/questions.json ./evaluation/questions.json
 COPY voicebank_ia/modeles_sauvegardes ./voicebank_ia/modeles_sauvegardes
 COPY voicebank_whisper ./voicebank_whisper
+COPY voicebank_db/init ./voicebank_db/init
+COPY voicebank_api/demarrer.sh ./demarrer.sh
 
 # Utilisateur sans privilèges
 # Modèles Whisper local téléchargés au 1er démarrage dans un volume (voir docker-compose)
@@ -21,5 +24,5 @@ USER voicebank
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)"
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:' + __import__('os').environ.get('PORT', '8000') + '/health').status==200 else 1)"
+CMD ["sh", "/app/demarrer.sh"]

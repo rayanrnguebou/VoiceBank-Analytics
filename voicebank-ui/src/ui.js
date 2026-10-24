@@ -3,13 +3,13 @@ export const carte = dark =>
   `rounded-2xl border p-6 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`;
 export const champ = dark =>
   `w-full px-3 py-2 rounded-xl border text-sm outline-none ${dark
-    ? "bg-gray-700 border-gray-600 text-white focus:border-blue-500"
-    : "bg-gray-50 border-gray-200 text-gray-900 focus:border-blue-500"}`;
+    ? "bg-gray-700 border-gray-600 text-white focus:border-foret-500"
+    : "bg-gray-50 border-gray-200 text-gray-900 focus:border-foret-500"}`;
 export const etiquette = dark => `block text-xs mb-1 ${dark ? "text-gray-400" : "text-gray-500"}`;
 export const titre = dark => `text-lg font-bold ${dark ? "text-white" : "text-gray-900"}`;
 export const texteDiscret = dark => `text-xs ${dark ? "text-gray-400" : "text-gray-500"}`;
 export const boutonPrincipal =
-  "px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl disabled:opacity-50";
+  "px-4 py-2 bg-foret-600 hover:bg-foret-700 text-white text-sm font-semibold rounded-xl disabled:opacity-50";
 export const boutonSecondaire = dark =>
   `px-3 py-1.5 rounded-lg text-xs font-medium ${dark ? "bg-gray-700 hover:bg-gray-600 text-gray-200"
     : "bg-gray-100 hover:bg-gray-200 text-gray-700"}`;

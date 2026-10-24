@@ -1,6 +1,7 @@
 // Outils d'amélioration continue : signaler / corriger une réponse, apprentissage (RAG),
 // fiabilité mesurée et journal d'audit.
 import { useState, useEffect, useCallback, useRef } from "react";
+import { CircleCheck, CircleX } from "lucide-react";
 import { useAPI } from "../useAPI";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate } from "../ui";
 
@@ -52,7 +53,7 @@ export function EditeurCorrection({ question: q0, sql: sql0, idSignalement, dark
 
   if (ok) return <p className="text-xs text-emerald-500 mt-2">Correction enregistrée : la prochaine question similaire utilisera cette requête.</p>;
   return (
-    <div className={`mt-3 p-3 rounded-xl space-y-2 ${dark ? "bg-gray-900/40" : "bg-blue-50"}`}>
+    <div className={`mt-3 p-3 rounded-xl space-y-2 ${dark ? "bg-gray-900/40" : "bg-foret-50"}`}>
       <label className="block">
         <span className={etiquette(dark)}>Question</span>
         <input value={question} onChange={e => setQuestion(e.target.value)} maxLength={500} className={champ(dark)} />
@@ -87,7 +88,7 @@ export function EditeurCorrection({ question: q0, sql: sql0, idSignalement, dark
 }
 
 // ── Onglet Apprentissage (admin) ─────────────────────
-export function PanelApprentissage({ dark }) {
+export function PanelApprentissage({ dark, onChange }) {
   const { appeler } = useAPI();
   const [signalements, setSignalements] = useState([]);
   const [corrections, setCorrections] = useState([]);
@@ -96,7 +97,8 @@ export function PanelApprentissage({ dark }) {
   const charger = useCallback(() => {
     appeler("get", "/signalements?statut=Ouvert").then(r => setSignalements(r ? r.data : []));
     appeler("get", "/rag/corrections?limit=100").then(r => setCorrections(r ? r.data : []));
-  }, [appeler]);
+    onChange && onChange();
+  }, [appeler, onChange]);
   useEffect(() => { charger(); }, [charger]);
 
   const rejeter = async id => { if (await appeler("post", `/signalements/${id}/traiter`, { statut: "Rejeté" })) charger(); };
@@ -214,7 +216,7 @@ export function PanelFiabilite({ dark }) {
                   <div key={cle} className="flex items-center gap-2 mb-1">
                     <span className={`text-xs w-28 ${dark ? "text-gray-400" : "text-gray-600"}`}>{cle}</span>
                     <div className={`flex-1 h-2 rounded-full overflow-hidden ${dark ? "bg-gray-700" : "bg-gray-200"}`}>
-                      <div className="h-full bg-blue-500" style={{ width: `${s.taux || 0}%` }} />
+                      <div className="h-full bg-foret-500" style={{ width: `${s.taux || 0}%` }} />
                     </div>
                     <span className={texteDiscret(dark)}>{s.justes}/{s.questions}</span>
                   </div>
@@ -234,7 +236,7 @@ export function PanelFiabilite({ dark }) {
             </details>
           )}
           {etat.historique?.length > 1 && (
-            <p className={`${texteDiscret(dark)} mt-3`}>Historique : {etat.historique.map(h => `${Number(h.taux_reussite).toFixed(0)} %`).join(" ← ")}</p>
+            <p className={`${texteDiscret(dark)} mt-3`}>Historique : {etat.historique.map(h => `${Number(h.taux_reussite).toFixed(0)} %`).join(" · ")}</p>
           )}
         </>
       )}
@@ -306,7 +308,7 @@ export function PanelAudit({ dark }) {
         <div className="space-y-1 max-h-72 overflow-y-auto">
           {(donnees?.questions || []).map((q, i) => (
             <p key={i} className={texteDiscret(dark)}>
-              <span className={q.succes ? "text-emerald-500" : "text-red-500"}>{q.succes ? "✓" : "✗"}</span>{" "}
+              {q.succes ? <CircleCheck size={12} className="inline text-emerald-500 -mt-0.5" aria-label="réussie" /> : <CircleX size={12} className="inline text-red-500 -mt-0.5" aria-label="échouée" />}{" "}
               {formaterDate(q.date_requete)} · <strong>{q.utilisateur || "?"}</strong> · {q.question} · {q.duree_ms} ms
             </p>
           ))}

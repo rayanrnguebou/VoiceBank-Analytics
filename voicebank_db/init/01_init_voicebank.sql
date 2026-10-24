@@ -281,6 +281,28 @@ CREATE TABLE IF NOT EXISTS voicebank.evaluations (
 
 
 -- ══════════════════════════════════════════════════════════
+-- TABLE 9 : COMPTES UTILISATEURS DE L'APPLICATION
+-- Jamais lisible par le compte lecture seule ni par l'IA. Pas de suppression :
+-- un compte est désactivé (traçabilité de l'audit).
+-- ══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS voicebank.utilisateurs (
+    nom                 VARCHAR(64)  PRIMARY KEY,
+    role                VARCHAR(20)  NOT NULL CHECK (role IN ('analyste', 'admin')),
+    hash_mdp            VARCHAR(100) NOT NULL,
+    actif               BOOLEAN      NOT NULL DEFAULT TRUE,
+    doit_changer_mdp    BOOLEAN      NOT NULL DEFAULT TRUE,
+    mdp_provisoire_expire TIMESTAMP,
+    echecs_connexion    INTEGER      NOT NULL DEFAULT 0,
+    verrouille_jusqua   TIMESTAMP,
+    version_jeton       INTEGER      NOT NULL DEFAULT 1,
+    cree_par            VARCHAR(64),
+    date_creation       TIMESTAMP    NOT NULL DEFAULT NOW(),
+    date_modif_mdp      TIMESTAMP    NOT NULL DEFAULT NOW(),
+    derniere_connexion  TIMESTAMP
+);
+
+
+-- ══════════════════════════════════════════════════════════
 -- VUES UTILES (pour Power BI et les requêtes fréquentes)
 -- ══════════════════════════════════════════════════════════
 

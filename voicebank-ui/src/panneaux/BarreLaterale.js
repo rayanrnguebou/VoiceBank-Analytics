@@ -2,17 +2,17 @@
 import { useEffect } from "react";
 import {
   AudioLines, LayoutDashboard, ShieldAlert, ScanSearch, Landmark, History,
-  GraduationCap, Target, ScrollText, ChartColumn, ExternalLink, LogOut, X,
+  GraduationCap, Target, ScrollText, ChartColumn, ExternalLink, LogOut, X, UsersRound, KeyRound,
 } from "lucide-react";
 
 const POWER_BI_URL = process.env.REACT_APP_POWER_BI_URL || "";
 
 export function Logo() {
-  // Monogramme : un « V » formé d'une onde sonore, sur fond laiton
+  // Monogramme : une onde sonore sur fond laiton (même dessin que public/favicon.svg)
   return (
     <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
       <rect width="32" height="32" rx="8" fill="#C9A13B" />
-      <path d="M7 11v4M11 8v12M16 11l0 0M16 11v12M21 8v12M25 11v4" stroke="#0F3D35" strokeWidth="2.4" strokeLinecap="round" />
+      <path d="M7 13v6M11.5 9v14M16 6v20M20.5 9v14M25 13v6" stroke="#0F3D35" strokeWidth="2.6" strokeLinecap="round" />
     </svg>
   );
 }
@@ -40,7 +40,7 @@ function Lien({ id, libelle, Icone, page, allerA, badge, badgeAlerte }) {
   );
 }
 
-export default function BarreLaterale({ page, allerA, estAdmin, session, nbHistorique, compteurs, ouverte, onFermer, onDeconnexion }) {
+export default function BarreLaterale({ page, allerA, estAdmin, session, nbHistorique, compteurs, ouverte, onFermer, onDeconnexion, onMotDePasse }) {
   useEffect(() => {
     if (!ouverte) return;
     const echap = e => e.key === "Escape" && onFermer();
@@ -96,6 +96,7 @@ export default function BarreLaterale({ page, allerA, estAdmin, session, nbHisto
               <Lien id="apprentissage" libelle="Apprentissage" Icone={GraduationCap} badge={compteurs.signalements} {...props} />
               <Lien id="fiabilite" libelle="Fiabilité" Icone={Target} {...props} />
               <Lien id="audit" libelle="Audit" Icone={ScrollText} {...props} />
+              <Lien id="comptes" libelle="Comptes" Icone={UsersRound} {...props} />
             </>
           )}
         </nav>
@@ -108,6 +109,10 @@ export default function BarreLaterale({ page, allerA, estAdmin, session, nbHisto
             <p className="text-sm font-medium truncate">{session.utilisateur}</p>
             <p className="text-xs text-foret-100/60">{session.role === "admin" ? "Administrateur" : "Analyste"}</p>
           </div>
+          <button onClick={() => { onMotDePasse(); onFermer(); }} aria-label="Changer mon mot de passe" title="Changer mon mot de passe"
+            className="p-2 rounded-lg text-foret-100/70 hover:text-white hover:bg-white/10">
+            <KeyRound size={16} />
+          </button>
           <button onClick={onDeconnexion} aria-label="Se déconnecter" title="Se déconnecter"
             className="p-2 rounded-lg text-foret-100/70 hover:text-white hover:bg-white/10">
             <LogOut size={16} />

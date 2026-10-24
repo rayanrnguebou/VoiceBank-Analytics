@@ -23,7 +23,7 @@ des corrections, mesure de la fiabilité et journal d'audit.
 | | |
 |---|---|
 | **Question vocale ou écrite** | Le texte s'écrit pendant qu'on parle, puis Whisper le finalise. |
-| **Réponse rédigée et parlée** | Résumé en 1-2 phrases (Gemini, ou calcul local), lu par le navigateur. Bouton 🔊 pour couper. |
+| **Réponse rédigée et parlée** | Résumé en 1-2 phrases (Gemini, ou calcul local), lu par le navigateur, puis une **analyse orale** plus poussée (tendance, concentration, risques, actions conseillées, question de suite) qui n'est pas affichée. Bouton « Lecture » pour arrêter, 🔊 pour couper la voix. |
 | **Questions de suite** | « et à Douala ? », « seulement BICEC », « en 2025 » reprennent la question précédente. |
 | **Pertinence** | Une règle locale ne répond que si elle couvre toute la question ; sinon Gemini, ou réponse marquée « approximative ». |
 | **Apprentissage** | Bouton « Réponse incorrecte ? » ; l'admin corrige, teste et enregistre la requête (RAG). |
@@ -31,7 +31,8 @@ des corrections, mesure de la fiabilité et journal d'audit.
 | **Fraude** | Score Isolation Forest + XGBoost, alertes à traiter (fraude confirmée / faux positif). |
 | **Crédit** | Probabilité de défaut, facteurs explicatifs (SHAP), crédits en cours les plus à risque. |
 | **Données personnelles** | Noms, e-mails, téléphones masqués pour le rôle analyste ; jamais envoyés à Gemini pour les résumés. |
-| **Audit** | Connexions, consultations de fiches, corrections, alertes traitées : journal en ajout seul. |
+| **Comptes** | Créés par l'administrateur (pas d'inscription libre), mot de passe provisoire à changer à la 1re connexion, blocage après 5 échecs, désactivation sans suppression. |
+| **Audit** | Connexions, consultations de fiches, corrections, alertes traitées, gestion des comptes : journal en ajout seul. |
 
 ## Fonctionnement
 
@@ -73,20 +74,41 @@ ADMIN_DATABASE_URL=postgresql://voicebank_admin:MOT_DE_PASSE@localhost:5432/voic
   python voicebank_db/charger_csv_postgres.py
 ```
 
-### Créer les comptes utilisateurs
+### Comptes utilisateurs
 
-Les comptes sont définis dans `VOICEBANK_USERS` sous la forme `nom:role:hash_bcrypt`, séparés
-par des virgules. `role` vaut `analyste` (consultation) ou `admin` (consultation + SQL manuel +
-corrections RAG).
+**Pas d'inscription libre** : c'est une application bancaire, seul un administrateur crée des comptes.
 
-```bash
-cd voicebank_api
-pip install bcrypt
-python -m app.outils.creer_hash        # demande le mot de passe, affiche le hash
-```
+1. **Premier administrateur** (une seule fois) : il est défini dans `VOICEBANK_USERS` sous la forme
+   `nom:role:hash_bcrypt` (plusieurs comptes séparés par des virgules).
 
-Dans `.env`, mets la valeur entre **apostrophes simples** (le hash contient des `$`) :
-`VOICEBANK_USERS='rayan:admin:$2b$12$...,analyste1:analyste:$2b$12$...'`
+   ```bash
+   cd voicebank_api
+   pip install bcrypt
+   python -m app.outils.creer_hash        # demande le mot de passe, affiche le hash
+   ```
+
+   Dans `.env`, mets la valeur entre **apostrophes simples** (le hash contient des `$`) :
+   `VOICEBANK_USERS='rayan:admin:$2b$12$...'`. Sur Render, sans apostrophes.
+   Au démarrage, l'API copie ces comptes dans la base (table `voicebank.utilisateurs`) s'ils n'y
+   sont pas encore. Ensuite **la base fait foi** : un mot de passe changé ou un compte désactivé
+   dans l'interface n'est pas écrasé par la configuration.
+
+2. **Les autres comptes** : menu **Administration → Comptes** → identifiant + rôle → **Créer**.
+   - Un mot de passe provisoire de 16 caractères s'affiche **une seule fois**, valable 72 h.
+     Transmets-le par un autre canal que l'identifiant.
+   - À la première connexion, la personne doit le remplacer (12 caractères minimum, 3 types de
+     caractères, sans son identifiant) avant d'accéder à quoi que ce soit.
+
+| Rôle | Droits |
+|---|---|
+| `analyste` | Questions, tableaux de bord, alertes, scores. Noms et coordonnées des clients masqués. |
+| `admin` | Tout, plus : comptes, corrections (apprentissage), SQL manuel, fiabilité, audit. |
+
+**Protections** : 5 mots de passe faux → compte bloqué 15 min (même message d'erreur que pour un
+compte inconnu) ; **Réinitialiser** donne un nouveau mot de passe provisoire et débloque ; changer
+de mot de passe, de rôle ou désactiver un compte **déconnecte immédiatement** ses sessions ; aucun
+compte n'est supprimé (l'audit reste lisible) ; on ne peut ni se désactiver soi-même ni retirer le
+dernier administrateur. Chacun peut changer son mot de passe (icône 🔑 en bas de la barre latérale).
 
 ## Clés IA (Gemini et Groq)
 
@@ -120,7 +142,8 @@ Le script crée le superutilisateur du `.env`, ajoute ce qui manque au schéma, 
 `voicebank_app` / `voicebank_reader` et désactive l'ancien compte `voicebank_user`
 (dont le mot de passe était publié sur GitHub). Il peut être relancé sans risque.
 **Relance-le après chaque mise à jour du projet** : il ajoute les nouvelles tables et colonnes
-(signalements, audit, évaluations, traitement des alertes) sans toucher aux données.
+(signalements, audit, évaluations, traitement des alertes, comptes) sans toucher aux données.
+Tant que la table des comptes n'existe pas, l'API reste utilisable avec `VOICEBANK_USERS` seul.
 **Ne lance jamais `docker compose down -v`** : `-v` supprime le volume, donc les données.
 
 ## Mesurer la fiabilité
@@ -199,6 +222,9 @@ audio dangereux, CORS, limitation des tentatives de connexion.
 ## Sécurité
 
 - Authentification JWT (mots de passe hachés en bcrypt), rôles `analyste` / `admin`.
+- Comptes créés par l'administrateur uniquement ; mot de passe provisoire à usage unique (72 h),
+  politique de mot de passe, blocage après 5 échecs, révocation immédiate des sessions.
+- La table des comptes est invisible pour le compte lecture seule et pour le SQL généré par l'IA.
 - 5 tentatives de connexion par minute et par IP ; limites sur les endpoints IA.
 - Le SQL dynamique est validé (sqlglot) **et** exécuté avec un compte PostgreSQL en lecture seule.
 - L'API se connecte avec un compte sans privilèges d'administration (`voicebank_app`).

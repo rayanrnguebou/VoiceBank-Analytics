@@ -18,7 +18,9 @@ def test_health(client):
 
 
 def test_login_et_moi(client, analyste):
-    assert client.get("/auth/moi", headers=analyste).json() == {"utilisateur": "analyste1", "role": "analyste"}
+    j = client.get("/auth/moi", headers=analyste).json()
+    assert (j["utilisateur"], j["role"], j["doit_changer_mot_de_passe"]) == ("analyste1", "analyste", False)
+    assert j["gestion_comptes"] is True
 
 
 def test_dashboard(client, analyste):
@@ -286,7 +288,7 @@ def test_limitation_tentatives_connexion(client):
     from app.main import limiter
     limiter.enabled = True
     try:
-        codes = [client.post("/auth/login", json={"nom": "rayan", "mot_de_passe": "faux"}).status_code
+        codes = [client.post("/auth/login", json={"nom": "personne", "mot_de_passe": "faux"}).status_code
                  for _ in range(7)]
     finally:
         limiter.enabled = False

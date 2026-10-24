@@ -31,17 +31,34 @@ export function formaterDate(v) {
   return isNaN(d) ? String(v) : d.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 }
 
-// Synthèse vocale du navigateur (aucune donnée envoyée à un serveur)
-export function lireAVoixHaute(texte) {
+// Synthèse vocale du navigateur (aucune donnée envoyée à un serveur).
+// Accepte un texte ou une liste (résumé puis commentaire) : lus à la suite, phrase par phrase
+// (Chrome coupe les énoncés de plus de ~15 secondes). L'état est diffusé par l'événement
+// « voicebank:lecture » (detail = true pendant la lecture, false à la fin).
+function signalerLecture(enCours) {
+  try { window.dispatchEvent(new CustomEvent("voicebank:lecture", { detail: enCours })); } catch (e) { /* rien */ }
+}
+
+export function decouperPhrases(texte) {
+  // Coupe après . ! ? … suivi d'une majuscule : « et à Douala ? » ou… reste d'un seul tenant.
+  return String(texte || "").split(/(?<=[.!?…])\s+(?=[A-ZÀ-ÖØ-Þ«"0-9])/).map(p => p.trim()).filter(Boolean);
+}
+
+export function lireAVoixHaute(textes) {
   try {
-    if (!texte || !window.speechSynthesis) return false;
+    const phrases = (Array.isArray(textes) ? textes : [textes]).flatMap(decouperPhrases);
+    if (!phrases.length || !window.speechSynthesis) return false;
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(texte);
-    u.lang = "fr-FR";
-    u.rate = 1.02;
     const voix = window.speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith("fr"));
-    if (voix) u.voice = voix;
-    window.speechSynthesis.speak(u);
+    phrases.forEach((phrase, i) => {
+      const u = new SpeechSynthesisUtterance(phrase);
+      u.lang = "fr-FR";
+      u.rate = 1.02;
+      if (voix) u.voice = voix;
+      if (i === phrases.length - 1) u.onend = u.onerror = () => signalerLecture(false);
+      window.speechSynthesis.speak(u);
+    });
+    signalerLecture(true);
     return true;
   } catch (e) {
     return false;
@@ -50,4 +67,5 @@ export function lireAVoixHaute(texte) {
 
 export function arreterLecture() {
   try { window.speechSynthesis?.cancel(); } catch (e) { /* rien */ }
+  signalerLecture(false);
 }

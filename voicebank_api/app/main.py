@@ -18,7 +18,9 @@ from slowapi.util import get_remote_address
 from . import audit, config, credit, db, evaluation, fraude, nl2sql, resume, transcription
 from .garde_sql import SQLRefuse, valider_sql
 from .masquage import masquer_ligne, masquer_lignes
-from .securite import Utilisateur, admin_requis, authentifier, creer_jeton, utilisateur_courant
+from . import securite
+from .securite import (CompteRefuse, Utilisateur, admin_requis, authentifier, creer_jeton,
+                       utilisateur_authentifie, utilisateur_courant)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("voicebank")
@@ -26,7 +28,7 @@ log = logging.getLogger("voicebank")
 app = FastAPI(
     title="VoiceBank Analytics API",
     description="API bancaire vocale (texte/voix -> SQL) — Nguebou Temgoua Rayan",
-    version="3.1.0",
+    version="3.2.0",
     docs_url=None if config.EST_PROD else "/docs",
     redoc_url=None,
     openapi_url=None if config.EST_PROD else "/openapi.json",
@@ -77,6 +79,10 @@ async def entetes_securite(request: Request, call_next):
 fraude.charger()
 credit.charger()
 transcription.precharger_en_arriere_plan()
+try:
+    securite.amorcer()
+except Exception:
+    log.exception("Amorçage des comptes impossible (base indisponible ?) : nouvel essai au prochain démarrage")
 
 # ════════════════════════════════════════
 # SCHÉMAS
@@ -84,6 +90,21 @@ transcription.precharger_en_arriere_plan()
 class Identifiants(BaseModel):
     nom: str = Field(min_length=1, max_length=64)
     mot_de_passe: str = Field(min_length=1, max_length=128)
+
+
+class ChangementMdp(BaseModel):
+    actuel: str = Field(min_length=1, max_length=128)
+    nouveau: str = Field(min_length=1, max_length=128)
+
+
+class NouveauCompte(BaseModel):
+    nom: str = Field(min_length=3, max_length=32)
+    role: Literal["analyste", "admin"] = "analyste"
+
+
+class ModificationCompte(BaseModel):
+    role: Literal["analyste", "admin"] | None = None
+    actif: bool | None = None
 
 
 class ContexteQuestion(BaseModel):
@@ -233,12 +254,14 @@ def _question_vers_resultat(texte: str, u: Utilisateur, contexte: ContexteQuesti
         _journaliser(texte, sql, False, int((time.time() - debut) * 1000), u)
         raise
     lignes = masquer_lignes(colonnes, lignes, u.role)
-    texte_resume, source_resume = resume.resumer(texte, colonnes, lignes) if resumer else (None, None)
+    texte_resume, commentaire, source_resume = (resume.resumer(texte, colonnes, lignes) if resumer
+                                                else (None, None, None))
     duree = int((time.time() - debut) * 1000)
     _journaliser(texte, sql, True, duree, u)
     return {"status": "ok", "question": texte, "sql": sql, "source": source,
             "score_rag": score, "avertissement": avertissement, "colonnes": colonnes, "total": len(lignes),
             "data": lignes, "duree_ms": duree, "resume": texte_resume, "resume_source": source_resume,
+            "commentaire": commentaire,
             "suite": suite, "question_precedente": ctx["question"] if suite else None}
 
 
@@ -265,15 +288,34 @@ def health():
 @app.post("/auth/login")
 @limiter.limit("5/minute")
 def login(request: Request, body: Identifiants):
-    u = authentifier(body.nom, body.mot_de_passe)
+    resultat = authentifier(body.nom, body.mot_de_passe)
     ip = get_remote_address(request)
-    if not u:
+    if not resultat:
         log.warning("Échec de connexion pour '%s' depuis %s", body.nom, ip)
         audit.journaliser(body.nom[:64], "connexion_refusee", None, ip)
-        raise HTTPException(401, "Identifiants incorrects")
+        raise HTTPException(401, "Identifiants incorrects. Après 5 échecs, le compte est bloqué 15 minutes.")
+    u, version = resultat
     audit.journaliser(u.nom, "connexion", {"role": u.role}, ip)
-    return {"access_token": creer_jeton(u), "token_type": "bearer",
-            "utilisateur": u.nom, "role": u.role, "expire_dans_min": config.JWT_DUREE_MIN}
+    return _reponse_jeton(u, version)
+
+
+def _reponse_jeton(u: Utilisateur, version: int) -> dict:
+    return {"access_token": creer_jeton(u, version), "token_type": "bearer",
+            "utilisateur": u.nom, "role": u.role, "doit_changer_mot_de_passe": u.doit_changer,
+            "expire_dans_min": config.JWT_DUREE_MIN}
+
+
+@app.post("/auth/mot-de-passe")
+@limiter.limit("5/minute")
+def changer_mon_mot_de_passe(request: Request, body: ChangementMdp,
+                             u: Utilisateur = Depends(utilisateur_authentifie)):
+    try:
+        version = securite.changer_mot_de_passe(u.nom, body.actuel, body.nouveau)
+    except CompteRefuse as e:
+        raise HTTPException(400, str(e))
+    audit.journaliser(u.nom, "mot_de_passe_change", None, get_remote_address(request))
+    # Nouveau jeton : cette session continue, les autres sont déconnectées.
+    return _reponse_jeton(Utilisateur(u.nom, u.role, False), version)
 
 
 # ════════════════════════════════════════
@@ -281,8 +323,9 @@ def login(request: Request, body: Identifiants):
 # ════════════════════════════════════════
 
 @app.get("/auth/moi")
-def moi(u: Utilisateur = Depends(utilisateur_courant)):
-    return {"utilisateur": u.nom, "role": u.role}
+def moi(u: Utilisateur = Depends(utilisateur_authentifie)):
+    return {"utilisateur": u.nom, "role": u.role, "doit_changer_mot_de_passe": u.doit_changer,
+            "gestion_comptes": securite.mode_base()}
 
 
 @app.get("/dashboard")
@@ -611,6 +654,51 @@ def journal_audit(action: str | None = Query(None, max_length=40), utilisateur: 
                         "FROM voicebank.logs_vocaux WHERE date_requete > NOW() - INTERVAL '30 days' "
                         "GROUP BY utilisateur ORDER BY questions DESC")
     return {"status": "ok", "evenements": evenements, "questions": questions, "synthese_30j": synthese}
+
+
+# ── Comptes utilisateurs (administrateur) ───────────────────────────
+def _compte(action):
+    try:
+        return action()
+    except CompteRefuse as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/admin/utilisateurs")
+def lister_utilisateurs(u: Utilisateur = Depends(admin_requis)):
+    if not securite.mode_base():
+        return {"gestion_comptes": False, "data": [{"nom": n, "role": r, "actif": True, "cree_par": "configuration"}
+                                                  for n, (r, _) in securite.COMPTES.items()]}
+    return {"gestion_comptes": True, "data": _compte(securite.lister_comptes)}
+
+
+@app.post("/admin/utilisateurs")
+@limiter.limit("20/minute")
+def creer_utilisateur(request: Request, body: NouveauCompte, u: Utilisateur = Depends(admin_requis)):
+    nom = body.nom.strip().lower()
+    mdp = _compte(lambda: securite.creer_compte(nom, body.role, u.nom))
+    audit.journaliser(u.nom, "compte_cree", {"compte": nom, "role": body.role}, get_remote_address(request))
+    return {"status": "ok", "nom": nom, "role": body.role, "mot_de_passe_provisoire": mdp,
+            "valable_heures": int(securite.DUREE_MDP_PROVISOIRE.total_seconds() // 3600)}
+
+
+@app.post("/admin/utilisateurs/{nom}/reinitialiser")
+@limiter.limit("20/minute")
+def reinitialiser_utilisateur(request: Request, nom: str = Path(max_length=64),
+                              u: Utilisateur = Depends(admin_requis)):
+    mdp = _compte(lambda: securite.reinitialiser(nom))
+    audit.journaliser(u.nom, "compte_reinitialise", {"compte": nom}, get_remote_address(request))
+    return {"status": "ok", "nom": nom, "mot_de_passe_provisoire": mdp,
+            "valable_heures": int(securite.DUREE_MDP_PROVISOIRE.total_seconds() // 3600)}
+
+
+@app.post("/admin/utilisateurs/{nom}/modifier")
+def modifier_utilisateur(request: Request, body: ModificationCompte, nom: str = Path(max_length=64),
+                         u: Utilisateur = Depends(admin_requis)):
+    changements = _compte(lambda: securite.modifier(nom, u.nom, body.role, body.actif))
+    if changements:
+        audit.journaliser(u.nom, "compte_modifie", {"compte": nom, **changements}, get_remote_address(request))
+    return {"status": "ok", "nom": nom, "changements": changements}
 
 
 @app.post("/admin/evaluation")

@@ -1,4 +1,5 @@
-"""Résumé en une ou deux phrases du résultat d'une question (lu à voix haute par l'interface).
+"""Résumé du résultat d'une question, puis commentaire plus poussé (conseils, interprétation).
+L'interface lit le résumé à voix haute, puis enchaîne sur le commentaire, qui n'est pas affiché.
 
 * Avec Gemini : résumé rédigé à partir des colonnes NON personnelles et d'un extrait limité.
 * Sans Gemini : résumé local calculé (nombre de résultats, totaux, élément en tête).
@@ -92,7 +93,90 @@ def resume_local(question: str, colonnes: list[str], lignes: list[dict]) -> str:
     return phrase
 
 
-def resume_gemini(question: str, colonnes: list[str], lignes: list[dict]) -> str | None:
+# ── Commentaire vocal : explication plus poussée, lue APRÈS le résumé (jamais affichée) ──
+
+_CONSEILS_THEMES = [
+    (("fraud", "alerte", "suspect"),
+     "Côté risque, traite en priorité les alertes critiques encore ouvertes, et regarde de près les "
+     "opérations de nuit et internationales : ce sont elles qui concentrent le plus de fraudes."),
+    (("défaut", "defaut", "impay", "retard"),
+     "Pour limiter les pertes, compare la mensualité au revenu de ces emprunteurs : au-delà d'un tiers, "
+     "le risque grimpe vite. La page Score de crédit t'explique dossier par dossier ce qui pèse."),
+    (("crédit", "credit", "prêt", "pret", "encours"),
+     "Pense à croiser ce résultat avec les retards de paiement : un encours élevé n'est un problème "
+     "que s'il est mal remboursé."),
+    (("diaspora",),
+     "La diaspora est un relais de croissance : transferts réguliers, épargne en devises. Une offre "
+     "dédiée, avec des frais de transfert réduits, peut fidéliser ces clients."),
+    (("solde", "top", "meilleur", "plus riche"),
+     "Ces clients à forte valeur méritent un suivi personnalisé : un conseiller attitré limite le "
+     "risque qu'ils partent à la concurrence."),
+    (("transaction", "volume", "canal", "mobile"),
+     "Surveille la part du mobile money dans ces volumes : c'est le canal qui croît le plus vite, "
+     "mais aussi celui où la fraude évolue le plus."),
+]
+
+
+def _part(x, total):
+    return round(100 * x / total) if total else 0
+
+
+def commentaire_local(question: str, colonnes: list[str], lignes: list[dict]) -> str:
+    """Interprétation simple et conseils, calculés sans IA."""
+    q = (question + " " + " ".join(colonnes)).lower()
+    phrases = []
+    if not lignes:
+        return ("Aucune donnée ne correspond. Essaie d'élargir la période ou de retirer un filtre, "
+                "et vérifie l'orthographe du nom de la ville ou de la banque.")
+    num = _colonne_numerique(colonnes, lignes)
+    cat = _colonne_categorie(colonnes, lignes)
+    temporel = next((c for c in colonnes if any(t in c.lower() for t in ("mois", "annee", "année", "date"))), None)
+    valeurs = [l for l in lignes if isinstance(l.get(num), (int, float))] if num else []
+
+    if temporel and num and len(valeurs) >= 3:
+        serie = sorted(valeurs, key=lambda l: str(l[temporel]))
+        premier, dernier = serie[0][num], serie[-1][num]
+        if premier:
+            evol = round(100 * (dernier - premier) / abs(premier))
+            sens = "une hausse" if evol > 0 else "une baisse" if evol < 0 else "une stabilité"
+            phrases.append(f"Sur la période, on observe {sens} de {abs(evol)} % entre le début et la fin.")
+        pic = max(serie, key=lambda l: l[num])
+        phrases.append(f"Le point le plus haut est atteint en {pic[temporel]}.")
+    elif cat and num and len(valeurs) >= 2:
+        tri = sorted(valeurs, key=lambda l: l[num], reverse=True)
+        total = sum(l[num] for l in tri)
+        part = _part(tri[0][num], total)
+        if part >= 40:
+            phrases.append(f"{tri[0][cat]} pèse à lui seul {part} % du total : c'est une forte concentration, "
+                           f"donc une dépendance à surveiller.")
+        elif part <= 100 / len(tri) * 1.5:
+            phrases.append("La répartition est assez équilibrée, aucun élément ne domine vraiment.")
+        else:
+            phrases.append(f"{tri[0][cat]} arrive en tête avec {part} % du total.")
+        if tri[-1][num] and len(tri) >= 3:
+            ecart = tri[0][num] / tri[-1][num]
+            if ecart >= 3:
+                phrases.append(f"L'écart est important : le premier fait {formater_nombre(round(ecart, 1))} fois "
+                               f"plus que le dernier, {tri[-1][cat]}.")
+    elif len(lignes) == 1 and num:
+        phrases.append("C'est un indicateur unique : pour l'interpréter, compare-le au mois précédent "
+                       "ou à une autre banque.")
+    elif len(lignes) >= 50:
+        phrases.append("La liste est longue : affine-la avec un filtre, par ville ou par banque, "
+                       "pour faire ressortir les cas prioritaires.")
+
+    for mots, conseil in _CONSEILS_THEMES:
+        if any(m in q for m in mots):
+            phrases.append(conseil)
+            break
+    if cat and len(lignes) > 1:
+        phrases.append("Tu peux aussi poser une question de suite, par exemple « et à Douala ? » "
+                       "ou « et en 2024 ? », pour comparer.")
+    return " ".join(phrases[:4]) or "Ouvre le graphique pour explorer le détail de ce résultat."
+
+
+def resume_gemini(question: str, colonnes: list[str], lignes: list[dict]) -> tuple[str, str | None] | None:
+    """Un seul appel Gemini pour le résumé ET le commentaire. Retourne (résumé, commentaire)."""
     from .nl2sql import client_gemini
     client = client_gemini()
     if client is None:
@@ -100,25 +184,38 @@ def resume_gemini(question: str, colonnes: list[str], lignes: list[dict]) -> str
     sures = [c for c in colonnes if not est_colonne_personnelle(c)]
     extrait = [{c: l.get(c) for c in sures} for l in lignes[:30]]
     prompt = (
-        "Tu es l'assistant vocal d'une banque. Résume en UNE ou DEUX phrases courtes, en français, "
-        "le résultat ci-dessous pour un analyste bancaire. Donne les chiffres clés arrondis (FCFA, %, "
-        "millions/milliards en toutes lettres), sans jargon technique, sans parler de SQL, sans "
-        "inventer de chiffre absent des données. Le texte sera lu à voix haute.\n\n"
+        "Tu es l'assistant vocal d'une banque en Afrique centrale (montants en FCFA). Tu réponds à un "
+        "analyste bancaire. Les deux textes seront lus à voix haute : phrases courtes, pas de listes, "
+        "pas de symboles, nombres arrondis (millions/milliards en toutes lettres), jamais de SQL.\n"
+        "Réponds UNIQUEMENT avec un objet JSON contenant deux clés :\n"
+        '- "resume" : une ou deux phrases avec les chiffres clés du résultat ;\n'
+        '- "commentaire" : trois à cinq phrases qui vont PLUS LOIN que le résumé, sans le répéter : '
+        "ce que le résultat révèle (concentration, écarts, tendance, anomalies), les risques ou "
+        "opportunités pour la banque, une ou deux actions concrètes à mener, et une question de suite "
+        "utile à poser. N'invente aucun chiffre absent des données ; si tu fais une hypothèse, "
+        "présente-la comme telle.\n\n"
         f"Question : <<<{question}>>>\nNombre total de lignes : {len(lignes)}\n"
-        f"Extrait (30 lignes max) : {json.dumps(extrait, ensure_ascii=False, default=str)[:6000]}\n\nRésumé :")
+        f"Extrait (30 lignes max) : {json.dumps(extrait, ensure_ascii=False, default=str)[:6000]}\n")
     try:
-        rep = client.models.generate_content(model=config.GEMINI_MODEL, contents=prompt)
-        texte = (rep.text or "").strip().replace("\n", " ")
-        return texte[:600] or None
+        rep = client.models.generate_content(model=config.GEMINI_MODEL, contents=prompt,
+                                             config={"response_mime_type": "application/json"})
+        brut = (rep.text or "").strip()
     except Exception as e:
         log.warning("Résumé Gemini impossible : %s", e)
         return None
+    try:
+        data = json.loads(brut.removeprefix("```json").removesuffix("```").strip())
+        texte = str(data.get("resume") or "").strip().replace("\n", " ")[:600]
+        comm = str(data.get("commentaire") or "").strip().replace("\n", " ")[:1500] or None
+    except (ValueError, AttributeError):
+        texte, comm = brut.replace("\n", " ")[:600], None      # réponse en texte libre
+    return (texte, comm) if texte else None
 
 
-def resumer(question: str, colonnes: list[str], lignes: list[dict]) -> tuple[str, str]:
-    """Retourne (résumé, source) avec source = 'gemini' ou 'local'."""
+def resumer(question: str, colonnes: list[str], lignes: list[dict]) -> tuple[str, str, str]:
+    """Retourne (résumé, commentaire, source) avec source = 'gemini' ou 'local'."""
     if lignes:
-        texte = resume_gemini(question, colonnes, lignes)
-        if texte:
-            return texte, "gemini"
-    return resume_local(question, colonnes, lignes), "local"
+        r = resume_gemini(question, colonnes, lignes)
+        if r:
+            return r[0], r[1] or commentaire_local(question, colonnes, lignes), "gemini"
+    return resume_local(question, colonnes, lignes), commentaire_local(question, colonnes, lignes), "local"

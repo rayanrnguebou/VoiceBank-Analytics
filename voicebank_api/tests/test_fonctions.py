@@ -32,9 +32,35 @@ def test_resume_gemini_sans_donnees_personnelles(client, admin):
     espion.assert_called_once()
 
 
+def test_commentaire_local_va_plus_loin(client, analyste):
+    j = _q(client, analyste, "Transactions frauduleuses par banque")
+    c = j["commentaire"]
+    assert c and c != j["resume"] and len(c) > 80
+    assert "alertes critiques" in c          # conseil lié au thème de la question
+
+
+def test_commentaire_gemini_en_json(client, admin):
+    with patch("app.nl2sql.client_gemini") as faux_client:
+        faux_client.return_value.models.generate_content.return_value.text = (
+            '{"resume": "79 crédits en défaut.", "commentaire": "La moitié vient de Douala. Relance ces clients."}')
+        j = _q(client, admin, "Crédits en défaut")
+    assert j["resume"] == "79 crédits en défaut."
+    assert j["commentaire"] == "La moitié vient de Douala. Relance ces clients."
+    kw = faux_client.return_value.models.generate_content.call_args.kwargs
+    assert kw["config"] == {"response_mime_type": "application/json"} and '"commentaire"' in kw["contents"]
+
+
+def test_commentaire_local_cas_limites():
+    assert "élargir" in resume.commentaire_local("q", ["a"], [])
+    serie = [{"mois": f"2025-{m:02d}", "volume_fcfa": 100 + 10 * m} for m in range(1, 7)]
+    assert "hausse" in resume.commentaire_local("Volume par mois", ["mois", "volume_fcfa"], serie)
+    conc = [{"banque": "Afriland", "nb": 90}, {"banque": "SGC", "nb": 5}, {"banque": "UBA", "nb": 5}]
+    assert "concentration" in resume.commentaire_local("Clients par banque", ["banque", "nb"], conc)
+
+
 def test_resume_desactivable(client, analyste):
     j = _q(client, analyste, "Crédits en défaut", resumer=False)
-    assert j["resume"] is None
+    assert j["resume"] is None and j["commentaire"] is None
 
 
 def test_resume_aucun_resultat():

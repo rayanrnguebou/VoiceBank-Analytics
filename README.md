@@ -125,7 +125,7 @@ psql "postgresql://ADMIN@localhost:5432/voicebank_db" -v app_pwd=XXX -v reader_p
 
 ```bash
 cd voicebank_api
-TEST_PG_ADMIN_URL=postgresql://postgres:MDP@localhost:5432/postgres pytest     # 97 tests
+TEST_PG_ADMIN_URL=postgresql://postgres:MDP@localhost:5432/postgres pytest     # 109 tests
 cd ../voicebank-ui && CI=true npm test
 ```
 

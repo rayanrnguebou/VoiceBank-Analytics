@@ -172,7 +172,7 @@ def _question_vers_resultat(texte: str, u: Utilisateur) -> dict:
     debut = time.time()
     question = nl2sql.normaliser_question(texte)
     try:
-        sql, source, score = nl2sql.texte_vers_sql(question)
+        sql, source, score, avertissement = nl2sql.texte_vers_sql(question)
     except nl2sql.IAIndisponible:
         _journaliser(texte, None, False, int((time.time() - debut) * 1000), u)
         raise HTTPException(503, "Je n'ai pas compris la question et l'IA est indisponible. "
@@ -185,7 +185,7 @@ def _question_vers_resultat(texte: str, u: Utilisateur) -> dict:
     duree = int((time.time() - debut) * 1000)
     _journaliser(texte, sql, True, duree, u)
     return {"status": "ok", "question": texte, "sql": sql, "source": source,
-            "score_rag": score, "colonnes": colonnes, "total": len(lignes),
+            "score_rag": score, "avertissement": avertissement, "colonnes": colonnes, "total": len(lignes),
             "data": lignes, "duree_ms": duree}
 
 

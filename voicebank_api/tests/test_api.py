@@ -315,3 +315,32 @@ def test_erreur_500_garde_les_entetes_cors(client, analyste):
     assert r.status_code == 500 and r.json()["detail"] == "Erreur interne du serveur"
     assert r.headers.get("access-control-allow-origin") == "http://localhost:3000"
     assert "panne" not in r.text
+
+
+# ════════════════ Pertinence des réponses ════════════════
+
+def test_filtre_non_couvert_par_regle_part_a_gemini(client, analyste):
+    sql = ("SELECT c.nom, cr.montant_fcfa FROM voicebank.credits cr JOIN voicebank.clients c "
+           "ON cr.id_client = c.id_client WHERE cr.statut_credit = 'Défaut' AND cr.ville = 'Douala'")
+    with patch.object(nl2sql, "sql_via_gemini", return_value=sql) as g:
+        j = client.post("/vocal/question", json={"texte": "crédits en défaut à Douala"}, headers=analyste).json()
+    g.assert_called_once()
+    assert j["source"] == "gemini" and j["avertissement"] is None
+
+
+def test_filtre_non_couvert_sans_gemini_previent(client, analyste):
+    j = client.post("/vocal/question", json={"texte": "crédits en défaut à Douala"}, headers=analyste).json()
+    assert j["source"] == "rule" and "douala" in j["avertissement"].lower()
+
+
+@pytest.mark.parametrize("question", ["Crédits en défaut", "montre moi les crédits en défaut",
+                                      "Top 10 clients par solde", "quels sont les clients par ville"])
+def test_formulations_simples_restent_sur_les_regles(client, analyste, question):
+    j = client.post("/vocal/question", json={"texte": question}, headers=analyste).json()
+    assert j["source"] in {"rule", "rag"} and j["avertissement"] is None
+
+
+def test_mots_non_couverts():
+    assert nl2sql.sql_via_regles("crédits en défaut par banque")[1] == ["banque"]
+    assert nl2sql.sql_via_regles("crédits en défaut")[1] == []
+    assert nl2sql.sql_via_regles("top 5 clients par solde")[1] == []

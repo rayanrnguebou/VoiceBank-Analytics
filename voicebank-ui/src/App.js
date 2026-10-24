@@ -467,6 +467,12 @@ function CarteResultat({ item, dark, onSupprimer }) {
           {ouvert ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
       </div>
+      {item.avertissement && (
+        <div className="mx-5 mb-3 flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-500 text-xs">
+          <AlertTriangle size={13} className="flex-shrink-0 mt-0.5" />
+          <span>{item.avertissement}</span>
+        </div>
+      )}
       {ouvert && item.data && item.data.length > 0 && (
         <div className="px-5 pb-5">
           <code className={`text-xs block mb-3 truncate ${dark ? "text-blue-300" : "text-blue-600"}`}>{item.sql}</code>
@@ -933,16 +939,48 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
 // COMPOSANT — BOUTON MICRO
 // ════════════════════════════════════════
 
-function BoutonMicro({ onTranscription, onErreur, dark }) {
+// Dictée en direct : reconnaissance vocale du navigateur (Chrome, Edge, Safari) pour afficher
+// le texte pendant qu'on parle. Le texte définitif vient ensuite de Whisper (Groq ou local),
+// plus fiable. Sur Firefox (pas de reconnaissance native), le texte arrive à la fin.
+const ReconnaissanceVocale = typeof window !== "undefined"
+  ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
+const DUREE_MAX_ENREGISTREMENT_MS = 12000;
+
+function BoutonMicro({ onDebut, onTexteEnDirect, onTranscription, onErreur, dark }) {
   const [statut, setStatut] = useState("idle");
   const mediaRecRef         = useRef(null);
   const chunksRef           = useRef([]);
   const timerRef            = useRef(null);
+  const reconnaissanceRef   = useRef(null);
+  const texteDirectRef      = useRef("");
 
   const arreter = useCallback(() => {
     clearTimeout(timerRef.current);
+    try { reconnaissanceRef.current?.stop(); } catch (e) { /* déjà arrêtée */ }
     if (mediaRecRef.current?.state === "recording") mediaRecRef.current.stop();
   }, []);
+
+  const demarrerDicteeDirecte = () => {
+    texteDirectRef.current = "";
+    if (!ReconnaissanceVocale) return;
+    try {
+      const rec = new ReconnaissanceVocale();
+      rec.lang = "fr-FR";
+      rec.interimResults = true;
+      rec.continuous = true;
+      rec.onresult = (e) => {
+        let texte = "";
+        for (let i = 0; i < e.results.length; i++) texte += e.results[i][0].transcript;
+        texteDirectRef.current = texte.trim();
+        onTexteEnDirect(texteDirectRef.current);
+      };
+      rec.onerror = () => { /* aperçu seulement : Whisper prendra le relais */ };
+      rec.start();
+      reconnaissanceRef.current = rec;
+    } catch (e) {
+      reconnaissanceRef.current = null;
+    }
+  };
 
   const demarrer = async () => {
     let stream;
@@ -965,23 +1003,35 @@ function BoutonMicro({ onTranscription, onErreur, dark }) {
       setStatut("processing");
       const formData = new FormData();
       formData.append("fichier", new Blob(chunksRef.current, { type: mimeType }), `audio.${extension}`);
+      const texteDirect = texteDirectRef.current;
       try {
         // Délai long : le Whisper local peut devoir charger son modèle à la 1re utilisation
         const res = await http.post("/vocal/transcrire", formData, { timeout: 120000 });
         if (res.data?.texte?.trim()) onTranscription(res.data.texte.trim());
+        else if (texteDirect) onTranscription(texteDirect);
         else onErreur("Aucun texte détecté. Parle plus fort ou plus clairement.");
       } catch (e) {
-        onErreur(`Transcription impossible : ${messageErreur(e)}`);
+        if (texteDirect) {
+          onTranscription(texteDirect);
+          onErreur(`Transcription serveur impossible (${messageErreur(e)}) : texte du navigateur conservé, vérifie-le avant d'envoyer.`);
+        } else {
+          onErreur(`Transcription impossible : ${messageErreur(e)}`);
+        }
       }
       setStatut("idle");
     };
     recorder.start(100);
     mediaRecRef.current = recorder;
     setStatut("recording");
-    timerRef.current = setTimeout(arreter, 8000);
+    onDebut();
+    demarrerDicteeDirecte();
+    timerRef.current = setTimeout(arreter, DUREE_MAX_ENREGISTREMENT_MS);
   };
 
-  useEffect(() => () => clearTimeout(timerRef.current), []);
+  useEffect(() => () => {
+    clearTimeout(timerRef.current);
+    try { reconnaissanceRef.current?.abort(); } catch (e) { /* rien */ }
+  }, []);
 
   return (
     <div className="flex flex-col items-center gap-2">
@@ -999,7 +1049,7 @@ function BoutonMicro({ onTranscription, onErreur, dark }) {
           : <Mic size={22} className="text-white" />}
       </button>
       <span className={`text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>
-        {statut === "recording" ? "🔴 Enregistrement..." : statut === "processing" ? "⏳ Transcription..." : "Cliquer pour parler"}
+        {statut === "recording" ? "🔴 Parle… (clique pour finir)" : statut === "processing" ? "⏳ Finalisation…" : "Cliquer pour parler"}
       </span>
     </div>
   );
@@ -1198,6 +1248,8 @@ export default function App() {
 function Tableau({ session, onDeconnexion }) {
   const [dark, setDark]             = useState(true);
   const [question, setQuestion]     = useState("");
+  const [dictee, setDictee]         = useState(false);
+  const champQuestionRef            = useRef(null);
   const [historique, setHistorique] = useState(() => chargerHistorique(session.utilisateur));
   const [dashboard, setDashboard]   = useState(null);
   const [onglet, setOnglet]         = useState("graphiques");
@@ -1224,7 +1276,7 @@ function Tableau({ session, onDeconnexion }) {
       id: Date.now(), timestamp: new Date().toISOString(),
       question: q, sql: res.sql, source: res.source,
       colonnes: res.colonnes, total: res.total,
-      data: res.data, duree_ms: res.duree_ms,
+      data: res.data, duree_ms: res.duree_ms, avertissement: res.avertissement || null,
     }, ...prev].slice(0, MAX_HISTORIQUE));
   };
 
@@ -1313,14 +1365,27 @@ function Tableau({ session, onDeconnexion }) {
         {/* ── Zone saisie ──────────────────────────────── */}
         <div className={`rounded-2xl border p-5 mb-6 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
           <div className="flex items-center gap-4 mb-4">
-            <BoutonMicro onTranscription={texte => poserQuestion(texte)} onErreur={setMessage} dark={dark} />
+            <BoutonMicro
+              onDebut={() => { setMessage(null); setQuestion(""); setDictee(true); }}
+              onTexteEnDirect={texte => setQuestion(texte)}
+              onTranscription={texte => {
+                // Le texte final remplace l'aperçu ; on laisse l'utilisateur le relire puis valider.
+                setDictee(false);
+                setQuestion(texte);
+                setTimeout(() => champQuestionRef.current?.focus(), 0);
+              }}
+              onErreur={msg => { setDictee(false); setMessage(msg); }}
+              dark={dark}
+            />
             <div className="flex-1">
               <div className="flex gap-2">
                 <input
+                  ref={champQuestionRef}
+                  aria-label="Question"
                   value={question}
                   onChange={e => setQuestion(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && poserQuestion()}
-                  placeholder="Pose ta question en français..."
+                  placeholder={dictee ? "Je t'écoute…" : "Pose ta question en français..."}
                   maxLength={500}
                   className={`flex-1 min-w-0 px-4 py-3 rounded-xl border text-sm outline-none transition-all ${
                     dark ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"

@@ -6,6 +6,7 @@ services:
   - type: web
     name: voicebank-api
     runtime: docker
+    plan: free                         # sans cette ligne, Render propose une offre payante
     dockerfilePath: ./voicebank_api/Dockerfile
     dockerContext: .
     healthCheckPath: /health
@@ -37,7 +38,7 @@ services:
 
   - type: web
     name: voicebank-ui
-    runtime: static
+    runtime: static                    # sites statiques : gratuits
     rootDir: voicebank-ui
     buildCommand: npm ci && npm run build
     staticPublishPath: build
@@ -62,6 +63,6 @@ services:
         sync: false
 
 databases:
-  - name: voicebank-db
+  - name: voicebank-db                # offre gratuite : expire 30 jours après sa création (voir README)
     databaseName: voicebank_db
     plan: free

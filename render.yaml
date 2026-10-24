@@ -1,5 +1,6 @@
 # VOICEBANK ANALYTICS — Blueprint Render
 # Les secrets (sync: false) se renseignent dans le tableau de bord Render.
+# Render → New → Blueprint → choisir ce dépôt. Voir README, section « Mettre en ligne ».
 
 services:
   - type: web
@@ -27,6 +28,12 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      - key: WHISPER_LOCAL              # offre gratuite (512 Mo) : transcription via Groq uniquement
+        value: "false"
+      - key: INITIALISER_BASE           # crée le schéma au démarrage (idempotent)
+        value: "true"
+      - key: DONNEES_DEMO               # remplit une base VIDE avec des données fictives
+        value: "true"
 
   - type: web
     name: voicebank-ui

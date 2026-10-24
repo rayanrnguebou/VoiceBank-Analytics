@@ -1,33 +1,57 @@
 # VoiceBank Analytics
 
-Assistant bancaire vocal : on pose une question en français (au micro ou au clavier), l'API la
-transforme en requête SQL, l'exécute sur la base PostgreSQL et l'interface affiche le résultat
-sous forme de graphique, avec export PDF. Un modèle IA (Isolation Forest + XGBoost) note le
-risque de fraude d'une transaction.
+![Tests](https://github.com/rayanrnguebou/VoiceBank-Analytics/actions/workflows/tests.yml/badge.svg)
+
+Assistant bancaire vocal : on pose une question en français, au micro ou au clavier
+(« crédits en défaut », puis « et à Douala ? »). L'API la traduit en SQL, l'exécute en lecture
+seule et répond **par un graphique et une phrase lue à voix haute**. Autour de cet assistant :
+détection de fraude avec traitement des alertes, score de crédit expliqué, apprentissage à partir
+des corrections, mesure de la fiabilité et journal d'audit.
 
 **Auteur : Nguebou Temgoua Rayan**
 
 | Couche | Technologies |
 |---|---|
-| Interface | React 19, Tailwind, Recharts, jsPDF |
-| API | FastAPI, SQLAlchemy, sqlglot (validation SQL), JWT |
-| IA | Gemini (texte → SQL), Groq Whisper (voix → texte), scikit-learn, XGBoost |
-| Données | PostgreSQL 16 (pg_trgm pour le RAG), Power BI |
+| Interface | React 19, Tailwind, Recharts, jsPDF, Web Speech API (dictée et lecture) |
+| API | FastAPI, SQLAlchemy, sqlglot (validation SQL), JWT, bcrypt |
+| IA | Gemini (texte → SQL, résumés), Whisper (Groq ou local faster-whisper), scikit-learn, XGBoost (SHAP natif) |
+| Données | PostgreSQL 15 (pg_trgm pour le RAG), Power BI |
+| Qualité | 139 tests API, tests d'interface, GitHub Actions, jeu d'évaluation de 50 questions |
+
+## Fonctionnalités
+
+| | |
+|---|---|
+| **Question vocale ou écrite** | Le texte s'écrit pendant qu'on parle, puis Whisper le finalise. |
+| **Réponse rédigée et parlée** | Résumé en 1-2 phrases (Gemini, ou calcul local), lu par le navigateur. Bouton 🔊 pour couper. |
+| **Questions de suite** | « et à Douala ? », « seulement BICEC », « en 2025 » reprennent la question précédente. |
+| **Pertinence** | Une règle locale ne répond que si elle couvre toute la question ; sinon Gemini, ou réponse marquée « approximative ». |
+| **Apprentissage** | Bouton « Réponse incorrecte ? » ; l'admin corrige, teste et enregistre la requête (RAG). |
+| **Fiabilité mesurée** | 50 questions de référence, taux de bonnes réponses par catégorie et par source. |
+| **Fraude** | Score Isolation Forest + XGBoost, alertes à traiter (fraude confirmée / faux positif). |
+| **Crédit** | Probabilité de défaut, facteurs explicatifs (SHAP), crédits en cours les plus à risque. |
+| **Données personnelles** | Noms, e-mails, téléphones masqués pour le rôle analyste ; jamais envoyés à Gemini pour les résumés. |
+| **Audit** | Connexions, consultations de fiches, corrections, alertes traitées : journal en ajout seul. |
 
 ## Fonctionnement
 
 ```
-Voix ──Groq Whisper──▶ texte ─┐
-Texte ────────────────────────┤
-                              ▼
-          1. correction RAG quasi identique (validée par un admin)
-          2. règles locales (questions fréquentes, sans IA)
-          3. correction RAG proche
-          4. Gemini
-                              ▼
-          garde SQL : 1 seul SELECT, tables voicebank uniquement, fonctions système interdites
-                              ▼
-          exécution par un compte LECTURE SEULE, transaction READ ONLY, timeout 5 s, 1000 lignes max
+Voix ──Whisper (Groq, sinon local)──▶ texte ─┐
+Texte ───────────────────────────────────────┤
+                                             ▼
+   question de suite ? ──oui──▶ Gemini avec la question précédente (sinon filtre local)
+                                             ▼ non
+   1. correction RAG quasi identique (validée par un admin)
+   2. règle locale qui couvre TOUTE la question
+   3. correction RAG proche
+   4. Gemini
+   5. sans Gemini : réponse approximative signalée
+                                             ▼
+   garde SQL : 1 seul SELECT, tables voicebank uniquement, fonctions système interdites
+                                             ▼
+   exécution par un compte LECTURE SEULE, transaction READ ONLY, timeout 5 s, 1000 lignes max
+                                             ▼
+   masquage des données personnelles (analyste) → résumé → réponse
 ```
 
 ## Démarrage rapide (Docker)
@@ -95,7 +119,45 @@ docker compose restart api
 Le script crée le superutilisateur du `.env`, ajoute ce qui manque au schéma, crée
 `voicebank_app` / `voicebank_reader` et désactive l'ancien compte `voicebank_user`
 (dont le mot de passe était publié sur GitHub). Il peut être relancé sans risque.
+**Relance-le après chaque mise à jour du projet** : il ajoute les nouvelles tables et colonnes
+(signalements, audit, évaluations, traitement des alertes) sans toucher aux données.
 **Ne lance jamais `docker compose down -v`** : `-v` supprime le volume, donc les données.
+
+## Mesurer la fiabilité
+
+Dans l'interface (admin) : onglet **Fiabilité** → « Lancer l'évaluation ». En ligne de commande :
+
+```bash
+docker compose exec api python -m app.outils.evaluer
+```
+
+Les 50 questions sont dans `voicebank_api/evaluation/questions.json` (ajoute les tiennes).
+Une réponse est juste si son résultat correspond à celui de la requête de référence.
+
+## Réentraîner le modèle de fraude
+
+Le script d'origine ne lisait jamais l'heure des transactions. Le nouveau script corrige ça et
+enregistre la date, l'AUC et les bornes de normalisation (`meta_fraude.json`) :
+
+```bash
+docker compose run --rm -v ./voicebank_ia/modeles_sauvegardes:/app/voicebank_ia/modeles_sauvegardes api python -m app.outils.entrainer_fraude
+docker compose up -d --build api
+```
+
+## Mettre en ligne (Render) avec des données de démonstration
+
+1. Render → **New → Blueprint** → choisis ce dépôt (`render.yaml`).
+2. Renseigne les secrets : `VOICEBANK_USERS`, `ALLOWED_ORIGINS` (URL de l'interface),
+   `REACT_APP_API_URL` (URL de l'API), `GEMINI_API_KEY`, `GROQ_API_KEY`.
+3. Au premier démarrage, l'API crée le schéma (`INITIALISER_BASE=true`) et remplit la base vide
+   avec des **données fictives** (`DONNEES_DEMO=true`) : aucune vraie donnée en ligne.
+4. Mets le lien de l'interface sur ton CV / GitHub.
+
+Générer les mêmes données de démo ailleurs (refuse d'écrire dans une base déjà remplie) :
+
+```bash
+ADMIN_DATABASE_URL=postgresql://admin:mdp@hote:5432/voicebank_db python -m app.outils.generer_demo
+```
 
 ## Développement sans Docker
 
@@ -125,7 +187,7 @@ psql "postgresql://ADMIN@localhost:5432/voicebank_db" -v app_pwd=XXX -v reader_p
 
 ```bash
 cd voicebank_api
-TEST_PG_ADMIN_URL=postgresql://postgres:MDP@localhost:5432/postgres pytest     # 109 tests
+TEST_PG_ADMIN_URL=postgresql://postgres:MDP@localhost:5432/postgres pytest
 cd ../voicebank-ui && CI=true npm test
 ```
 
@@ -143,26 +205,14 @@ audio dangereux, CORS, limitation des tentatives de connexion.
 - CORS limité à `ALLOWED_ORIGINS`, en-têtes de sécurité, erreurs internes jamais renvoyées au client.
 - Uploads audio : extensions autorisées, 10 Mo max, aucun fichier écrit sur disque.
 - Ports Docker liés à `127.0.0.1`, conteneur API sans root, secrets uniquement dans `.env`.
+- Noms, e-mails, téléphones et numéros de compte masqués pour le rôle analyste.
+- Journal d'audit en ajout seul (le compte de l'API ne peut ni le modifier ni l'effacer).
 - L'historique navigateur est en `sessionStorage` (effacé à la fermeture et à la déconnexion).
-
-## Déploiement Render
-
-`render.yaml` déclare la base, l'API (Docker) et l'interface (site statique).
-
-1. Render → New → Blueprint → choisis ce dépôt.
-2. Renseigne les variables `sync: false` : `VOICEBANK_USERS`, `ALLOWED_ORIGINS` (URL de
-   l'interface), `REACT_APP_API_URL` (URL de l'API), `GEMINI_API_KEY`, `GROQ_API_KEY`.
-3. Initialise la base avec l'URL externe fournie par Render :
-   `psql URL -f voicebank_db/init/01_init_voicebank.sql -f voicebank_db/init/02_corrections_rag.sql`
-4. Si Render autorise la création de rôles, lance aussi `securite/roles.sql` et renseigne
-   `READONLY_DATABASE_URL` avec le compte `voicebank_reader`. Sinon, laisse-la vide : le SQL
-   sera exécuté en transaction READ ONLY avec le compte principal (qui n'est pas superutilisateur
-   sur Render), en plus de la garde SQL.
 
 ## Structure
 
 ```
-voicebank_api/      API FastAPI (app/), tests (tests/), Dockerfile
+voicebank_api/      API FastAPI (app/), tests (tests/), evaluation/, Dockerfile
 voicebank-ui/       Interface React, Dockerfile + nginx.conf
 voicebank_db/       init/ (scripts SQL auto), securite/roles.sql, chargement des CSV
 voicebank_ia/       entraînement des modèles + modèles sauvegardés

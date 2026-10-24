@@ -4,6 +4,11 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { http, lireSession, connexion, deconnexion, messageErreur } from "./api";
+import { useAPI } from "./useAPI";
+import PanelAlertes from "./panneaux/Alertes";
+import PanelCredit from "./panneaux/Credit";
+import { FormulaireSignalement, EditeurCorrection, PanelApprentissage, PanelFiabilite, PanelAudit } from "./panneaux/Admin";
+import { lireAVoixHaute, arreterLecture } from "./ui";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -14,7 +19,8 @@ import {
   Database, Activity, Users, CreditCard,
   ShieldAlert, TrendingUp, ExternalLink,
   Trash2, ChevronDown, ChevronUp, Download,
-  History, CheckSquare, Square, FileText, LogOut, Lock, AlertTriangle, X
+  History, CheckSquare, Square, FileText, LogOut, Lock, AlertTriangle, X,
+  Volume2, VolumeX, Flag, Wrench
 } from "lucide-react";
 
 // ════════════════════════════════════════
@@ -93,88 +99,6 @@ function formaterValeur(val) {
 // ════════════════════════════════════════
 // HOOK API
 // ════════════════════════════════════════
-
-function useAPI() {
-  const [chargement, setChargement] = useState(false);
-  const [erreur, setErreur]         = useState(null);
-
-  const appeler = useCallback(async (methode, url, data = null, options = {}) => {
-    setChargement(true);
-    setErreur(null);
-    try {
-      const config = { method: methode, url, ...options };
-      if (data) config.data = data;
-      const res = await http(config);
-      return res.data;
-    } catch (e) {
-      setErreur(messageErreur(e));
-      return null;
-    } finally {
-      setChargement(false);
-    }
-  }, []);
-
-  return { appeler, chargement, erreur };
-}
-
-// ════════════════════════════════════════
-// COMPOSANT — ALERTES FRAUDE
-// ════════════════════════════════════════
-
-function PanelAlertes({ dark }) {
-  const { appeler } = useAPI();
-  const [alertes, setAlertes] = useState([]);
-  const [filtre, setFiltre]   = useState("Critique");
-
-  useEffect(() => {
-    appeler("get", `/alertes/fraude?niveau=${encodeURIComponent(filtre)}&limit=8`).then(res => {
-      setAlertes(res ? res.data : []);
-    });
-  }, [filtre, appeler]);
-
-  const couleurNiveau = {
-    Critique: "text-red-500 bg-red-100",
-    Élevé:    "text-orange-500 bg-orange-100",
-    Moyen:    "text-yellow-600 bg-yellow-100",
-    Faible:   "text-green-600 bg-green-100",
-  };
-
-  return (
-    <div className={`rounded-2xl border p-6 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className={`text-lg font-bold ${dark ? "text-white" : "text-gray-900"}`}>🚨 Alertes Fraude</h2>
-        <div className="flex gap-1">
-          {["Critique","Élevé","Moyen"].map(n => (
-            <button key={n} onClick={() => setFiltre(n)}
-              className={`text-xs px-2.5 py-1 rounded-full transition-all ${filtre === n ? "bg-blue-600 text-white" : dark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`}>
-              {n}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="space-y-2">
-        {alertes.length === 0 ? (
-          <p className={`text-sm text-center py-4 ${dark ? "text-gray-500" : "text-gray-400"}`}>Aucune alerte {filtre}</p>
-        ) : alertes.map((a, i) => (
-          <div key={i} className={`flex items-center justify-between p-3 rounded-xl ${dark ? "bg-gray-700" : "bg-gray-50"}`}>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${couleurNiveau[a.niveau_alerte] || "text-gray-500 bg-gray-100"}`}>{a.niveau_alerte}</span>
-                <span className={`text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>Score : {(a.score_anomalie * 100).toFixed(0)}%</span>
-              </div>
-              <p className={`text-xs truncate ${dark ? "text-gray-300" : "text-gray-600"}`}>{a.motif || "Comportement inhabituel"}</p>
-              <p className={`text-xs ${dark ? "text-gray-500" : "text-gray-400"}`}>{a.banque} · {a.ville}</p>
-            </div>
-            <div className="text-right ml-2">
-              <p className={`text-sm font-bold ${dark ? "text-white" : "text-gray-900"}`}>{a.montant_fcfa ? (a.montant_fcfa / 1000000).toFixed(1) + "M" : "--"}</p>
-              <p className={`text-xs ${dark ? "text-gray-500" : "text-gray-400"}`}>FCFA</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 // ════════════════════════════════════════
 // COMPOSANT — GRAPHIQUES DASHBOARD
@@ -440,8 +364,10 @@ function GraphiquePourPDF({ colonnes, data }) {
 // COMPOSANT — CARTE RÉSULTAT
 // ════════════════════════════════════════
 
-function CarteResultat({ item, dark, onSupprimer }) {
+function CarteResultat({ item, dark, onSupprimer, role }) {
   const [ouvert, setOuvert] = useState(true);
+  const [action, setAction] = useState(null);   // "signaler" | "corriger"
+  const discret = `text-xs ${dark ? "text-gray-400" : "text-gray-500"}`;
 
   return (
     <div className={`rounded-2xl border mb-4 overflow-hidden transition-all ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
@@ -450,9 +376,12 @@ function CarteResultat({ item, dark, onSupprimer }) {
         onClick={() => setOuvert(!ouvert)}
       >
         <div className="flex-1 min-w-0">
+          {item.suite && item.question_precedente && (
+            <p className={`text-xs truncate ${dark ? "text-blue-300" : "text-blue-600"}`}>↳ suite de « {item.question_precedente} »</p>
+          )}
           <p className={`text-sm font-medium truncate ${dark ? "text-white" : "text-gray-900"}`}>{item.question}</p>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className={`text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>{item.total} résultats · {item.duree_ms}ms</span>
+            <span className={discret}>{item.total} résultats · {item.duree_ms}ms</span>
             <span className={`text-xs px-2 py-0.5 rounded-full ${(SOURCES[item.source] || SOURCES.gemini).classe}`}>
               {(SOURCES[item.source] || SOURCES.gemini).label}
             </span>
@@ -460,13 +389,22 @@ function CarteResultat({ item, dark, onSupprimer }) {
           </div>
         </div>
         <div className="flex items-center gap-2 ml-3">
-          <button onClick={e => { e.stopPropagation(); onSupprimer(item.id); }}
+          <button onClick={e => { e.stopPropagation(); onSupprimer(item.id); }} aria-label="Supprimer ce résultat"
             className={`p-1.5 rounded-lg ${dark ? "hover:bg-gray-600 text-gray-400" : "hover:bg-gray-100 text-gray-400"}`}>
             <Trash2 size={13} />
           </button>
           {ouvert ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
       </div>
+      {item.resume && (
+        <div className={`mx-5 mb-3 flex items-start gap-2 p-3 rounded-xl ${dark ? "bg-blue-900/20 text-blue-100" : "bg-blue-50 text-blue-900"}`}>
+          <p className="text-sm flex-1">{item.resume}</p>
+          <button onClick={() => lireAVoixHaute(item.resume)} aria-label="Lire la réponse à voix haute" title="Écouter"
+            className={`p-1.5 rounded-lg flex-shrink-0 ${dark ? "hover:bg-blue-800/40" : "hover:bg-blue-100"}`}>
+            <Volume2 size={15} />
+          </button>
+        </div>
+      )}
       {item.avertissement && (
         <div className="mx-5 mb-3 flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-500 text-xs">
           <AlertTriangle size={13} className="flex-shrink-0 mt-0.5" />
@@ -474,13 +412,31 @@ function CarteResultat({ item, dark, onSupprimer }) {
         </div>
       )}
       {ouvert && item.data && item.data.length > 0 && (
-        <div className="px-5 pb-5">
+        <div className="px-5 pb-3">
           <code className={`text-xs block mb-3 truncate ${dark ? "text-blue-300" : "text-blue-600"}`}>{item.sql}</code>
           <GraphiqueDynamique colonnes={item.colonnes} data={item.data} question={item.question} dark={dark} />
         </div>
       )}
       {ouvert && (!item.data || item.data.length === 0) && (
-        <div className={`px-5 pb-5 text-sm ${dark ? "text-gray-400" : "text-gray-500"}`}>Aucun résultat trouvé pour cette question.</div>
+        <div className={`px-5 pb-3 text-sm ${dark ? "text-gray-400" : "text-gray-500"}`}>Aucun résultat trouvé pour cette question.</div>
+      )}
+      {ouvert && (
+        <div className="px-5 pb-4">
+          <div className="flex flex-wrap gap-3">
+            <button onClick={() => setAction(action === "signaler" ? null : "signaler")}
+              className={`flex items-center gap-1 text-xs hover:underline ${dark ? "text-gray-400" : "text-gray-500"}`}>
+              <Flag size={12} /> Réponse incorrecte ?
+            </button>
+            {role === "admin" && (
+              <button onClick={() => setAction(action === "corriger" ? null : "corriger")}
+                className={`flex items-center gap-1 text-xs hover:underline ${dark ? "text-blue-300" : "text-blue-600"}`}>
+                <Wrench size={12} /> Corriger la requête
+              </button>
+            )}
+          </div>
+          {action === "signaler" && <FormulaireSignalement item={item} dark={dark} onFermer={() => setAction(null)} />}
+          {action === "corriger" && <EditeurCorrection question={item.question} sql={item.sql} dark={dark} />}
+        </div>
       )}
     </div>
   );
@@ -591,6 +547,16 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
         pdf.setFontSize(7);
         pdf.text(sourceBadge, margin + 87, y, { align: "center" });
         y += 7;
+
+        // ── Résumé ──
+        if (item.resume) {
+          pdf.setFont("helvetica", "italic");
+          pdf.setFontSize(8.5);
+          pdf.setTextColor(30, 64, 175);
+          const lignesResume = pdf.splitTextToSize(item.resume, cW);
+          pdf.text(lignesResume, margin, y);
+          y += lignesResume.length * 4 + 2;
+        }
 
         // ── Requête SQL ──
         if (y > pageH - 50) { pdf.addPage(); y = 18; }
@@ -1080,10 +1046,12 @@ function KpiCard({ titre, valeur, icone: Icone, couleur, dark }) {
 function PanelAnalyse({ dark }) {
   const { appeler, chargement, erreur } = useAPI();
   const [ref, setRef]       = useState(null);
-  const [form, setForm]     = useState({ montant_fcfa: 250000, est_internationale: "Non" });
+  const [form, setForm]     = useState({ montant_fcfa: 250000, est_internationale: "Non", heure: "14:00" });
   const [resultat, setResultat] = useState(null);
+  const [infos, setInfos]   = useState(null);
 
   useEffect(() => {
+    appeler("get", "/ia/modeles").then(res => res && setInfos(res.fraude));
     appeler("get", "/ia/referentiel").then(res => {
       if (!res?.data) return;
       setRef(res.data);
@@ -1098,7 +1066,9 @@ function PanelAnalyse({ dark }) {
   const analyser = async (e) => {
     e.preventDefault();
     setResultat(null);
-    const res = await appeler("post", "/ia/analyser-transaction", { ...form, montant_fcfa: Number(form.montant_fcfa) });
+    const res = await appeler("post", "/ia/analyser-transaction", {
+      ...form, montant_fcfa: Number(form.montant_fcfa), heure: form.heure || null,
+    });
     if (res) setResultat(res);
   };
 
@@ -1111,7 +1081,14 @@ function PanelAnalyse({ dark }) {
   return (
     <div className={`rounded-2xl border p-6 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
       <h2 className={`text-lg font-bold mb-1 ${dark ? "text-white" : "text-gray-900"}`}>Analyser une transaction</h2>
-      <p className={`text-xs mb-4 ${dark ? "text-gray-400" : "text-gray-500"}`}>Score de fraude calculé par Isolation Forest + XGBoost.</p>
+      <p className={`text-xs mb-1 ${dark ? "text-gray-400" : "text-gray-500"}`}>Score de fraude calculé par Isolation Forest + XGBoost.</p>
+      {infos && (
+        <p className={`text-xs mb-4 ${infos.remarque ? "text-amber-500" : dark ? "text-gray-500" : "text-gray-400"}`}>
+          {infos.date_entrainement
+            ? `Modèle entraîné le ${new Date(infos.date_entrainement).toLocaleDateString("fr-FR")} sur ${Number(infos.nb_transactions).toLocaleString("fr-FR")} transactions${infos.auc_xgboost ? ` · AUC ${infos.auc_xgboost}` : ""}.`
+            : infos.remarque}
+        </p>
+      )}
       {!ref ? (
         <p className={`text-sm ${dark ? "text-gray-400" : "text-gray-500"}`}>{erreur || "Chargement du modèle…"}</p>
       ) : (
@@ -1134,6 +1111,10 @@ function PanelAnalyse({ dark }) {
             <select value={form.est_internationale} onChange={e => setForm({ ...form, est_internationale: e.target.value })} className={champ}>
               <option>Non</option><option>Oui</option>
             </select>
+          </label>
+          <label>
+            <span className={etiquette}>Heure{infos && !infos.heure_prise_en_compte ? " (ignorée par le modèle actuel)" : ""}</span>
+            <input type="time" value={form.heure} onChange={e => setForm({ ...form, heure: e.target.value })} className={champ} />
           </label>
           <div className="sm:col-span-2 flex items-center gap-3">
             <button type="submit" disabled={chargement}
@@ -1236,6 +1217,7 @@ export default function App() {
   }, []);
 
   const seDeconnecter = () => {
+    arreterLecture();
     if (session) sessionStorage.removeItem(`${CLE_STORAGE}_${session.utilisateur}`);
     deconnexion();
     setSession(null);
@@ -1255,7 +1237,21 @@ function Tableau({ session, onDeconnexion }) {
   const [onglet, setOnglet]         = useState("graphiques");
   const [stats, setStats]           = useState(null);
   const [message, setMessage]       = useState(null);
-  const { appeler, chargement, erreur } = useAPI();
+  const [voix, setVoix]             = useState(() => {
+    try { return localStorage.getItem("voicebank_voix") !== "non"; } catch (e) { return true; }
+  });
+  // Deux canaux séparés : le chargement du tableau de bord ne doit jamais bloquer une question.
+  const { appeler } = useAPI();
+  const { appeler: appelerQuestion, chargement, erreur } = useAPI();
+  const estAdmin = session.role === "admin";
+
+  const basculerVoix = () => {
+    setVoix(v => {
+      try { localStorage.setItem("voicebank_voix", v ? "non" : "oui"); } catch (e) { /* rien */ }
+      if (v) arreterLecture();
+      return !v;
+    });
+  };
 
   useEffect(() => {
     appeler("get", "/dashboard").then(res => { if (res?.data) setDashboard(res.data); });
@@ -1270,14 +1266,21 @@ function Tableau({ session, onDeconnexion }) {
     if (!q || chargement) return;
     setQuestion("");
     setMessage(null);
-    const res = await appeler("post", "/vocal/question", { texte: q, langue: "fr" });
+    // Contexte = dernière question (moins de 15 min) : permet « et à Douala ? ».
+    // C'est l'API qui décide si la nouvelle question est une suite ou une question complète.
+    const derniere = historique[0];
+    const contexte = derniere && derniere.sql && Date.now() - new Date(derniere.timestamp).getTime() < 15 * 60 * 1000
+      ? { question: derniere.question, sql: derniere.sql } : null;
+    const res = await appelerQuestion("post", "/vocal/question", { texte: q, langue: "fr", contexte });
     if (!res) return;  // le message d'erreur est affiché via `erreur`
     setHistorique(prev => [{
       id: Date.now(), timestamp: new Date().toISOString(),
       question: q, sql: res.sql, source: res.source,
       colonnes: res.colonnes, total: res.total,
       data: res.data, duree_ms: res.duree_ms, avertissement: res.avertissement || null,
+      resume: res.resume || null, suite: !!res.suite, question_precedente: res.question_precedente || null,
     }, ...prev].slice(0, MAX_HISTORIQUE));
+    if (voix && res.resume) lireAVoixHaute(res.resume);
   };
 
   const supprimerItem = (id) => setHistorique(prev => prev.filter(item => item.id !== id));
@@ -1306,8 +1309,14 @@ function Tableau({ session, onDeconnexion }) {
   const ONGLETS = [
     { id: "graphiques", label: "Graphiques" },
     { id: "alertes",    label: "Alertes" },
-    { id: "analyse",    label: "Analyse IA" },
+    { id: "analyse",    label: "Analyse fraude" },
+    { id: "credit",     label: "Score crédit" },
     { id: "historique", label: `Historique${historique.length > 0 ? ` (${historique.length})` : ""}` },
+    ...(estAdmin ? [
+      { id: "apprentissage", label: "Apprentissage" },
+      { id: "fiabilite",     label: "Fiabilité" },
+      { id: "audit",         label: "Audit" },
+    ] : []),
   ];
 
   return (
@@ -1333,6 +1342,11 @@ function Tableau({ session, onDeconnexion }) {
               <TrendingUp size={13} /> Power BI <ExternalLink size={11} />
             </a>
           )}
+          <button onClick={basculerVoix} aria-label={voix ? "Désactiver la réponse vocale" : "Activer la réponse vocale"}
+            title={voix ? "Réponse vocale activée" : "Réponse vocale désactivée"}
+            className={`p-2 rounded-xl transition-all ${dark ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}>
+            {voix ? <Volume2 size={15} /> : <VolumeX size={15} />}
+          </button>
           <button onClick={() => setDark(!dark)} aria-label="Changer de thème"
             className={`p-2 rounded-xl transition-all ${dark ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}>
             {dark ? <Sun size={15} /> : <Moon size={15} />}
@@ -1427,7 +1441,7 @@ function Tableau({ session, onDeconnexion }) {
               </button>
             </div>
             {historique.slice(0, 5).map(item => (
-              <CarteResultat key={item.id} item={item} dark={dark} onSupprimer={supprimerItem} />
+              <CarteResultat key={item.id} item={item} dark={dark} onSupprimer={supprimerItem} role={session.role} />
             ))}
             {historique.length > 5 && (
               <button onClick={() => setOnglet("historique")}
@@ -1468,6 +1482,10 @@ function Tableau({ session, onDeconnexion }) {
             : <p className={`text-sm ${dark ? "text-gray-500" : "text-gray-400"}`}>Statistiques indisponibles.</p>)}
           {onglet === "alertes"    && <PanelAlertes dark={dark} />}
           {onglet === "analyse"    && <PanelAnalyse dark={dark} />}
+          {onglet === "credit"     && <PanelCredit dark={dark} />}
+          {estAdmin && onglet === "apprentissage" && <PanelApprentissage dark={dark} />}
+          {estAdmin && onglet === "fiabilite"     && <PanelFiabilite dark={dark} />}
+          {estAdmin && onglet === "audit"         && <PanelAudit dark={dark} />}
           {onglet === "historique" && (
             <PanelHistorique
               historique={historique}

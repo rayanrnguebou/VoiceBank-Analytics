@@ -202,6 +202,16 @@ CREATE INDEX IF NOT EXISTS idx_alertes_client      ON voicebank.alertes_fraude(i
 CREATE INDEX IF NOT EXISTS idx_alertes_niveau      ON voicebank.alertes_fraude(niveau_alerte);
 CREATE INDEX IF NOT EXISTS idx_alertes_traitee     ON voicebank.alertes_fraude(traitee);
 
+-- Traitement des alertes par les analystes (v3)
+ALTER TABLE voicebank.alertes_fraude ADD COLUMN IF NOT EXISTS decision        VARCHAR(20);
+ALTER TABLE voicebank.alertes_fraude ADD COLUMN IF NOT EXISTS commentaire     TEXT;
+ALTER TABLE voicebank.alertes_fraude ADD COLUMN IF NOT EXISTS traitee_par     VARCHAR(64);
+ALTER TABLE voicebank.alertes_fraude ADD COLUMN IF NOT EXISTS date_traitement TIMESTAMP;
+DO $$ BEGIN
+    ALTER TABLE voicebank.alertes_fraude ADD CONSTRAINT chk_alerte_decision
+        CHECK (decision IS NULL OR decision IN ('Fraude confirmée', 'Faux positif'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 
 -- ══════════════════════════════════════════════════════════
 -- TABLE 5 : LOGS REQUÊTES VOCALES (historique VoiceBank)
@@ -215,6 +225,58 @@ CREATE TABLE IF NOT EXISTS voicebank.logs_vocaux (
     duree_ms            INTEGER,                           -- temps de réponse en ms
     utilisateur         VARCHAR(64),                       -- compte ayant posé la question
     date_requete        TIMESTAMP    DEFAULT NOW()
+);
+
+
+ALTER TABLE voicebank.logs_vocaux ADD COLUMN IF NOT EXISTS utilisateur VARCHAR(64);
+
+
+-- ══════════════════════════════════════════════════════════
+-- TABLE 6 : SIGNALEMENTS (réponses jugées fausses par un utilisateur)
+-- ══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS voicebank.signalements (
+    id_signalement      SERIAL       PRIMARY KEY,
+    question            TEXT         NOT NULL,
+    requete_sql         TEXT,
+    source              VARCHAR(20),
+    commentaire         TEXT,
+    utilisateur         VARCHAR(64)  NOT NULL,
+    statut              VARCHAR(10)  NOT NULL DEFAULT 'Ouvert'
+                        CHECK (statut IN ('Ouvert', 'Corrigé', 'Rejeté')),
+    traite_par          VARCHAR(64),
+    date_traitement     TIMESTAMP,
+    date_signalement    TIMESTAMP    DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_signalements_statut ON voicebank.signalements(statut);
+
+
+-- ══════════════════════════════════════════════════════════
+-- TABLE 7 : JOURNAL D'AUDIT (ajout seulement, jamais modifié)
+-- ══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS voicebank.journal_audit (
+    id_evenement        BIGSERIAL    PRIMARY KEY,
+    date_evenement      TIMESTAMP    DEFAULT NOW(),
+    utilisateur         VARCHAR(64),
+    action              VARCHAR(40)  NOT NULL,
+    detail              JSONB,
+    adresse_ip          VARCHAR(64)
+);
+CREATE INDEX IF NOT EXISTS idx_audit_date   ON voicebank.journal_audit(date_evenement DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON voicebank.journal_audit(action);
+
+
+-- ══════════════════════════════════════════════════════════
+-- TABLE 8 : ÉVALUATIONS DE FIABILITÉ (taux de bonnes réponses)
+-- ══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS voicebank.evaluations (
+    id_evaluation       SERIAL       PRIMARY KEY,
+    date_evaluation     TIMESTAMP    DEFAULT NOW(),
+    utilisateur         VARCHAR(64),
+    nb_questions        INTEGER,
+    nb_reussies         INTEGER,
+    taux_reussite       NUMERIC(5,2),
+    gemini_actif        BOOLEAN,
+    details             JSONB
 );
 
 

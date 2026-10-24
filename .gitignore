@@ -15,9 +15,9 @@ env/
 # Power BI
 *.pbix
 
-# Modeles IA (trop lourds pour GitHub)
-voicebank_ia/modeles_sauvegardes/
+# Graphiques IA générés
 voicebank_ia/graphiques_ia/
+# Les modèles (voicebank_ia/modeles_sauvegardes) SONT versionnés : l'API en a besoin
 
 # Donnees (trop lourdes pour GitHub)
 output_voicebank/
@@ -31,7 +31,14 @@ node_modules/
 
 # Data
 *.csv
+!voicebank_ia/modeles_sauvegardes/*.csv
 *.xlsx
+*.7z
+*.zip
+
+# Build
+voicebank-ui/build/
+.pytest_cache/
 
 # OS
 .DS_Store

@@ -1,48 +1,68 @@
-# VOICEBANK ANALYTICS - Configuration Render
-# Auteur : Nguebou Temgoua Rayan
-# Place ce fichier a la RACINE de ton depot GitHub
+# VOICEBANK ANALYTICS — Blueprint Render
+# Les secrets (sync: false) se renseignent dans le tableau de bord Render.
+# Render → New → Blueprint → choisir ce dépôt. Voir README, section « Mettre en ligne ».
 
 services:
-
-  # ─────────────────────────────────────
-  # API FastAPI
-  # ─────────────────────────────────────
   - type: web
     name: voicebank-api
-    runtime: python
-    rootDir: voicebank_api
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    runtime: docker
+    plan: free                         # sans cette ligne, Render propose une offre payante
+    dockerfilePath: ./voicebank_api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
     envVars:
+      - key: ENV
+        value: production
       - key: DATABASE_URL
-        sync: false        # a renseigner manuellement dans Render
+        fromDatabase:
+          name: voicebank-db
+          property: connectionString
+      - key: READONLY_DATABASE_URL     # URL du compte voicebank_reader (voir README)
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: VOICEBANK_USERS
+        sync: false
+      - key: ALLOWED_ORIGINS           # ex. https://voicebank-ui.onrender.com
+        sync: false
       - key: GEMINI_API_KEY
-        sync: false        # a renseigner manuellement dans Render
-      - key: PYTHON_VERSION
-        value: 3.10.12
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: WHISPER_LOCAL              # offre gratuite (512 Mo) : transcription via Groq uniquement
+        value: "false"
+      - key: INITIALISER_BASE           # crée le schéma au démarrage (idempotent)
+        value: "true"
+      - key: DONNEES_DEMO               # remplit une base VIDE avec des données fictives
+        value: "true"
 
-  # ─────────────────────────────────────
-  # Interface React (site statique)
-  # ─────────────────────────────────────
   - type: web
     name: voicebank-ui
-    runtime: static
-    rootDir: voicebank_ui
-    buildCommand: npm install && npm run build
+    runtime: static                    # sites statiques : gratuits
+    rootDir: voicebank-ui
+    buildCommand: npm ci && npm run build
     staticPublishPath: build
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
     envVars:
-      - key: REACT_APP_API_URL
-        sync: false        # URL de ton API deployee sur Render
+      - key: REACT_APP_API_URL         # ex. https://voicebank-api.onrender.com
+        sync: false
+      - key: REACT_APP_POWER_BI_URL
+        sync: false
 
-  # ─────────────────────────────────────
-  # Base de donnees PostgreSQL
-  # ─────────────────────────────────────
 databases:
-  - name: voicebank-db
+  - name: voicebank-db                # offre gratuite : expire 30 jours après sa création (voir README)
     databaseName: voicebank_db
-    user: voicebank_user
     plan: free

@@ -1,4 +1,5 @@
 """Authentification (JWT) et contrôle d'accès par rôle."""
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -10,6 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from . import config
 
 ROLES = {"analyste", "admin"}
+_HASH_BCRYPT = re.compile(r"\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}")
 ALGO = "HS256"
 
 
@@ -28,9 +30,14 @@ def _charger_comptes() -> dict:
             raise RuntimeError("VOICEBANK_USERS mal formé (attendu nom:role:hash)")
         if role not in ROLES:
             raise RuntimeError(f"Rôle inconnu '{role}' (attendu : {', '.join(sorted(ROLES))})")
-        if not hash_.startswith("$2"):
-            raise RuntimeError(f"Le mot de passe de '{nom}' doit être un hash bcrypt")
+        if not _HASH_BCRYPT.fullmatch(hash_):
+            raise RuntimeError(
+                f"VOICEBANK_USERS : le hash du compte '{nom}' n'est pas un hash bcrypt valide "
+                f"(60 caractères commençant par $2b$). Génère-le avec : python -m app.outils.creer_hash "
+                f"et mets la valeur entre apostrophes simples dans .env")
         comptes[nom] = (role, hash_.encode())
+    if not comptes:
+        raise RuntimeError("VOICEBANK_USERS est vide : aucun compte ne pourrait se connecter")
     return comptes
 
 

@@ -249,7 +249,8 @@ const LIBELLES_ACTIONS = {
   connexion: "Connexion", connexion_refusee: "Connexion refusée", consultation_client: "Fiche client consultée",
   correction_rag: "Correction enregistrée", correction_supprimee: "Correction supprimée", signalement: "Réponse signalée",
   signalement_traite: "Signalement traité", alerte_traitee: "Alerte traitée", evaluation_lancee: "Évaluation lancée",
-  score_credit: "Score de crédit consulté",
+  score_credit: "Score de crédit consulté", compte_cree: "Compte créé", compte_reinitialise: "Mot de passe réinitialisé",
+  compte_modifie: "Compte modifié", mot_de_passe_change: "Mot de passe changé",
 };
 
 export function PanelAudit({ dark }) {

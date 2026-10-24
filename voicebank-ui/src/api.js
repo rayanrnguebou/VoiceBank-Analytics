@@ -40,14 +40,20 @@ http.interceptors.response.use(
   }
 );
 
-export async function connexion(nom, motDePasse) {
-  const { data } = await http.post("/auth/login", { nom, mot_de_passe: motDePasse });
+// Réponse de /auth/login ou /auth/mot-de-passe -> session enregistrée
+export function appliquerJeton(data) {
   const session = {
     token: data.access_token, utilisateur: data.utilisateur, role: data.role,
+    doitChangerMdp: !!data.doit_changer_mot_de_passe,
     expire: Date.now() + data.expire_dans_min * 60 * 1000,
   };
   ecrireSession(session);
   return session;
+}
+
+export async function connexion(nom, motDePasse) {
+  const { data } = await http.post("/auth/login", { nom, mot_de_passe: motDePasse });
+  return appliquerJeton(data);
 }
 
 export function deconnexion() {

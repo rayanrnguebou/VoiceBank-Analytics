@@ -40,11 +40,16 @@ def _trop_de_requetes(request: Request, exc: RateLimitExceeded):
     return JSONResponse({"detail": "Trop de requêtes, réessaie dans un instant."}, status_code=429)
 
 
-@app.exception_handler(Exception)
-def _erreur_interne(request: Request, exc: Exception):
+@app.middleware("http")
+async def erreurs_internes(request: Request, call_next):
+    # Ajouté AVANT CORS (donc à l'intérieur) : une erreur 500 garde les en-têtes CORS et le
+    # navigateur affiche "Erreur interne" au lieu de "API injoignable".
     # Le détail reste dans les logs serveur, jamais renvoyé au client.
-    log.exception("Erreur non gérée sur %s %s", request.method, request.url.path)
-    return JSONResponse({"detail": "Erreur interne du serveur"}, status_code=500)
+    try:
+        return await call_next(request)
+    except Exception:
+        log.exception("Erreur non gérée sur %s %s", request.method, request.url.path)
+        return JSONResponse({"detail": "Erreur interne du serveur"}, status_code=500)
 
 
 app.add_middleware(

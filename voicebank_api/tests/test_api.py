@@ -292,3 +292,26 @@ def test_limitation_tentatives_connexion(client):
         limiter.enabled = False
         limiter.reset()
     assert codes[:5] == [401] * 5 and codes[-1] == 429
+
+
+@pytest.mark.parametrize("valeur", [
+    "rayan:admin:$2b$12$REMPLACE_PAR_TON_HASH",
+    "rayan:admin:motdepasseenclair",
+    "rayan:superadmin:$2b$12$" + "a" * 53,
+    "",
+])
+def test_comptes_invalides_refuses_au_demarrage(monkeypatch, valeur):
+    from app import config, securite
+    monkeypatch.setattr(config, "VOICEBANK_USERS", valeur)
+    with pytest.raises(RuntimeError):
+        securite._charger_comptes()
+
+
+def test_erreur_500_garde_les_entetes_cors(client, analyste):
+    from app import db
+    with patch.object(db, "lire", side_effect=RuntimeError("panne")), \
+         patch("app.main._lire", side_effect=RuntimeError("panne")):
+        r = client.get("/dashboard", headers={**analyste, "Origin": "http://localhost:3000"})
+    assert r.status_code == 500 and r.json()["detail"] == "Erreur interne du serveur"
+    assert r.headers.get("access-control-allow-origin") == "http://localhost:3000"
+    assert "panne" not in r.text

@@ -42,12 +42,24 @@ def test_commentaire_local_va_plus_loin(client, analyste):
 def test_commentaire_gemini_en_json(client, admin):
     with patch("app.nl2sql.client_gemini") as faux_client:
         faux_client.return_value.models.generate_content.return_value.text = (
-            '{"resume": "79 crédits en défaut.", "commentaire": "La moitié vient de Douala. Relance ces clients."}')
+            '{"resume": "79 crédits en défaut.", "commentaire": "La moitié vient de Douala. Relance ces clients.",'
+            ' "relance": "Veux-tu voir leur répartition par ville", "question_suivante": "Crédits en défaut par ville"}')
         j = _q(client, admin, "Crédits en défaut")
     assert j["resume"] == "79 crédits en défaut."
     assert j["commentaire"] == "La moitié vient de Douala. Relance ces clients."
+    assert j["relance"] == {"texte": "Veux-tu voir leur répartition par ville ?", "question": "Crédits en défaut par ville"}
     kw = faux_client.return_value.models.generate_content.call_args.kwargs
     assert kw["config"] == {"response_mime_type": "application/json"} and '"commentaire"' in kw["contents"]
+
+
+def test_relance_locale(client, analyste):
+    j = _q(client, analyste, "Transactions frauduleuses par banque")
+    assert j["relance"] == {"texte": "Veux-tu voir les alertes critiques encore à traiter ?", "question": "Alertes critiques"}
+    # La question proposée est comprise par les règles locales (aucune IA nécessaire)
+    suivante = _q(client, analyste, j["relance"]["question"])
+    assert suivante["source"] in ("rule", "rag") and suivante["total"] > 0
+    assert resume.relance_locale("Crédits en défaut")["question"] != "Crédits en défaut"
+    assert resume.relance_locale("Bonjour") == {"texte": resume.RELANCE_OUVERTE, "question": None}
 
 
 def test_commentaire_local_cas_limites():
@@ -60,7 +72,7 @@ def test_commentaire_local_cas_limites():
 
 def test_resume_desactivable(client, analyste):
     j = _q(client, analyste, "Crédits en défaut", resumer=False)
-    assert j["resume"] is None and j["commentaire"] is None
+    assert j["resume"] is None and j["commentaire"] is None and j["relance"] is None
 
 
 def test_resume_aucun_resultat():

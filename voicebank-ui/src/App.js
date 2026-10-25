@@ -11,6 +11,7 @@ import BarreLaterale, { Logo } from "./panneaux/BarreLaterale";
 import { FormulaireSignalement, EditeurCorrection, PanelApprentissage, PanelFiabilite, PanelAudit } from "./panneaux/Admin";
 import { EcranMotDePasseProvisoire, FenetreMotDePasse, PanelComptes } from "./panneaux/Comptes";
 import { lireAVoixHaute, arreterLecture } from "./ui";
+import { ecouterReponse, interpreterReponse } from "./conversation";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -21,7 +22,7 @@ import {
   Activity, Users, CreditCard,
   ShieldAlert, Trash2, ChevronDown, ChevronUp, Download,
   History, CheckSquare, Square, FileText, Lock, AlertTriangle, X,
-  Volume2, VolumeX, Flag, Wrench, Menu, CornerDownRight, Calendar, Clock, Timer,
+  Volume2, VolumeX, Flag, Wrench, Menu, MessagesSquare, CornerDownRight, Calendar, Clock, Timer,
   ChartColumn, ChartLine, ChartPie, ChartArea, Gauge, Table2, BookCheck, Zap, Sparkles,
 } from "lucide-react";
 
@@ -1255,6 +1256,13 @@ function Tableau({ session, onDeconnexion, onSession }) {
   const [stats, setStats]           = useState(null);
   const [message, setMessage]       = useState(null);
   const [parle, setParle]           = useState(false);
+  const [ecoute, setEcoute]         = useState(null);        // null | "attente" | "parole" | "transcription"
+  const [conversation, setConversation] = useState(() => {
+    try { return localStorage.getItem("voicebank_conversation") !== "non"; } catch (e) { return true; }
+  });
+  const ecouteRef  = useRef(null);       // contrôle de l'écoute en cours (annuler)
+  const poserRef   = useRef(null);       // dernière version de poserQuestion (contexte à jour)
+  const ongletRef  = useRef("assistant");
   const [voix, setVoix]             = useState(() => {
     try { return localStorage.getItem("voicebank_voix") !== "non"; } catch (e) { return true; }
   });
@@ -1263,12 +1271,58 @@ function Tableau({ session, onDeconnexion, onSession }) {
   const { appeler: appelerQuestion, chargement, erreur } = useAPI();
   const estAdmin = session.role === "admin";
 
+  const arreterEcoute = useCallback(() => {
+    ecouteRef.current?.annuler?.();
+    ecouteRef.current = null;
+    setEcoute(null);
+  }, []);
+
   const basculerVoix = () => {
     setVoix(v => {
       try { localStorage.setItem("voicebank_voix", v ? "non" : "oui"); } catch (e) { /* rien */ }
-      if (v) arreterLecture();
+      if (v) { arreterLecture(); arreterEcoute(); }
       return !v;
     });
+  };
+
+  const basculerConversation = () => {
+    setConversation(c => {
+      try { localStorage.setItem("voicebank_conversation", c ? "non" : "oui"); } catch (e) { /* rien */ }
+      if (c) arreterEcoute();
+      return !c;
+    });
+  };
+
+  // Mode conversation : la relance (« Veux-tu voir… ? ») vient d'être lue, on écoute la réponse.
+  const ecouterLaReponse = async (relance, essai = 1) => {
+    if (ongletRef.current !== "assistant") return;
+    const controle = {};
+    ecouteRef.current = controle;
+    setEcoute("attente");
+    let texte = "";
+    try {
+      texte = await ecouterReponse({
+        controle,
+        onParole: () => setEcoute("parole"),
+        onTexteEnDirect: t => setQuestion(t),
+        onTranscription: () => setEcoute("transcription"),
+      });
+    } catch (e) {
+      setMessage(e.message);
+    }
+    if (ecouteRef.current !== controle) return;     // écoute annulée entre-temps
+    ecouteRef.current = null;
+    setEcoute(null);
+    const reponse = interpreterReponse(texte);
+    if (reponse.type === "vide") { setQuestion(""); return; }
+    if (reponse.type === "non") { setQuestion(""); lireAVoixHaute("D'accord. Je reste à ta disposition."); return; }
+    if (reponse.type === "oui") {
+      setQuestion("");
+      if (relance?.question) poserRef.current(relance.question);
+      else if (essai === 1) lireAVoixHaute("Je t'écoute.", { onFin: () => ecouterLaReponse(null, 2) });
+      return;
+    }
+    poserRef.current(reponse.texte);
   };
 
   useEffect(() => {
@@ -1282,7 +1336,11 @@ function Tableau({ session, onDeconnexion, onSession }) {
     appeler("get", "/stats/global").then(res => { if (res?.data) setStats(res.data); });
   }, [appeler]);
 
-  const allerA = useCallback(id => { setOnglet(id); window.scrollTo(0, 0); }, []);
+  const allerA = useCallback(id => {
+    setOnglet(id); ongletRef.current = id; window.scrollTo(0, 0);
+    if (id !== "assistant") arreterEcoute();
+  }, [arreterEcoute]);
+  useEffect(() => () => ecouteRef.current?.annuler?.(), []);
 
   // Compteurs de la barre latérale : alertes à traiter, signalements en attente (admin)
   const rafraichirCompteurs = useCallback(() => {
@@ -1298,6 +1356,7 @@ function Tableau({ session, onDeconnexion, onSession }) {
   const poserQuestion = async (texte) => {
     const q = (texte ?? question).trim();
     if (!q || chargement) return;
+    if (ecouteRef.current) arreterEcoute();
     setQuestion("");
     setMessage(null);
     // Contexte = dernière question (moins de 15 min) : permet « et à Douala ? ».
@@ -1312,12 +1371,19 @@ function Tableau({ session, onDeconnexion, onSession }) {
       question: q, sql: res.sql, source: res.source,
       colonnes: res.colonnes, total: res.total,
       data: res.data, duree_ms: res.duree_ms, avertissement: res.avertissement || null,
-      resume: res.resume || null, commentaire: res.commentaire || null,
+      resume: res.resume || null, commentaire: res.commentaire || null, relance: res.relance || null,
       suite: !!res.suite, question_precedente: res.question_precedente || null,
     }, ...prev].slice(0, MAX_HISTORIQUE));
-    // Le résumé (affiché) est lu en premier, puis l'analyse plus poussée (uniquement à l'oral).
-    if (voix && res.resume) lireAVoixHaute([res.resume, res.commentaire]);
+    // Le résumé (affiché) est lu en premier, puis l'analyse plus poussée et la relance
+    // (uniquement à l'oral). En mode conversation, on écoute ensuite la réponse, sans clic.
+    if (voix && res.resume) {
+      const relance = res.relance;
+      lireAVoixHaute([res.resume, res.commentaire, relance?.texte], {
+        onFin: conversation && relance ? () => ecouterLaReponse(relance) : undefined,
+      });
+    }
   };
+  poserRef.current = poserQuestion;
 
   const supprimerItem = (id) => setHistorique(prev => prev.filter(item => item.id !== id));
   const toutEffacer = () => {
@@ -1392,6 +1458,27 @@ function Tableau({ session, onDeconnexion, onSession }) {
               <Square size={11} fill="currentColor" />
             </button>
           )}
+          {ecoute && (
+            <button onClick={arreterEcoute} aria-label="Arrêter l'écoute" title="Arrêter l'écoute"
+              className="flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full text-xs font-medium bg-red-500/15 text-red-500 hover:bg-red-500/25">
+              <span className="relative flex w-2 h-2" aria-hidden="true">
+                <span className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-75" />
+                <span className="relative w-2 h-2 rounded-full bg-red-500" />
+              </span>
+              <span>{ecoute === "transcription" ? "Je réfléchis…" : ecoute === "parole" ? "Je t'écoute…" : "À toi…"}</span>
+              <Square size={11} fill="currentColor" />
+            </button>
+          )}
+          {voix && (
+            <button onClick={basculerConversation} aria-pressed={conversation}
+              aria-label={conversation ? "Désactiver le mode conversation" : "Activer le mode conversation"}
+              title={conversation ? "Mode conversation : je t'écoute après chaque réponse" : "Mode conversation désactivé"}
+              className={`p-2 rounded-lg transition-colors ${conversation
+                ? (dark ? "text-laiton-300 hover:bg-gray-800" : "text-laiton-600 hover:bg-gray-200")
+                : (dark ? "text-gray-500 hover:bg-gray-800" : "text-gray-400 hover:bg-gray-200")}`}>
+              <MessagesSquare size={17} />
+            </button>
+          )}
           <button onClick={basculerVoix} aria-label={voix ? "Désactiver la réponse vocale" : "Activer la réponse vocale"}
             title={voix ? "Réponse vocale activée" : "Réponse vocale désactivée"}
             className={`p-2 rounded-lg transition-colors ${dark ? "text-gray-300 hover:bg-gray-800" : "text-gray-600 hover:bg-gray-200"}`}>
@@ -1423,7 +1510,7 @@ function Tableau({ session, onDeconnexion, onSession }) {
               <div className={`rounded-2xl border p-5 mb-6 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
                 <div className="flex items-center gap-4 mb-4">
                   <BoutonMicro
-                    onDebut={() => { setMessage(null); setQuestion(""); setDictee(true); }}
+                    onDebut={() => { arreterEcoute(); arreterLecture(); setMessage(null); setQuestion(""); setDictee(true); }}
                     onTexteEnDirect={texte => setQuestion(texte)}
                     onTranscription={texte => {
                       // Le texte final remplace l'aperçu ; on laisse l'utilisateur le relire puis valider.
@@ -1440,9 +1527,9 @@ function Tableau({ session, onDeconnexion, onSession }) {
                         ref={champQuestionRef}
                         aria-label="Question"
                         value={question}
-                        onChange={e => setQuestion(e.target.value)}
+                        onChange={e => { if (ecouteRef.current) arreterEcoute(); setQuestion(e.target.value); }}
                         onKeyDown={e => e.key === "Enter" && poserQuestion()}
-                        placeholder={dictee ? "Je t'écoute…" : "Pose ta question en français..."}
+                        placeholder={dictee || ecoute ? "Je t'écoute…" : "Pose ta question en français..."}
                         maxLength={500}
                         className={`flex-1 min-w-0 px-4 py-3 rounded-xl border text-sm outline-none transition-all ${
                           dark ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-foret-500"

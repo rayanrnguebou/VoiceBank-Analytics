@@ -44,18 +44,24 @@ export function decouperPhrases(texte) {
   return String(texte || "").split(/(?<=[.!?…])\s+(?=[A-ZÀ-ÖØ-Þ«"0-9])/).map(p => p.trim()).filter(Boolean);
 }
 
-export function lireAVoixHaute(textes) {
+// options.onFin : appelé quand la lecture va jusqu'au bout (pas si elle est interrompue).
+export function lireAVoixHaute(textes, options = {}) {
   try {
     const phrases = (Array.isArray(textes) ? textes : [textes]).flatMap(decouperPhrases);
     if (!phrases.length || !window.speechSynthesis) return false;
     window.speechSynthesis.cancel();
+    window.__voicebankEnonces = [];      // garde une référence : sinon Chrome peut perdre « onend »
     const voix = window.speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith("fr"));
     phrases.forEach((phrase, i) => {
       const u = new SpeechSynthesisUtterance(phrase);
       u.lang = "fr-FR";
       u.rate = 1.02;
       if (voix) u.voice = voix;
-      if (i === phrases.length - 1) u.onend = u.onerror = () => signalerLecture(false);
+      if (i === phrases.length - 1) {
+        u.onend = () => { signalerLecture(false); options.onFin && options.onFin(); };
+        u.onerror = () => signalerLecture(false);
+      }
+      window.__voicebankEnonces.push(u);
       window.speechSynthesis.speak(u);
     });
     signalerLecture(true);

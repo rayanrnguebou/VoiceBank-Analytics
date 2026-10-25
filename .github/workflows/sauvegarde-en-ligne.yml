@@ -1,0 +1,57 @@
+# Sauvegarde quotidienne de la base en ligne (Render), chiffrée, conservée 30 jours.
+# Secrets à créer (GitHub → Settings → Secrets and variables → Actions) :
+#   RENDER_DATABASE_URL     : External Database URL de voicebank-db (Render → Connect)
+#   SAUVEGARDE_MOT_DE_PASSE : phrase secrète longue, pour chiffrer (à garder hors de GitHub)
+# Restaurer : télécharger l'artefact, puis voir README « Sauvegarder la base ».
+name: Sauvegarde en ligne
+
+on:
+  schedule:
+    - cron: "17 2 * * *"        # chaque nuit à 02:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sauvegarde:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Vérifier la configuration
+        id: config
+        env:
+          URL: ${{ secrets.RENDER_DATABASE_URL }}
+          MDP: ${{ secrets.SAUVEGARDE_MOT_DE_PASSE }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$MDP" ]; then
+            echo "Secrets RENDER_DATABASE_URL / SAUVEGARDE_MOT_DE_PASSE absents : sauvegarde ignorée."
+            echo "actif=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "actif=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sauvegarder et chiffrer
+        if: steps.config.outputs.actif == 'true'
+        env:
+          URL: ${{ secrets.RENDER_DATABASE_URL }}
+          MDP: ${{ secrets.SAUVEGARDE_MOT_DE_PASSE }}
+        run: |
+          set -euo pipefail
+          FICHIER="voicebank_en_ligne_$(date -u +%Y-%m-%d_%H%M).dump"
+          # Client PostgreSQL 17 : compatible avec toutes les versions proposées par Render
+          docker run --rm -e URL postgres:17-alpine sh -c 'pg_dump "$URL" -Fc --no-owner' > "$FICHIER"
+          test -s "$FICHIER"
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:MDP -in "$FICHIER" -out "$FICHIER.enc"
+          shred -u "$FICHIER"
+          ls -l "$FICHIER.enc"
+          echo "FICHIER=$FICHIER.enc" >> "$GITHUB_ENV"
+
+      - name: Conserver (30 jours)
+        if: steps.config.outputs.actif == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.FICHIER }}
+          path: ${{ env.FICHIER }}
+          retention-days: 30
+          if-no-files-found: error

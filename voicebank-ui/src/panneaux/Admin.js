@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { CircleCheck, CircleX } from "lucide-react";
 import { useAPI } from "../useAPI";
+import { useLectureSeule, TITRE_LECTURE_SEULE } from "../lectureSeule";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate } from "../ui";
 
 // ── Signaler une réponse fausse (tous les utilisateurs) ─────────────
@@ -34,6 +35,7 @@ export function FormulaireSignalement({ item, dark, onFermer }) {
 
 // ── Corriger une réponse (administrateur) : tester puis enregistrer dans le RAG ─────
 export function EditeurCorrection({ question: q0, sql: sql0, idSignalement, dark, onTermine }) {
+  const ls = useLectureSeule();
   const test = useAPI();
   const enreg = useAPI();
   const [question, setQuestion] = useState(q0 || "");
@@ -67,8 +69,8 @@ export function EditeurCorrection({ question: q0, sql: sql0, idSignalement, dark
         <button onClick={tester} disabled={test.chargement || !sql.trim()} className={boutonSecondaire(dark)}>
           {test.chargement ? "Test…" : "Tester la requête"}
         </button>
-        <button onClick={enregistrer} disabled={!apercu || enreg.chargement || !question.trim()} className={boutonPrincipal}
-          title={!apercu ? "Teste d'abord la requête" : ""}>Enregistrer la correction</button>
+        <button onClick={enregistrer} disabled={ls || !apercu || enreg.chargement || !question.trim()} className={boutonPrincipal}
+          title={ls ? TITRE_LECTURE_SEULE : !apercu ? "Teste d'abord la requête" : ""}>Enregistrer la correction</button>
       </div>
       {test.erreur && <p className="text-xs text-red-500">{test.erreur}</p>}
       {enreg.erreur && <p className="text-xs text-red-500">{enreg.erreur}</p>}
@@ -90,6 +92,7 @@ export function EditeurCorrection({ question: q0, sql: sql0, idSignalement, dark
 // ── Onglet Apprentissage (admin) ─────────────────────
 export function PanelApprentissage({ dark, onChange }) {
   const { appeler } = useAPI();
+  const ls = useLectureSeule();
   const [signalements, setSignalements] = useState([]);
   const [corrections, setCorrections] = useState([]);
   const [edition, setEdition] = useState(null);
@@ -124,8 +127,8 @@ export function PanelApprentissage({ dark, onChange }) {
                   onTermine={() => setTimeout(() => { setEdition(null); charger(); }, 1200)} />
               ) : (
                 <div className="flex gap-2 mt-2">
-                  <button onClick={() => setEdition(s.id_signalement)} className={boutonSecondaire(dark)}>Corriger</button>
-                  <button onClick={() => rejeter(s.id_signalement)} className={boutonSecondaire(dark)}>Rejeter</button>
+                  <button onClick={() => setEdition(s.id_signalement)} disabled={ls} title={ls ? TITRE_LECTURE_SEULE : undefined} className={`${boutonSecondaire(dark)} disabled:opacity-50`}>Corriger</button>
+                  <button onClick={() => rejeter(s.id_signalement)} disabled={ls} title={ls ? TITRE_LECTURE_SEULE : undefined} className={`${boutonSecondaire(dark)} disabled:opacity-50`}>Rejeter</button>
                 </div>
               )}
             </div>
@@ -136,7 +139,7 @@ export function PanelApprentissage({ dark, onChange }) {
       <div className={carte(dark)}>
         <div className="flex items-center justify-between mb-2">
           <h2 className={titre(dark)}>Corrections apprises ({corrections.length})</h2>
-          <button onClick={() => setEdition("nouvelle")} className={boutonSecondaire(dark)}>+ Ajouter</button>
+          <button onClick={() => setEdition("nouvelle")} disabled={ls} title={ls ? TITRE_LECTURE_SEULE : undefined} className={`${boutonSecondaire(dark)} disabled:opacity-50`}>+ Ajouter</button>
         </div>
         {edition === "nouvelle" && <EditeurCorrection dark={dark} onTermine={() => setTimeout(() => { setEdition(null); charger(); }, 1200)} />}
         <div className="divide-y divide-gray-500/20 mt-2">
@@ -148,7 +151,7 @@ export function PanelApprentissage({ dark, onChange }) {
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <span className={texteDiscret(dark)}>{c.utilisee} util.</span>
-                <button onClick={() => supprimer(c)} className="text-xs text-red-500 hover:underline">Supprimer</button>
+                <button onClick={() => supprimer(c)} disabled={ls} title={ls ? TITRE_LECTURE_SEULE : undefined} className="text-xs text-red-500 hover:underline disabled:opacity-40 disabled:no-underline">Supprimer</button>
               </div>
             </div>
           ))}
@@ -161,6 +164,7 @@ export function PanelApprentissage({ dark, onChange }) {
 // ── Onglet Fiabilité (admin) ─────────────────────────
 export function PanelFiabilite({ dark }) {
   const { appeler, erreur } = useAPI();
+  const ls = useLectureSeule();
   const [etat, setEtat] = useState(null);
   const minuterie = useRef(null);
 
@@ -194,7 +198,7 @@ export function PanelFiabilite({ dark }) {
     <div className={carte(dark)}>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
         <h2 className={titre(dark)}>Fiabilité des réponses</h2>
-        <button onClick={lancer} disabled={etat?.en_cours} className={boutonPrincipal}>
+        <button onClick={lancer} disabled={ls || etat?.en_cours} title={ls ? TITRE_LECTURE_SEULE : undefined} className={boutonPrincipal}>
           {etat?.en_cours ? "Évaluation en cours…" : "Lancer l'évaluation"}
         </button>
       </div>

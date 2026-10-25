@@ -31,6 +31,12 @@ services:
         sync: false
       - key: WHISPER_LOCAL              # offre gratuite (512 Mo) : transcription via Groq uniquement
         value: "false"
+      - key: URL_INTERFACE              # retour après paiement (adresse de l'interface)
+        value: https://voicebank-ui.onrender.com
+      - key: NOTCHPAY_PUBLIC_KEY        # paiement : business.notchpay.co → Settings → API Keys
+        sync: false
+      - key: NOTCHPAY_HASH_KEY          # signature des webhooks (même page)
+        sync: false
       - key: INITIALISER_BASE           # crée le schéma au démarrage (idempotent)
         value: "true"
       - key: DONNEES_DEMO               # remplit une base VIDE avec des données fictives

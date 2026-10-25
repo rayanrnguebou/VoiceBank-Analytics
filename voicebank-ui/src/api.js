@@ -32,7 +32,8 @@ http.interceptors.request.use(config => {
 http.interceptors.response.use(
   r => r,
   e => {
-    if (e.response?.status === 401 && !e.config?.url?.includes("/auth/login")) {
+    if (e.response?.status === 402) window.dispatchEvent(new Event("voicebank:acces-expire"));
+    if (e.response?.status === 401 && !e.config?.url?.includes("/auth/login") && !e.config?.url?.includes("/auth/essai")) {
       if (lireSession()) noterMotifDeconnexion("Ta session a expiré ou a été fermée. Reconnecte-toi.");
       ecrireSession(null);
       window.dispatchEvent(new Event("voicebank:deconnexion"));
@@ -55,6 +56,11 @@ export function appliquerJeton(data) {
 export async function connexion(nom, motDePasse) {
   // Délai long : sur l'offre gratuite de Render, l'API peut mettre ~1 min à se réveiller.
   const { data } = await http.post("/auth/login", { nom, mot_de_passe: motDePasse }, { timeout: 90000 });
+  return appliquerJeton(data);
+}
+
+export async function inscriptionEssai(corps) {
+  const { data } = await http.post("/auth/essai", corps, { timeout: 90000 });
   return appliquerJeton(data);
 }
 

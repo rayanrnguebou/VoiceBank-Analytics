@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { ShieldAlert, CircleCheck, CircleX } from "lucide-react";
 import { useAPI } from "../useAPI";
+import { useLectureSeule, TITRE_LECTURE_SEULE } from "../lectureSeule";
 import { carte, champ, titre, texteDiscret, boutonSecondaire, formaterFcfa, formaterDate } from "../ui";
 
 const NIVEAUX = ["Tous", "Critique", "Élevé", "Moyen"];
@@ -12,6 +13,7 @@ const COULEUR_NIVEAU = {
 
 function LigneAlerte({ a, dark, onTraitee }) {
   const { appeler, chargement, erreur } = useAPI();
+  const ls = useLectureSeule();
   const [ouvert, setOuvert] = useState(false);
   const [commentaire, setCommentaire] = useState("");
 
@@ -48,7 +50,8 @@ function LigneAlerte({ a, dark, onTraitee }) {
           {a.commentaire && <span className={`text-xs italic ${dark ? "text-gray-300" : "text-gray-600"}`}>« {a.commentaire} »</span>}
         </div>
       ) : !ouvert ? (
-        <button onClick={() => setOuvert(true)} className={`mt-2 ${boutonSecondaire(dark)}`}>Traiter</button>
+        <button onClick={() => setOuvert(true)} disabled={ls} title={ls ? TITRE_LECTURE_SEULE : undefined}
+          className={`mt-2 ${boutonSecondaire(dark)} disabled:opacity-50`}>Traiter</button>
       ) : (
         <div className="mt-2 space-y-2">
           <input value={commentaire} onChange={e => setCommentaire(e.target.value)} maxLength={1000}

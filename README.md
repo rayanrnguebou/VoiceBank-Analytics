@@ -32,6 +32,7 @@ des corrections, mesure de la fiabilité et journal d'audit.
 | **Fraude** | Score Isolation Forest + XGBoost, alertes à traiter (fraude confirmée / faux positif). |
 | **Crédit** | Probabilité de défaut, facteurs explicatifs (SHAP), crédits en cours les plus à risque. |
 | **Données personnelles** | Noms, e-mails, téléphones masqués pour le rôle analyste ; jamais envoyés à Gemini pour les résumés. |
+| **Essai et abonnements** | Accueil « Visiteur ou Organisation », essai gratuit 3 jours en lecture seule, formules jour / semaine / mois / année payées en FCFA (MTN MoMo, Orange Money, carte). |
 | **Comptes** | Créés par l'administrateur (pas d'inscription libre), mot de passe provisoire à changer à la 1re connexion, blocage après 5 échecs, désactivation sans suppression. |
 | **Audit** | Connexions, consultations de fiches, corrections, alertes traitées, gestion des comptes : journal en ajout seul. |
 
@@ -147,18 +148,93 @@ Le script crée le superutilisateur du `.env`, ajoute ce qui manque au schéma, 
 Tant que la table des comptes n'existe pas, l'API reste utilisable avec `VOICEBANK_USERS` seul.
 **Ne lance jamais `docker compose down -v`** : `-v` supprime le volume, donc les données.
 
-## Sauvegarder la base (Docker local)
+## Sauvegarder la base
 
-Tes données réelles n'existent que dans le volume Docker : sauvegarde-les régulièrement.
+### En local (Docker)
+
+Tes données n'existent que dans le volume Docker : sauvegarde-les.
 
 | | Windows | macOS / Linux |
 |---|---|---|
-| Sauvegarder | double-clic sur `sauvegarde\sauvegarder.bat` | `sh sauvegarde/sauvegarder.sh` |
+| Sauvegarder maintenant | double-clic sur `sauvegarde\sauvegarder.bat` | `sh sauvegarde/sauvegarder.sh` |
+| **Sauvegarde automatique chaque jour à 20 h** | double-clic sur `sauvegarde\planifier.bat` (une fois) | `crontab -e` → `0 20 * * * sh /chemin/sauvegarde/sauvegarder.sh` |
 | Restaurer | `sauvegarde\restaurer.bat sauvegardes\voicebank_AAAA-MM-JJ_HHMM.dump` | `sh sauvegarde/restaurer.sh sauvegardes/…dump` |
 
-Les fichiers vont dans `sauvegardes/` (exclu de Git, les 10 plus récents sont conservés).
-Copie-les de temps en temps hors de l'ordinateur (clé USB, disque externe, cloud chiffré).
-La restauration demande de taper `OUI`, remplace le contenu de la base, puis remet les droits à niveau.
+Les fichiers vont dans `sauvegardes/` (exclu de Git, les 10 plus récents sont gardés, résultat de
+chaque sauvegarde dans `sauvegardes/journal.txt`). Docker Desktop doit être lancé à 20 h.
+Copie-les de temps en temps hors de l'ordinateur (clé USB, disque externe, cloud privé).
+
+### En ligne (Render)
+
+La base gratuite de Render n'a pas de sauvegarde : un workflow GitHub en fait une **chaque nuit**,
+**chiffrée** (AES-256), conservée 30 jours dans l'onglet *Actions* du dépôt.
+
+1. GitHub → dépôt → **Settings → Secrets and variables → Actions → New repository secret** :
+   - `RENDER_DATABASE_URL` : Render → voicebank-db → **Connect** → *External Database URL* ;
+   - `SAUVEGARDE_MOT_DE_PASSE` : une longue phrase secrète, notée en lieu sûr (sans elle, les
+     sauvegardes sont illisibles).
+2. Onglet **Actions → Sauvegarde en ligne → Run workflow** pour tester tout de suite.
+
+Restaurer une sauvegarde en ligne (Git Bash ou macOS / Linux) :
+
+```bash
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in voicebank_en_ligne_….dump.enc -out en_ligne.dump
+docker run --rm -i -e URL="<External Database URL>" postgres:17-alpine \
+  sh -c 'pg_restore --clean --if-exists --no-owner -d "$URL"' < en_ligne.dump
+```
+
+### Mettre en ligne les données de ton PC
+
+Pour que le site public montre les mêmes données que ta base locale :
+`sauvegarde\publier_en_ligne.bat` (ou `sh sauvegarde/publier_en_ligne.sh`), puis colle l'*External
+Database URL* de Render. Le script sauvegarde d'abord ta base locale, puis remplace en ligne les
+clients, crédits, transactions, alertes et corrections apprises. **Les comptes, mots de passe,
+paiements et journaux d'audit ne sont jamais copiés.** À relancer quand tes données changent.
+
+## Offre publique : essai gratuit et abonnements
+
+L'accueil demande **« Tu es… » Visiteur ou Organisation** :
+
+- **Visiteur** : s'inscrit avec nom, e-mail et mot de passe, et obtient un **essai gratuit de 3 jours**.
+  Il voit **tout l'outil, administration comprise**, mais en **lecture seule** : le serveur refuse
+  toute modification (alertes, corrections, comptes, évaluation…) et l'administration lui est
+  montrée **anonymisée** (il ne voit ni les autres comptes, ni leurs questions, ni leurs adresses IP).
+  Quota : 30 questions par jour (protège les coûts Gemini / Groq).
+- **Organisation** : se connecte avec un compte créé par son administrateur (accès complet selon le rôle).
+- **Abonnement** (Jour 500 · Semaine 2 000 · Mois 6 000 · Année 60 000 FCFA, modifiables avec
+  `PRIX_JOUR`… sans toucher au code) : à la fin de l'essai, seule la page *Abonnement* reste accessible.
+  Le visiteur choisit une formule, indique s'il est une **organisation** (raison sociale, secteur,
+  effectif, ville, responsable, fonction, e-mail, téléphone, NIU et RCCM facultatifs) ou un
+  **particulier** (nom, profession, ville, e-mail, téléphone), puis paie. Un achat s'ajoute à la
+  durée restante ; pas de reconduction automatique.
+- L'administrateur suit visiteurs, abonnés, paiements et revenus dans **Administration → Abonnements**.
+
+### Paiement (NotchPay : MTN MoMo, Orange Money, cartes)
+
+Intégration gratuite, sans abonnement : NotchPay prend seulement une commission par paiement.
+
+1. Crée un compte sur [business.notchpay.co](https://business.notchpay.co) et fais valider ton
+   identité (KYC) pour encaisser en réel.
+2. **Settings → API Keys** : copie la *Public key* (d'abord celle de **test**, qui contient `test_`)
+   et la *Hash key* des webhooks.
+3. **Settings → Webhooks** : ajoute l'adresse `https://voicebank-api.onrender.com/paiements/notchpay/webhook`.
+4. Render → voicebank-api → **Environment** : `NOTCHPAY_PUBLIC_KEY` et `NOTCHPAY_HASH_KEY`, puis Save.
+5. Teste un paiement en mode test, puis remplace par les clés **live**.
+
+Sécurité des paiements :
+- le montant et la durée sont fixés **par le serveur** (un prix envoyé par le navigateur est ignoré) ;
+- la saisie du paiement se fait sur la **page de NotchPay** : aucune donnée de carte ou de mobile
+  money ne passe par VoiceBank ;
+- l'abonnement n'est activé qu'après une **vérification serveur à serveur** auprès de NotchPay
+  (statut payé, même référence, même montant, même devise) ;
+- les webhooks sont **authentifiés** (HMAC SHA-256, comparaison à temps constant) et leur contenu est
+  revérifié auprès de NotchPay ;
+- activation **idempotente** et verrouillée : un paiement ne prolonge l'abonnement qu'une seule fois ;
+- facturation et paiements sont **invisibles** pour le compte lecture seule et pour l'IA ;
+- inscription : 3 par heure et par adresse IP, plafond quotidien, piège à robots, un essai par e-mail.
+
+En local, `PAIEMENT_SIMULATION=true` dans `.env` permet de tester tout le parcours sans compte
+marchand (refusé automatiquement sur Render et dès qu'une vraie clé est configurée).
 
 ## Mesurer la fiabilité
 

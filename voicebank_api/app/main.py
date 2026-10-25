@@ -15,12 +15,13 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from . import audit, config, credit, db, evaluation, fraude, nl2sql, resume, transcription
+from . import audit, config, credit, db, evaluation, fraude, nl2sql, paiement, resume, transcription
 from .garde_sql import SQLRefuse, valider_sql
 from .masquage import masquer_ligne, masquer_lignes
 from . import securite
-from .securite import (CompteRefuse, Utilisateur, admin_requis, authentifier, creer_jeton,
-                       utilisateur_authentifie, utilisateur_courant)
+from .paiement import PaiementRefuse
+from .securite import (CompteRefuse, Utilisateur, admin_ou_decouverte, admin_requis, authentifier, creer_jeton,
+                       interne_requis, utilisateur_authentifie, utilisateur_courant, utilisateur_valide)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("voicebank")
@@ -34,7 +35,19 @@ app = FastAPI(
     openapi_url=None if config.EST_PROD else "/openapi.json",
 )
 
-limiter = Limiter(key_func=get_remote_address, enabled=config.RATE_LIMIT_ACTIF)
+def ip_client(request: Request) -> str:
+    """Adresse du client pour les limites de débit et l'audit. Derrière un proxy (Render), on prend
+    la DERNIÈRE adresse de X-Forwarded-For, ajoutée par le proxy lui-même : les premières peuvent
+    être inventées par le client pour contourner les limites."""
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        derniere = xff.split(",")[-1].strip()
+        if derniere:
+            return derniere[:64]
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=ip_client, enabled=config.RATE_LIMIT_ACTIF)
 app.state.limiter = limiter
 
 
@@ -105,6 +118,50 @@ class NouveauCompte(BaseModel):
 class ModificationCompte(BaseModel):
     role: Literal["analyste", "admin"] | None = None
     actif: bool | None = None
+
+
+TELEPHONE = r"^\+?[0-9 ]{8,20}$"
+EMAIL = r"^[^@\s]{1,64}@[^@\s]+\.[A-Za-z]{2,24}$"
+
+
+class InscriptionEssai(BaseModel):
+    nom_complet: str = Field(min_length=2, max_length=120)
+    email: str = Field(min_length=5, max_length=64)
+    mot_de_passe: str = Field(min_length=1, max_length=128)
+    profil: Literal["etudiant", "professionnel", "entreprise", "recruteur", "autre"] = "professionnel"
+    accepte_conditions: bool
+    site_web: str | None = Field(None, max_length=200)     # piège à robots : doit rester vide
+
+
+class InfosOrganisation(BaseModel):
+    raison_sociale: str = Field(min_length=2, max_length=150)
+    secteur: Literal["banque", "microfinance", "assurance", "fintech", "administration", "autre"]
+    taille: Literal["1-10", "11-50", "51-250", "250+"]
+    pays: str = Field(min_length=2, max_length=60)
+    ville: str = Field(min_length=2, max_length=60)
+    responsable: str = Field(min_length=2, max_length=120)
+    fonction: str = Field(min_length=2, max_length=80)
+    email: str = Field(pattern=EMAIL, max_length=254)
+    telephone: str = Field(pattern=TELEPHONE)
+    niu: str | None = Field(None, max_length=30)            # numéro d'identifiant unique (contribuable)
+    rccm: str | None = Field(None, max_length=40)
+
+
+class InfosParticulier(BaseModel):
+    nom_complet: str = Field(min_length=2, max_length=120)
+    profession: str = Field(min_length=2, max_length=80)
+    pays: str = Field(min_length=2, max_length=60)
+    ville: str = Field(min_length=2, max_length=60)
+    email: str = Field(pattern=EMAIL, max_length=254)
+    telephone: str = Field(pattern=TELEPHONE)
+
+
+class Commande(BaseModel):
+    formule: Literal["jour", "semaine", "mois", "annee"]
+    type_client: Literal["organisation", "particulier"]
+    organisation: InfosOrganisation | None = None
+    particulier: InfosParticulier | None = None
+    accepte_conditions: bool
 
 
 class ContexteQuestion(BaseModel):
@@ -288,7 +345,7 @@ def health():
 @limiter.limit("5/minute")
 def login(request: Request, body: Identifiants):
     resultat = authentifier(body.nom, body.mot_de_passe)
-    ip = get_remote_address(request)
+    ip = ip_client(request)
     if not resultat:
         log.warning("Échec de connexion pour '%s' depuis %s", body.nom, ip)
         audit.journaliser(body.nom[:64], "connexion_refusee", None, ip)
@@ -306,7 +363,7 @@ def _reponse_jeton(u: Utilisateur, version: int) -> dict:
 
 @app.post("/auth/renouveler")
 @limiter.limit("30/minute")
-def renouveler_jeton(request: Request, u: Utilisateur = Depends(utilisateur_courant)):
+def renouveler_jeton(request: Request, u: Utilisateur = Depends(utilisateur_valide)):
     """Nouveau jeton pour une session active (l'interface l'appelle tant que l'utilisateur est actif).
     Un compte désactivé ou dont le mot de passe a changé est refusé par utilisateur_courant."""
     return _reponse_jeton(u, securite.version_jeton(u.nom))
@@ -320,7 +377,7 @@ def changer_mon_mot_de_passe(request: Request, body: ChangementMdp,
         version = securite.changer_mot_de_passe(u.nom, body.actuel, body.nouveau)
     except CompteRefuse as e:
         raise HTTPException(400, str(e))
-    audit.journaliser(u.nom, "mot_de_passe_change", None, get_remote_address(request))
+    audit.journaliser(u.nom, "mot_de_passe_change", None, ip_client(request))
     # Nouveau jeton : cette session continue, les autres sont déconnectées.
     return _reponse_jeton(Utilisateur(u.nom, u.role, False), version)
 
@@ -332,7 +389,153 @@ def changer_mon_mot_de_passe(request: Request, body: ChangementMdp,
 @app.get("/auth/moi")
 def moi(u: Utilisateur = Depends(utilisateur_authentifie)):
     return {"utilisateur": u.nom, "role": u.role, "doit_changer_mot_de_passe": u.doit_changer,
-            "gestion_comptes": securite.mode_base()}
+            "gestion_comptes": securite.mode_base(), "acces": _acces(u)}
+
+
+def _acces(u: Utilisateur) -> dict:
+    """Statut d'accès affiché par l'interface (bandeau d'essai, abonnement)."""
+    if not u.externe or not securite.mode_base():
+        return {"type": "interne", "lecture_seule": False, "expire": False}
+    l = db.ecrire("SELECT essai_fin, abonnement_fin, formule, nom_complet, "
+                  "(SELECT COUNT(*) FROM voicebank.logs_vocaux WHERE utilisateur = :u "
+                  " AND date_requete >= CURRENT_DATE) AS questions_jour, "
+                  "GREATEST(EXTRACT(EPOCH FROM (CASE WHEN role = 'visiteur' THEN essai_fin ELSE abonnement_fin END) "
+                  " - LOCALTIMESTAMP), 0) AS secondes_restantes "
+                  "FROM voicebank.utilisateurs WHERE nom = :u", {"u": u.nom}).lignes[0]
+    return {"type": "essai" if u.role == "visiteur" else "abonnement", "lecture_seule": True,
+            "expire": u.acces_expire, "formule": l.formule, "nom_complet": l.nom_complet,
+            "fin": (l.essai_fin if u.role == "visiteur" else l.abonnement_fin).isoformat()
+                   if (l.essai_fin if u.role == "visiteur" else l.abonnement_fin) else None,
+            "secondes_restantes": int(l.secondes_restantes or 0),
+            "questions_jour": int(l.questions_jour), "quota_questions": _quota(u)}
+
+
+def _quota(u: Utilisateur) -> int | None:
+    if not u.externe:
+        return None
+    return config.QUOTA_QUESTIONS_ESSAI if u.role == "visiteur" else config.QUOTA_QUESTIONS_CLIENT
+
+
+def _verifier_quota(u: Utilisateur):
+    quota = _quota(u)
+    if quota is None:
+        return
+    n = db.ecrire("SELECT COUNT(*) FROM voicebank.logs_vocaux WHERE utilisateur = :u "
+                  "AND date_requete >= CURRENT_DATE", {"u": u.nom}).scalar()
+    if n >= quota:
+        raise HTTPException(429, f"Quota du jour atteint ({quota} questions"
+                                 f"{' pendant l’essai' if u.role == 'visiteur' else ''}). Reviens demain"
+                                 f"{' ou choisis une formule' if u.role == 'visiteur' else ''}.")
+
+
+def _anonyme(nom: str | None, u: Utilisateur) -> str | None:
+    """Pour un visiteur, les autres comptes sont anonymisés."""
+    if not u.externe or not nom or nom == u.nom:
+        return nom
+    return nom[:1] + "***"
+
+
+# ── Essai gratuit et abonnements ─────────────────────────────────────
+
+@app.post("/auth/essai")
+@limiter.limit("3/hour")
+def inscription_essai(request: Request, body: InscriptionEssai):
+    if not config.INSCRIPTION_ESSAI:
+        raise HTTPException(403, "Les inscriptions sont fermées pour le moment.")
+    if body.site_web:                       # robot : on fait comme si tout allait bien
+        raise HTTPException(400, "Inscription impossible")
+    if not body.accepte_conditions:
+        raise HTTPException(400, "Accepte les conditions d'utilisation pour continuer.")
+    try:
+        u = securite.creer_essai(body.email, body.nom_complet, body.profil, body.mot_de_passe)
+    except CompteRefuse as e:
+        raise HTTPException(400, str(e))
+    audit.journaliser(u.nom, "essai_cree", {"profil": body.profil}, ip_client(request))
+    return _reponse_jeton(u, securite.version_jeton(u.nom))
+
+
+@app.get("/abonnement/formules")
+def formules_abonnement():
+    return {"formules": paiement.formules(), "paiement": paiement.mode(), "essai_jours": config.ESSAI_JOURS,
+            "quota_essai": config.QUOTA_QUESTIONS_ESSAI, "quota_client": config.QUOTA_QUESTIONS_CLIENT,
+            "inscription_ouverte": config.INSCRIPTION_ESSAI}
+
+
+@app.get("/abonnement/moi")
+def mon_abonnement(u: Utilisateur = Depends(utilisateur_valide)):
+    return {"acces": _acces(u), "paiements": paiement.mes_paiements(u.nom) if u.externe else []}
+
+
+@app.post("/abonnement/commander")
+@limiter.limit("10/hour")
+def commander_abonnement(request: Request, body: Commande, u: Utilisateur = Depends(utilisateur_valide)):
+    if not u.externe:
+        raise HTTPException(400, "Les comptes de l'organisation n'ont pas besoin d'abonnement.")
+    if not body.accepte_conditions:
+        raise HTTPException(400, "Accepte les conditions de vente pour continuer.")
+    infos = body.organisation if body.type_client == "organisation" else body.particulier
+    if infos is None:
+        raise HTTPException(400, "Complète les informations demandées.")
+    try:
+        cmd = paiement.commander(u.nom, body.formule, body.type_client, infos.model_dump())
+    except PaiementRefuse as e:
+        raise HTTPException(400, str(e))
+    audit.journaliser(u.nom, "abonnement_commande", {"formule": body.formule, "reference": cmd["reference"],
+                                                     "montant": cmd["montant"]}, ip_client(request))
+    return cmd
+
+
+@app.get("/abonnement/verifier/{reference}")
+@limiter.limit("30/minute")
+def verifier_abonnement(request: Request, reference: str = Path(min_length=8, max_length=64, pattern=r"^[A-Za-z0-9._-]+$"),
+                        u: Utilisateur = Depends(utilisateur_valide)):
+    try:
+        res = paiement.verifier(reference, u.nom)
+    except PaiementRefuse as e:
+        raise HTTPException(404, str(e))
+    if res["statut"] == "paye":
+        audit.journaliser(u.nom, "abonnement_paye", {"reference": res["reference"], "formule": res["formule"]},
+                          ip_client(request))
+        res["jeton"] = _reponse_jeton(Utilisateur(u.nom, "client"), securite.version_jeton(u.nom))
+    return res
+
+
+@app.post("/paiements/notchpay/webhook", include_in_schema=False)
+@limiter.limit("120/minute")
+async def webhook_notchpay(request: Request):
+    corps = await request.body()
+    if len(corps) > 100_000:
+        raise HTTPException(413, "Trop volumineux")
+    try:
+        statut = await run_in_threadpool(paiement.traiter_webhook, corps, request.headers.get("x-notch-signature"))
+    except PaiementRefuse:
+        log.warning("Webhook NotchPay refusé (signature) depuis %s", ip_client(request))
+        raise HTTPException(401, "Signature invalide")
+    return {"status": "ok", "paiement": statut}
+
+
+@app.get("/admin/abonnements")
+def lister_abonnements(u: Utilisateur = Depends(admin_requis)):
+    _, rows = _lire_app(
+        "SELECT p.reference, p.utilisateur, p.formule, p.montant, p.devise, p.statut, p.fournisseur, "
+        "p.date_creation, p.date_paiement, p.abonnement_fin, f.type_client, f.informations "
+        "FROM voicebank.paiements p LEFT JOIN voicebank.profils_facturation f ON f.utilisateur = p.utilisateur "
+        "ORDER BY p.date_creation DESC LIMIT 200")
+    _, synthese = _lire_app(
+        "SELECT COUNT(*) FILTER (WHERE role = 'visiteur') AS visiteurs, "
+        "COUNT(*) FILTER (WHERE role = 'visiteur' AND essai_fin > LOCALTIMESTAMP) AS essais_en_cours, "
+        "COUNT(*) FILTER (WHERE role = 'client' AND abonnement_fin > LOCALTIMESTAMP) AS abonnes_actifs, "
+        "(SELECT COALESCE(SUM(montant), 0) FROM voicebank.paiements WHERE statut = 'paye') AS revenus "
+        "FROM voicebank.utilisateurs")
+    return {"status": "ok", "paiements": rows, "synthese": synthese[0] if synthese else {},
+            "paiement": paiement.mode()}
+
+
+def _lire_app(sql: str, params: dict | None = None):
+    """Lecture avec le compte applicatif (tables invisibles pour le compte lecture seule)."""
+    r = db.ecrire(sql, params)
+    lignes = [{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in l._mapping.items()} for l in r.lignes]
+    return (list(r.lignes[0]._mapping.keys()) if r.lignes else []), lignes
 
 
 @app.get("/dashboard")
@@ -387,7 +590,7 @@ def detail_client(request: Request, id_client: str = Path(max_length=12),
     _, credits = _lire(
         "SELECT id_credit, type_credit, montant_fcfa, statut_credit, taux_interet_pct, mensualite_fcfa "
         "FROM voicebank.credits WHERE id_client = :id", {"id": id_client})
-    audit.journaliser(u.nom, "consultation_client", {"id_client": id_client}, get_remote_address(request))
+    audit.journaliser(u.nom, "consultation_client", {"id_client": id_client}, ip_client(request))
     return {"status": "ok", "client": masquer_ligne(client[0], u.role), "transactions": transactions,
             "credits": credits}
 
@@ -406,7 +609,7 @@ def transactions_recentes(limit: int = Query(50, ge=1, le=500), fraude_only: boo
 
 @app.post("/alertes/{id_alerte}/traiter")
 def traiter_alerte(request: Request, body: TraitementAlerte, id_alerte: int = Path(ge=1),
-                   u: Utilisateur = Depends(utilisateur_courant)):
+                   u: Utilisateur = Depends(interne_requis)):
     res = db.ecrire(
         "UPDATE voicebank.alertes_fraude SET traitee = TRUE, decision = :d, commentaire = :c, "
         "traitee_par = :u, date_traitement = NOW() WHERE id_alerte = :id AND traitee = FALSE",
@@ -415,7 +618,7 @@ def traiter_alerte(request: Request, body: TraitementAlerte, id_alerte: int = Pa
         _, existe = _lire("SELECT traitee FROM voicebank.alertes_fraude WHERE id_alerte = :id", {"id": id_alerte})
         raise HTTPException(409 if existe else 404, "Alerte déjà traitée" if existe else "Alerte introuvable")
     audit.journaliser(u.nom, "alerte_traitee", {"id_alerte": id_alerte, "decision": body.decision},
-                      get_remote_address(request))
+                      ip_client(request))
     return {"status": "ok", "id_alerte": id_alerte, "decision": body.decision, "traitee_par": u.nom}
 
 
@@ -463,6 +666,7 @@ def portefeuille_credit(statut: Literal["En cours", "Remboursé", "En retard", "
 @app.post("/vocal/question")
 @limiter.limit("30/minute")
 def question_vocale(request: Request, body: QuestionVocale, u: Utilisateur = Depends(utilisateur_courant)):
+    _verifier_quota(u)
     return _question_vers_resultat(body.texte, u, body.contexte, body.resumer)
 
 
@@ -479,6 +683,7 @@ async def transcrire_audio(request: Request, fichier: UploadFile = File(...),
 @limiter.limit("10/minute")
 async def pipeline_vocal_complet(request: Request, fichier: UploadFile = File(...),
                                  u: Utilisateur = Depends(utilisateur_courant)):
+    await run_in_threadpool(_verifier_quota, u)
     contenu, extension = await _lire_audio(fichier)
     texte, moteur = await _transcrire(contenu, extension)
     resultat = await run_in_threadpool(_question_vers_resultat, texte, u)
@@ -544,7 +749,7 @@ def score_credit_existant(request: Request, id_credit: str = Path(max_length=12)
     _, rows = _lire(_SQL_CREDIT + "WHERE cr.id_credit = :id", {"id": id_credit})
     if not rows:
         raise HTTPException(404, "Crédit introuvable")
-    audit.journaliser(u.nom, "score_credit", {"id_credit": id_credit}, get_remote_address(request))
+    audit.journaliser(u.nom, "score_credit", {"id_credit": id_credit}, ip_client(request))
     return {"status": "ok", "credit": rows[0], **credit.scorer(rows[0], strict=False)}
 
 
@@ -565,13 +770,13 @@ def credits_a_risque(limit: int = Query(15, ge=1, le=100), banque: str | None = 
 # ── Signalements (réponse jugée fausse) ───────────────
 
 @app.post("/signalements")
-def signaler(request: Request, body: Signalement, u: Utilisateur = Depends(utilisateur_courant)):
+def signaler(request: Request, body: Signalement, u: Utilisateur = Depends(interne_requis)):
     res = db.ecrire("INSERT INTO voicebank.signalements (question, requete_sql, source, commentaire, utilisateur) "
                     "VALUES (:q, :s, :src, :c, :u) RETURNING id_signalement",
                     {"q": body.question, "s": body.sql, "src": body.source, "c": body.commentaire, "u": u.nom})
     id_s = res.scalar()
     audit.journaliser(u.nom, "signalement", {"id_signalement": id_s, "question": body.question},
-                      get_remote_address(request))
+                      ip_client(request))
     return {"status": "ok", "id_signalement": id_s,
             "message": "Merci : un administrateur va vérifier et corriger cette réponse."}
 
@@ -582,8 +787,10 @@ def signaler(request: Request, body: Signalement, u: Utilisateur = Depends(utili
 
 @app.post("/sql/executer")
 @limiter.limit("30/minute")
-def executer_requete(request: Request, body: RequeteSQL, u: Utilisateur = Depends(admin_requis)):
+def executer_requete(request: Request, body: RequeteSQL, u: Utilisateur = Depends(admin_ou_decouverte)):
+    # Lecture seule (compte lecteur + garde SQL) : un visiteur peut tester, données personnelles masquées.
     sql, colonnes, lignes = _executer_sql_valide(body.sql)
+    lignes = masquer_lignes(colonnes, lignes, u.role)
     log.info("SQL manuel exécuté par %s", u.nom)
     return {"status": "ok", "colonnes": colonnes, "total": len(lignes), "data": lignes}
 
@@ -605,7 +812,7 @@ def corriger_reponse(request: Request, body: Correction, u: Utilisateur = Depend
         db.ecrire("UPDATE voicebank.signalements SET statut = 'Corrigé', traite_par = :u, date_traitement = NOW() "
                   "WHERE id_signalement = :id", {"u": u.nom, "id": body.id_signalement})
     audit.journaliser(u.nom, "correction_rag", {"question": question, "id_signalement": body.id_signalement},
-                      get_remote_address(request))
+                      ip_client(request))
     return {"status": "ok", "message": "Correction enregistrée.", "question": question, "sql_correct": sql}
 
 
@@ -615,17 +822,19 @@ def supprimer_correction(request: Request, id_correction: int = Path(ge=1), u: U
     if not res.lignes:
         raise HTTPException(404, "Correction introuvable")
     audit.journaliser(u.nom, "correction_supprimee", {"id": id_correction, "question": res.scalar()},
-                      get_remote_address(request))
+                      ip_client(request))
     return {"status": "ok"}
 
 
 @app.get("/signalements")
 def lister_signalements(statut: Literal["Ouvert", "Corrigé", "Rejeté"] | None = "Ouvert",
-                        limit: int = Query(50, ge=1, le=200), u: Utilisateur = Depends(admin_requis)):
+                        limit: int = Query(50, ge=1, le=200), u: Utilisateur = Depends(admin_ou_decouverte)):
     where, params = ("WHERE statut = :st", {"st": statut}) if statut else ("", {})
     _, rows = _lire("SELECT id_signalement, question, requete_sql, source, commentaire, utilisateur, statut, "
                     f"traite_par, date_signalement FROM voicebank.signalements {where} "
                     "ORDER BY date_signalement DESC LIMIT :limit", params | {"limit": limit})
+    for r in rows:
+        r["utilisateur"], r["traite_par"] = _anonyme(r["utilisateur"], u), _anonyme(r["traite_par"], u)
     return {"status": "ok", "total": len(rows), "data": rows}
 
 
@@ -637,7 +846,7 @@ def traiter_signalement(request: Request, body: DecisionSignalement, id_signalem
     if res.rowcount == 0:
         raise HTTPException(404, "Signalement introuvable")
     audit.journaliser(u.nom, "signalement_traite", {"id_signalement": id_signalement, "statut": body.statut},
-                      get_remote_address(request))
+                      ip_client(request))
     return {"status": "ok"}
 
 
@@ -645,8 +854,10 @@ def traiter_signalement(request: Request, body: DecisionSignalement, id_signalem
 
 @app.get("/admin/audit")
 def journal_audit(action: str | None = Query(None, max_length=40), utilisateur: str | None = Query(None, max_length=64),
-                  limit: int = Query(100, ge=1, le=500), u: Utilisateur = Depends(admin_requis)):
+                  limit: int = Query(100, ge=1, le=500), u: Utilisateur = Depends(admin_ou_decouverte)):
     conditions, params = ["TRUE"], {"limit": limit}
+    if u.externe:          # un visiteur ne voit que sa propre activité
+        utilisateur = u.nom
     if action:
         conditions.append("action = :a"); params["a"] = action
     if utilisateur:
@@ -654,12 +865,13 @@ def journal_audit(action: str | None = Query(None, max_length=40), utilisateur: 
     _, evenements = _lire("SELECT id_evenement, date_evenement, utilisateur, action, detail, adresse_ip "
                           f"FROM voicebank.journal_audit WHERE {' AND '.join(conditions)} "
                           "ORDER BY date_evenement DESC LIMIT :limit", params)
+    filtre, p_u = ("AND utilisateur = :u", {"u": u.nom}) if u.externe else ("", {})
     _, questions = _lire("SELECT date_requete, utilisateur, texte_original AS question, succes, duree_ms "
-                         "FROM voicebank.logs_vocaux ORDER BY date_requete DESC LIMIT 100")
+                         f"FROM voicebank.logs_vocaux WHERE TRUE {filtre} ORDER BY date_requete DESC LIMIT 100", p_u)
     _, synthese = _lire("SELECT utilisateur, COUNT(*) AS questions, "
                         "ROUND(100.0 * AVG(CASE WHEN succes THEN 1 ELSE 0 END), 1) AS taux_succes "
-                        "FROM voicebank.logs_vocaux WHERE date_requete > NOW() - INTERVAL '30 days' "
-                        "GROUP BY utilisateur ORDER BY questions DESC")
+                        f"FROM voicebank.logs_vocaux WHERE date_requete > NOW() - INTERVAL '30 days' {filtre} "
+                        "GROUP BY utilisateur ORDER BY questions DESC", p_u)
     return {"status": "ok", "evenements": evenements, "questions": questions, "synthese_30j": synthese}
 
 
@@ -672,7 +884,14 @@ def _compte(action):
 
 
 @app.get("/admin/utilisateurs")
-def lister_utilisateurs(u: Utilisateur = Depends(admin_requis)):
+def lister_utilisateurs(u: Utilisateur = Depends(admin_ou_decouverte)):
+    if u.externe:
+        # Démonstration : la liste des comptes internes, anonymisée, sans les visiteurs ni les clients.
+        comptes = [c for c in _compte(securite.lister_comptes) if c["role"] in securite.ROLES or c["nom"] == u.nom]
+        champs = ("nom", "role", "actif", "doit_changer_mdp", "verrouille", "provisoire_expire", "derniere_connexion")
+        return {"gestion_comptes": True, "lecture_seule": True,
+                "data": [{**{k: c.get(k) for k in champs}, "nom": _anonyme(c["nom"], u),
+                          "cree_par": _anonyme(c.get("cree_par"), u)} for c in comptes]}
     if not securite.mode_base():
         return {"gestion_comptes": False, "data": [{"nom": n, "role": r, "actif": True, "cree_par": "configuration"}
                                                   for n, (r, _) in securite.COMPTES.items()]}
@@ -684,7 +903,7 @@ def lister_utilisateurs(u: Utilisateur = Depends(admin_requis)):
 def creer_utilisateur(request: Request, body: NouveauCompte, u: Utilisateur = Depends(admin_requis)):
     nom = body.nom.strip().lower()
     mdp = _compte(lambda: securite.creer_compte(nom, body.role, u.nom))
-    audit.journaliser(u.nom, "compte_cree", {"compte": nom, "role": body.role}, get_remote_address(request))
+    audit.journaliser(u.nom, "compte_cree", {"compte": nom, "role": body.role}, ip_client(request))
     return {"status": "ok", "nom": nom, "role": body.role, "mot_de_passe_provisoire": mdp,
             "valable_heures": int(securite.DUREE_MDP_PROVISOIRE.total_seconds() // 3600)}
 
@@ -694,7 +913,7 @@ def creer_utilisateur(request: Request, body: NouveauCompte, u: Utilisateur = De
 def reinitialiser_utilisateur(request: Request, nom: str = Path(max_length=64),
                               u: Utilisateur = Depends(admin_requis)):
     mdp = _compte(lambda: securite.reinitialiser(nom))
-    audit.journaliser(u.nom, "compte_reinitialise", {"compte": nom}, get_remote_address(request))
+    audit.journaliser(u.nom, "compte_reinitialise", {"compte": nom}, ip_client(request))
     return {"status": "ok", "nom": nom, "mot_de_passe_provisoire": mdp,
             "valable_heures": int(securite.DUREE_MDP_PROVISOIRE.total_seconds() // 3600)}
 
@@ -704,7 +923,7 @@ def modifier_utilisateur(request: Request, body: ModificationCompte, nom: str = 
                          u: Utilisateur = Depends(admin_requis)):
     changements = _compte(lambda: securite.modifier(nom, u.nom, body.role, body.actif))
     if changements:
-        audit.journaliser(u.nom, "compte_modifie", {"compte": nom, **changements}, get_remote_address(request))
+        audit.journaliser(u.nom, "compte_modifie", {"compte": nom, **changements}, ip_client(request))
     return {"status": "ok", "nom": nom, "changements": changements}
 
 
@@ -712,29 +931,31 @@ def modifier_utilisateur(request: Request, body: ModificationCompte, nom: str = 
 def lancer_evaluation(request: Request, u: Utilisateur = Depends(admin_requis)):
     if not evaluation.lancer_en_arriere_plan(u.nom):
         raise HTTPException(409, "Une évaluation est déjà en cours")
-    audit.journaliser(u.nom, "evaluation_lancee", None, get_remote_address(request))
+    audit.journaliser(u.nom, "evaluation_lancee", None, ip_client(request))
     return {"status": "ok", "message": "Évaluation lancée (1 à 2 minutes avec Gemini)."}
 
 
 @app.get("/admin/evaluation")
-def derniere_evaluation(u: Utilisateur = Depends(admin_requis)):
+def derniere_evaluation(u: Utilisateur = Depends(admin_ou_decouverte)):
     _, rows = _lire("SELECT id_evaluation, date_evaluation, utilisateur, nb_questions, nb_reussies, taux_reussite, "
                     "gemini_actif, details FROM voicebank.evaluations ORDER BY date_evaluation DESC LIMIT 1")
     _, historique = _lire("SELECT date_evaluation, taux_reussite, gemini_actif FROM voicebank.evaluations "
                           "ORDER BY date_evaluation DESC LIMIT 10")
+    if rows:
+        rows[0]["utilisateur"] = _anonyme(rows[0]["utilisateur"], u)
     return {"status": "ok", "en_cours": evaluation.etat["en_cours"], "derniere": rows[0] if rows else None,
             "historique": historique}
 
 
 @app.get("/rag/corrections")
-def lister_corrections(limit: int = Query(50, ge=1, le=200), u: Utilisateur = Depends(admin_requis)):
+def lister_corrections(limit: int = Query(50, ge=1, le=200), u: Utilisateur = Depends(admin_ou_decouverte)):
     _, rows = _lire("SELECT id, question, sql_correct, utilisee, date_ajout FROM voicebank.logs_corrections "
                     "ORDER BY utilisee DESC, date_ajout DESC LIMIT :limit", {"limit": limit})
     return {"status": "ok", "total": len(rows), "data": rows}
 
 
 @app.get("/rag/stats")
-def stats_rag(u: Utilisateur = Depends(admin_requis)):
+def stats_rag(u: Utilisateur = Depends(admin_ou_decouverte)):
     _, c = _lire("SELECT COUNT(*) AS total, COALESCE(SUM(utilisee), 0) AS utilisations "
                  "FROM voicebank.logs_corrections")
     _, l = _lire("SELECT COUNT(*) AS total FROM voicebank.logs_vocaux")

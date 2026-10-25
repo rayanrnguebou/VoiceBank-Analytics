@@ -302,6 +302,51 @@ CREATE TABLE IF NOT EXISTS voicebank.utilisateurs (
 );
 
 
+-- Offre publique : visiteurs en essai (lecture seule) et clients abonnés
+ALTER TABLE voicebank.utilisateurs ADD COLUMN IF NOT EXISTS email        VARCHAR(254);
+ALTER TABLE voicebank.utilisateurs ADD COLUMN IF NOT EXISTS nom_complet  VARCHAR(120);
+ALTER TABLE voicebank.utilisateurs ADD COLUMN IF NOT EXISTS profil       VARCHAR(30);
+ALTER TABLE voicebank.utilisateurs ADD COLUMN IF NOT EXISTS essai_fin    TIMESTAMP;
+ALTER TABLE voicebank.utilisateurs ADD COLUMN IF NOT EXISTS abonnement_fin TIMESTAMP;
+ALTER TABLE voicebank.utilisateurs ADD COLUMN IF NOT EXISTS formule      VARCHAR(20);
+ALTER TABLE voicebank.utilisateurs DROP CONSTRAINT IF EXISTS utilisateurs_role_check;
+ALTER TABLE voicebank.utilisateurs ADD CONSTRAINT utilisateurs_role_check
+    CHECK (role IN ('analyste', 'admin', 'visiteur', 'client'));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_utilisateurs_email ON voicebank.utilisateurs (LOWER(email));
+
+-- ══════════════════════════════════════════════════════════
+-- TABLE 10 : INFORMATIONS DE FACTURATION (organisation ou particulier)
+-- ══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS voicebank.profils_facturation (
+    utilisateur         VARCHAR(64)  PRIMARY KEY REFERENCES voicebank.utilisateurs(nom),
+    type_client         VARCHAR(20)  NOT NULL CHECK (type_client IN ('organisation', 'particulier')),
+    informations        JSONB        NOT NULL,
+    date_maj            TIMESTAMP    NOT NULL DEFAULT NOW()
+);
+
+-- ══════════════════════════════════════════════════════════
+-- TABLE 11 : PAIEMENTS DES ABONNEMENTS
+-- Le montant est fixé par le serveur ; un paiement n'active l'abonnement qu'une seule fois.
+-- ══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS voicebank.paiements (
+    id_paiement         SERIAL       PRIMARY KEY,
+    reference           VARCHAR(64)  NOT NULL UNIQUE,
+    utilisateur         VARCHAR(64)  NOT NULL REFERENCES voicebank.utilisateurs(nom),
+    formule             VARCHAR(20)  NOT NULL,
+    duree_jours         INTEGER      NOT NULL CHECK (duree_jours > 0),
+    montant             INTEGER      NOT NULL CHECK (montant > 0),
+    devise              CHAR(3)      NOT NULL DEFAULT 'XAF',
+    statut              VARCHAR(20)  NOT NULL DEFAULT 'en_attente'
+                        CHECK (statut IN ('en_attente', 'paye', 'echoue', 'annule')),
+    fournisseur         VARCHAR(20)  NOT NULL,
+    reference_fournisseur VARCHAR(100),
+    date_creation       TIMESTAMP    NOT NULL DEFAULT NOW(),
+    date_paiement       TIMESTAMP,
+    abonnement_fin      TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_paiements_utilisateur ON voicebank.paiements (utilisateur, date_creation DESC);
+
+
 -- ══════════════════════════════════════════════════════════
 -- VUES UTILES (pour Power BI et les requêtes fréquentes)
 -- ══════════════════════════════════════════════════════════

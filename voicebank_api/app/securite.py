@@ -31,7 +31,9 @@ from . import config, db
 
 log = logging.getLogger("voicebank")
 
-ROLES = {"analyste", "admin"}
+ROLES = {"analyste", "admin"}                 # comptes internes (créés par l'administrateur)
+ROLES_EXTERNES = {"visiteur", "client"}       # essai gratuit / abonnés : lecture seule sur la démo
+EMAIL_VALIDE = re.compile(r"[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,24}")
 _HASH_BCRYPT = re.compile(r"\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}")
 NOM_VALIDE = re.compile(r"[a-z0-9][a-z0-9._-]{2,31}")
 ALGO = "HS256"
@@ -48,6 +50,11 @@ class Utilisateur:
     nom: str
     role: str
     doit_changer: bool = False
+    acces_expire: bool = False       # essai terminé ou abonnement échu
+
+    @property
+    def externe(self) -> bool:
+        return self.role in ROLES_EXTERNES
 
 
 class CompteRefuse(Exception):
@@ -151,11 +158,16 @@ def mdp_provisoire() -> str:
 # Connexion
 # ════════════════════════════════════════
 
+_SQL_ACCES_EXPIRE = ("CASE WHEN role = 'visiteur' THEN COALESCE(essai_fin < LOCALTIMESTAMP, TRUE) "
+                     "WHEN role = 'client' THEN COALESCE(abonnement_fin < LOCALTIMESTAMP, TRUE) ELSE FALSE END")
+
+
 def _ligne(nom: str):
     # Les dates sont comparées dans la base (LOCALTIMESTAMP) : pas de souci de fuseau horaire.
     r = db.ecrire("SELECT nom, role, hash_mdp, actif, doit_changer_mdp, echecs_connexion, version_jeton, "
                   "COALESCE(verrouille_jusqua > LOCALTIMESTAMP, FALSE) AS verrouille, "
-                  "COALESCE(doit_changer_mdp AND mdp_provisoire_expire < LOCALTIMESTAMP, FALSE) AS expire "
+                  "COALESCE(doit_changer_mdp AND mdp_provisoire_expire < LOCALTIMESTAMP, FALSE) AS expire, "
+                  f"{_SQL_ACCES_EXPIRE} AS acces_expire "
                   "FROM voicebank.utilisateurs WHERE nom = :n", {"n": nom})
     return r.lignes[0] if r.lignes else None
 
@@ -164,6 +176,9 @@ def authentifier(nom: str, mot_de_passe: str) -> tuple[Utilisateur, int] | None:
     """Retourne (utilisateur, version du jeton) ou None. Même message d'erreur pour tous les
     cas (compte inconnu, désactivé, verrouillé, mot de passe faux) : rien n'est révélé."""
     mdp = mot_de_passe.encode()[:72]
+    nom = nom.strip()
+    if "@" in nom:
+        nom = nom.lower()          # les visiteurs se connectent avec leur e-mail
     if not mode_base():
         role, hash_ = COMPTES.get(nom, (None, _HASH_FACTICE))
         ok = bcrypt.checkpw(mdp, hash_)
@@ -190,7 +205,7 @@ def authentifier(nom: str, mot_de_passe: str) -> tuple[Utilisateur, int] | None:
         return None     # mot de passe provisoire expiré : l'administrateur doit le réinitialiser
     db.ecrire("UPDATE voicebank.utilisateurs SET echecs_connexion = 0, verrouille_jusqua = NULL, "
               "derniere_connexion = LOCALTIMESTAMP WHERE nom = :n", {"n": nom})
-    return Utilisateur(l.nom, l.role, l.doit_changer_mdp), l.version_jeton
+    return Utilisateur(l.nom, l.role, l.doit_changer_mdp, l.acces_expire), l.version_jeton
 
 
 def creer_jeton(u: Utilisateur, version: int = 0) -> str:
@@ -219,13 +234,16 @@ def _depuis_jeton(cred: HTTPAuthorizationCredentials | None) -> Utilisateur:
         if COMPTES.get(data["sub"], (None,))[0] != data["role"]:
             raise erreur
         return Utilisateur(data["sub"], data["role"])
-    r = db.ecrire("SELECT role, actif, doit_changer_mdp, version_jeton FROM voicebank.utilisateurs "
+    r = db.ecrire("SELECT role, actif, doit_changer_mdp, version_jeton, "
+                  f"{_SQL_ACCES_EXPIRE} AS acces_expire FROM voicebank.utilisateurs "
                   "WHERE nom = :n", {"n": data["sub"]})
     l = r.lignes[0] if r.lignes else None
     # Compte supprimé, désactivé, rôle changé ou mot de passe changé : la session est révoquée.
-    if l is None or not l.actif or l.role != data["role"] or l.version_jeton != data.get("ver"):
+    # Exception : visiteur devenu client après paiement (pas besoin de se reconnecter).
+    meme_role = l is not None and (l.role == data["role"] or {l.role, data["role"]} <= ROLES_EXTERNES)
+    if l is None or not l.actif or not meme_role or l.version_jeton != data.get("ver"):
         raise erreur
-    return Utilisateur(data["sub"], l.role, l.doit_changer_mdp)
+    return Utilisateur(data["sub"], l.role, l.doit_changer_mdp, l.acces_expire)
 
 
 def version_jeton(nom: str) -> int:
@@ -239,16 +257,70 @@ def utilisateur_authentifie(cred: HTTPAuthorizationCredentials | None = Depends(
     return _depuis_jeton(cred)
 
 
-def utilisateur_courant(u: Utilisateur = Depends(utilisateur_authentifie)) -> Utilisateur:
+def utilisateur_valide(u: Utilisateur = Depends(utilisateur_authentifie)) -> Utilisateur:
+    """Connecté, mot de passe définitif (mais l'essai ou l'abonnement peut être échu)."""
     if u.doit_changer:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Change ton mot de passe provisoire pour continuer")
     return u
 
 
+def utilisateur_courant(u: Utilisateur = Depends(utilisateur_valide)) -> Utilisateur:
+    if u.acces_expire:
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED,
+                            "Ton essai gratuit est terminé : choisis une formule pour continuer."
+                            if u.role == "visiteur" else
+                            "Ton abonnement est arrivé à échéance : renouvelle-le pour continuer.")
+    return u
+
+
+LECTURE_SEULE = ("Mode découverte : lecture seule. Les données de démonstration ne peuvent pas être "
+                 "modifiées depuis un compte d'essai ou d'abonné.")
+
+
+def interne_requis(u: Utilisateur = Depends(utilisateur_courant)) -> Utilisateur:
+    """Actions qui modifient les données partagées : comptes internes uniquement."""
+    if u.externe:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, LECTURE_SEULE)
+    return u
+
+
 def admin_requis(u: Utilisateur = Depends(utilisateur_courant)) -> Utilisateur:
+    if u.externe:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, LECTURE_SEULE)
     if u.role != "admin":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Réservé aux administrateurs")
     return u
+
+
+def admin_ou_decouverte(u: Utilisateur = Depends(utilisateur_courant)) -> Utilisateur:
+    """Pages d'administration en lecture : l'administrateur, ou un visiteur / abonné qui découvre
+    l'outil (les endpoints concernés anonymisent alors ce qui concerne les autres comptes)."""
+    if u.role != "admin" and not u.externe:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Réservé aux administrateurs")
+    return u
+
+
+def creer_essai(email: str, nom_complet: str, profil: str, mot_de_passe: str) -> Utilisateur:
+    """Compte visiteur : identifiant = e-mail, essai gratuit de ESSAI_JOURS jours."""
+    if not mode_base():
+        raise CompteRefuse("Inscription indisponible pour le moment")
+    email = email.strip().lower()
+    if len(email) > 64 or not EMAIL_VALIDE.fullmatch(email):
+        raise CompteRefuse("Adresse e-mail invalide")
+    verifier_politique(mot_de_passe, email.split("@")[0])
+    n = db.ecrire("SELECT COUNT(*) FROM voicebank.utilisateurs WHERE cree_par = 'inscription' "
+                  "AND date_creation > LOCALTIMESTAMP - INTERVAL '1 day'").scalar()
+    if n >= config.MAX_ESSAIS_PAR_JOUR:
+        raise CompteRefuse("Trop d'inscriptions aujourd'hui, réessaie demain.")
+    r = db.ecrire("INSERT INTO voicebank.utilisateurs (nom, role, hash_mdp, doit_changer_mdp, cree_par, email, "
+                  "nom_complet, profil, essai_fin) SELECT :n, 'visiteur', :h, FALSE, 'inscription', :n, :c, :p, "
+                  "LOCALTIMESTAMP + :d WHERE NOT EXISTS (SELECT 1 FROM voicebank.utilisateurs "
+                  "WHERE nom = :n OR LOWER(email) = :n) ON CONFLICT DO NOTHING",
+                  {"n": email, "h": hacher(mot_de_passe), "c": nom_complet.strip()[:120], "p": profil,
+                   "d": timedelta(days=config.ESSAI_JOURS)})
+    if not r.rowcount:
+        raise CompteRefuse("Un compte existe déjà avec cette adresse : connecte-toi.")
+    return Utilisateur(email, "visiteur")
 
 
 # ════════════════════════════════════════
@@ -280,8 +352,8 @@ def changer_mot_de_passe(nom: str, actuel: str, nouveau: str) -> int:
 def lister_comptes() -> list[dict]:
     _exiger_base()
     r = db.ecrire("SELECT nom, role, actif, doit_changer_mdp, mdp_provisoire_expire, cree_par, date_creation, "
-                  "date_modif_mdp, derniere_connexion, "
-                  "COALESCE(verrouille_jusqua > LOCALTIMESTAMP, FALSE) AS verrouille, "
+                  "date_modif_mdp, derniere_connexion, email, nom_complet, profil, essai_fin, abonnement_fin, "
+                  "formule, COALESCE(verrouille_jusqua > LOCALTIMESTAMP, FALSE) AS verrouille, "
                   "COALESCE(doit_changer_mdp AND mdp_provisoire_expire < LOCALTIMESTAMP, FALSE) AS provisoire_expire "
                   "FROM voicebank.utilisateurs ORDER BY actif DESC, nom")
     return [{k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in l._mapping.items()}

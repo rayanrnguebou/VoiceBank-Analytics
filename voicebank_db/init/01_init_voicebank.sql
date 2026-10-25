@@ -348,6 +348,36 @@ CREATE INDEX IF NOT EXISTS idx_paiements_utilisateur ON voicebank.paiements (uti
 
 
 -- ══════════════════════════════════════════════════════════
+-- TABLE 12 : SOURCES DE DONNÉES DES ORGANISATIONS (connecteur)
+-- Identifiants de connexion CHIFFRÉS ; seul le propriétaire peut interroger sa source.
+-- ══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS voicebank.sources_donnees (
+    id_source           SERIAL       PRIMARY KEY,
+    proprietaire        VARCHAR(64)  NOT NULL REFERENCES voicebank.utilisateurs(nom),
+    nom                 VARCHAR(80)  NOT NULL,
+    type_source         VARCHAR(20)  NOT NULL CHECK (type_source IN ('postgresql', 'mysql', 'sqlserver', 'fichier')),
+    config_chiffree     TEXT,
+    resume_connexion    VARCHAR(200),
+    statut              VARCHAR(20)  NOT NULL DEFAULT 'analyse' CHECK (statut IN ('analyse', 'pret', 'erreur')),
+    erreur              VARCHAR(500),
+    profil              JSONB,
+    masquer_pii         BOOLEAN      NOT NULL DEFAULT TRUE,
+    date_creation       TIMESTAMP    NOT NULL DEFAULT NOW(),
+    date_analyse        TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_sources_proprietaire ON voicebank.sources_donnees (proprietaire);
+
+CREATE TABLE IF NOT EXISTS voicebank.sources_fichiers (
+    id_fichier          SERIAL       PRIMARY KEY,
+    id_source           INTEGER      NOT NULL REFERENCES voicebank.sources_donnees(id_source) ON DELETE CASCADE,
+    nom_fichier         VARCHAR(200) NOT NULL,
+    contenu             BYTEA        NOT NULL,
+    taille              INTEGER      NOT NULL,
+    date_ajout          TIMESTAMP    NOT NULL DEFAULT NOW()
+);
+
+
+-- ══════════════════════════════════════════════════════════
 -- VUES UTILES (pour Power BI et les requêtes fréquentes)
 -- ══════════════════════════════════════════════════════════
 

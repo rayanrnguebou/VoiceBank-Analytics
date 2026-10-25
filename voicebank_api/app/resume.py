@@ -71,6 +71,10 @@ def resume_local(question: str, colonnes: list[str], lignes: list[dict]) -> str:
                    and not c.lower().startswith("id")][:4]
         return ("Résultat : " + ", ".join(parties) + ".") if parties else "Un seul résultat trouvé."
     cat = _colonne_categorie(colonnes, lignes)
+    if cat is None and num and len(colonnes) <= 4:
+        # Colonnes aux noms inconnus (bases connectées) : la première colonne qui n'est pas la mesure
+        cat = next((c for c in colonnes if c != num and not est_colonne_personnelle(c)
+                    and c.lower() not in ("annee", "mois")), None)
     phrase = f"{formater_nombre(n)} résultats."
     liste_detaillee = any(c.lower().startswith("id_") for c in colonnes)   # une ligne = un élément
     if liste_detaillee and num:

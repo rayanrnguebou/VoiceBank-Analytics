@@ -33,6 +33,7 @@ des corrections, mesure de la fiabilité et journal d'audit.
 | **Crédit** | Probabilité de défaut, facteurs explicatifs (SHAP), crédits en cours les plus à risque. |
 | **Données personnelles** | Noms, e-mails, téléphones masqués pour le rôle analyste ; jamais envoyés à Gemini pour les résumés. |
 | **Essai et abonnements** | Accueil « Visiteur ou Organisation », essai gratuit 3 jours en lecture seule, formules jour / semaine / mois / année payées en FCFA (MTN MoMo, Orange Money, carte). |
+| **Connecteur « Mes données »** | Branche une base PostgreSQL, MySQL/MariaDB, SQL Server ou des fichiers Excel/CSV : analyse de la structure et du sens métier, diagnostic de qualité, puis questions en français dans le dialecte de la base. |
 | **Comptes** | Créés par l'administrateur (pas d'inscription libre), mot de passe provisoire à changer à la 1re connexion, blocage après 5 échecs, désactivation sans suppression. |
 | **Audit** | Connexions, consultations de fiches, corrections, alertes traitées, gestion des comptes : journal en ajout seul. |
 
@@ -190,6 +191,37 @@ Pour que le site public montre les mêmes données que ta base locale :
 Database URL* de Render. Le script sauvegarde d'abord ta base locale, puis remplace en ligne les
 clients, crédits, transactions, alertes et corrections apprises. **Les comptes, mots de passe,
 paiements et journaux d'audit ne sont jamais copiés.** À relancer quand tes données changent.
+
+## Connecteur : brancher les données d'une organisation
+
+Menu **Mes données → Connecter une source** (abonnés et administrateur ; pendant l'essai, une source de
+démonstration est explorable).
+
+| Source | Ce qu'il faut |
+|---|---|
+| PostgreSQL, MySQL / MariaDB, SQL Server | adresse, port, base, **compte en lecture seule** (le formulaire donne le SQL pour le créer), serveur joignable depuis Internet |
+| Excel (.xlsx) / CSV | jusqu'à 5 fichiers de 10 Mo ; chaque feuille ou fichier devient une table |
+
+**Ce que fait l'analyse, quel que soit le schéma** (noms en français ou en anglais, sans documentation) :
+- rôle de chaque colonne : montant, date, statut, lieu, catégorie, taux, score, identifiant, indicateur de fraude ;
+- entités (clients, comptes, crédits, transactions, agences…) et **domaine** (banque, microfinance, assurance, commerce) ;
+- **relations** déclarées, ou déduites des noms (`customer_id` → `customers`) ;
+- **données personnelles** (noms, e-mails, téléphones, numéros de compte, pièces d'identité) et **secrets**
+  (mots de passe, jetons) : les premières sont masquées et jamais envoyées à l'IA, les seconds ne sont jamais lus ;
+- **diagnostic de qualité** avec une note sur 100 : références orphelines, doublons, valeurs manquantes,
+  montants négatifs, dates futures ou improbables, colonnes constantes, données anciennes ;
+- **questions suggérées** adaptées à la base.
+
+**Questions en français** (assistant, sélecteur « Données interrogées ») : Gemini écrit la requête dans le dialecte
+de la base (PostgreSQL, MySQL, T-SQL, SQLite) à partir de la carte des données ; sans Gemini, un moteur local
+comprend les formulations courantes — totaux, moyennes, comptages, « par mois », « par ville », « top 10 clients
+par solde », filtres (« à Douala », « en retard », « en 2025 », « frauduleuses ») — même si la base est en anglais.
+
+**Sécurité** : connexion en lecture seule (session en lecture seule, transaction toujours annulée, délai de 20 s),
+garde SQL par dialecte (une seule requête SELECT, tables connues uniquement, fonctions système interdites),
+identifiants chiffrés (`CLE_SOURCES`), adresses privées refusées en ligne (anti-SSRF), une source n'est visible
+et interrogeable que par son propriétaire, l'analyse ne lit qu'un échantillon de 500 lignes par table.
+En local avec Docker, une base installée sur le même PC se joint avec l'hôte `host.docker.internal`.
 
 ## Offre publique : essai gratuit et abonnements
 

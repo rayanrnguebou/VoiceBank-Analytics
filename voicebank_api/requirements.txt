@@ -19,3 +19,8 @@ slowapi==0.1.10
 # Whisper local (voicebank_whisper) : secours quand GROQ_API_KEY est vide
 faster-whisper==1.2.1
 av==15.1.0            # PyAV >= 16 incompatible avec faster-whisper 1.2.1 (testé)
+# Connecteur : bases et fichiers des organisations
+pymysql==1.2.3        # MySQL / MariaDB
+pymssql==2.3.7        # SQL Server (FreeTDS inclus)
+openpyxl==3.1.5       # Excel .xlsx
+cryptography==50.0.2  # chiffrement des identifiants de connexion

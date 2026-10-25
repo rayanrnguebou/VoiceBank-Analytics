@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 import {
   AudioLines, LayoutDashboard, ShieldAlert, ScanSearch, Landmark, History,
-  GraduationCap, Target, ScrollText, ChartColumn, ExternalLink, LogOut, X, UsersRound, KeyRound, CreditCard, Wallet,
+  GraduationCap, Target, DatabaseZap, ScrollText, ChartColumn, ExternalLink, LogOut, X, UsersRound, KeyRound, CreditCard, Wallet,
 } from "lucide-react";
 
 const POWER_BI_URL = process.env.REACT_APP_POWER_BI_URL || "";
@@ -73,6 +73,7 @@ export default function BarreLaterale({ page, allerA, estAdmin, voitAdmin, exter
         <nav className="flex-1 overflow-y-auto px-3 space-y-1">
           <Lien id="assistant" libelle="Assistant vocal" Icone={AudioLines} {...props} />
           <Lien id="tableau" libelle="Tableau de bord" Icone={LayoutDashboard} {...props} />
+          <Lien id="donnees" libelle="Mes données" Icone={DatabaseZap} {...props} />
 
           <p className="px-4 pt-5 pb-1.5 text-xs text-foret-100/45">Risques</p>
           <Lien id="alertes" libelle="Alertes de fraude" Icone={ShieldAlert} badge={compteurs.alertes} badgeAlerte {...props} />

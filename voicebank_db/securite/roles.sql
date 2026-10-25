@@ -47,6 +47,10 @@ REVOKE ALL ON voicebank.utilisateurs FROM voicebank_reader;
 GRANT SELECT, INSERT, UPDATE ON voicebank.profils_facturation, voicebank.paiements TO voicebank_app;
 GRANT USAGE ON SEQUENCE voicebank.paiements_id_paiement_seq TO voicebank_app;
 REVOKE ALL ON voicebank.profils_facturation, voicebank.paiements FROM voicebank_reader;
+-- Connecteur : sources des organisations (le propriétaire peut supprimer les siennes)
+GRANT SELECT, INSERT, UPDATE, DELETE ON voicebank.sources_donnees, voicebank.sources_fichiers TO voicebank_app;
+GRANT USAGE ON SEQUENCE voicebank.sources_donnees_id_source_seq, voicebank.sources_fichiers_id_fichier_seq TO voicebank_app;
+REVOKE ALL ON voicebank.sources_donnees, voicebank.sources_fichiers FROM voicebank_reader;
 GRANT UPDATE (statut, traite_par, date_traitement) ON voicebank.signalements TO voicebank_app;
 GRANT UPDATE (traitee, decision, commentaire, traitee_par, date_traitement)
       ON voicebank.alertes_fraude TO voicebank_app;

@@ -334,3 +334,19 @@ def test_suppression_d_une_source(client, admin, base_pg):
     sid = client.post("/sources?synchrone=true", headers=admin, json={"nom": "Temporaire", **base_pg}).json()["id"]
     assert client.post(f"/sources/{sid}/supprimer", headers=admin).status_code == 200
     assert client.post(f"/sources/{sid}/question", headers=admin, json={"texte": "Combien de clients ?"}).status_code == 404
+
+
+def test_monnaie_des_bases_connectees(client, admin, source_pg):
+    d = client.get(f"/sources/{source_pg}", headers=admin).json()["data"]
+    assert d["devise_detectee"] == "XAF" and d["devise"] == "XAF"           # colonne « currency » = XAF
+    base = _q(client, admin, source_pg, "Solde moyen des comptes")
+    col = base["colonnes_monetaires"][0]
+    eur = client.post(f"/sources/{source_pg}/question", headers=admin,
+                      json={"texte": "Solde moyen des comptes", "devise": "EUR"}).json()
+    assert abs(eur["data"][0][col] - base["data"][0][col] / 655.957) < 0.01 and "euros" in eur["resume"]
+    # Base dont les montants sont en euros : affichage en FCFA converti
+    assert client.post(f"/sources/{source_pg}/devise", headers=admin, json={"devise": "EUR"}).status_code == 200
+    j = _q(client, admin, source_pg, "Solde moyen des comptes")
+    assert j["devise_base"] == "EUR" and abs(j["data"][0][col] - base["data"][0][col] * 655.957) < 1
+    client.post(f"/sources/{source_pg}/devise", headers=admin, json={"devise": None})
+    assert _q(client, admin, source_pg, "Combien de clients ?")["colonnes_monetaires"] == []

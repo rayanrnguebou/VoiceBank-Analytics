@@ -1,7 +1,8 @@
 // Score de crédit expliqué : évaluer une demande, ou repérer les crédits en cours les plus risqués
 import { useState, useEffect } from "react";
 import { useAPI } from "../useAPI";
-import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, COULEURS_NIVEAU, formaterFcfa } from "../ui";
+import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, COULEURS_NIVEAU } from "../ui";
+import { useDevise } from "../devise";
 
 export function Explication({ resultat, dark }) {
   if (!resultat) return null;
@@ -40,7 +41,11 @@ const DEMANDE_INITIALE = {
   taux_interet_pct: 12, duree_mois: 36, est_diaspora: "Non",
 };
 
+// Champs monétaires : saisis dans la monnaie choisie, envoyés au modèle en FCFA
+const MONETAIRES = ["montant_fcfa", "mensualite_fcfa", "revenu_annuel_fcfa"];
+
 export default function PanelCredit({ dark }) {
+  const devise = useDevise();
   const api = useAPI();
   const liste = useAPI();
   const detail = useAPI();
@@ -62,7 +67,7 @@ export default function PanelCredit({ dark }) {
   const evaluer = async (e) => {
     e.preventDefault();
     setResultat(null);
-    const nums = ["montant_fcfa", "mensualite_fcfa", "revenu_annuel_fcfa", "score_credit", "taux_interet_pct", "duree_mois"];
+    const nums = [...MONETAIRES, "score_credit", "taux_interet_pct", "duree_mois"];
     const corps = { ...form };
     nums.forEach(k => { corps[k] = Number(corps[k]); });
     const res = await api.appeler("post", "/ia/score-credit", corps);
@@ -76,7 +81,8 @@ export default function PanelCredit({ dark }) {
   };
 
   const nombres = [
-    ["montant_fcfa", "Montant (FCFA)"], ["mensualite_fcfa", "Mensualité (FCFA)"], ["revenu_annuel_fcfa", "Revenu annuel (FCFA)"],
+    ["montant_fcfa", `Montant (${devise.libelle})`], ["mensualite_fcfa", `Mensualité (${devise.libelle})`],
+    ["revenu_annuel_fcfa", `Revenu annuel (${devise.libelle})`],
     ["score_credit", "Score historique (300-850)"], ["taux_interet_pct", "Taux d'intérêt (%)"], ["duree_mois", "Durée (mois)"],
   ];
 
@@ -90,8 +96,10 @@ export default function PanelCredit({ dark }) {
             {nombres.map(([cle, nom]) => (
               <label key={cle}>
                 <span className={etiquette(dark)}>{nom}</span>
-                <input type="number" step="any" min="0" required value={form[cle]}
-                  onChange={e => setForm({ ...form, [cle]: e.target.value })} className={champ(dark)} />
+                <input type="number" step="any" min="0" required
+                  value={MONETAIRES.includes(cle) && form[cle] !== "" ? Math.round(devise.convertir(form[cle]) * 100) / 100 : form[cle]}
+                  onChange={e => setForm({ ...form, [cle]: MONETAIRES.includes(cle) && e.target.value !== "" ? devise.versFcfa(e.target.value) : e.target.value })}
+                  className={champ(dark)} />
               </label>
             ))}
             {[["type_credit", "Type de crédit"], ["garantie", "Garantie"], ["banque", "Banque"]].map(([cle, nom]) => (
@@ -130,7 +138,7 @@ export default function PanelCredit({ dark }) {
                 className={`w-full flex items-center justify-between gap-3 p-3 rounded-xl text-left ${dark ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-50 hover:bg-gray-100"}`}>
                 <div className="min-w-0">
                   <p className={`text-sm font-medium ${dark ? "text-white" : "text-gray-900"}`}>{c.id_credit} · {c.type_credit}</p>
-                  <p className={texteDiscret(dark)}>{c.banque} · {formaterFcfa(c.montant_fcfa)} FCFA · {c.duree_mois} mois</p>
+                  <p className={texteDiscret(dark)}>{c.banque} · {devise.formater(c.montant_fcfa, { compact: true })} · {c.duree_mois} mois</p>
                 </div>
                 <span className={`text-xs font-semibold text-white px-2.5 py-1 rounded-full flex-shrink-0 ${COULEURS_NIVEAU[c.niveau_risque] || "bg-gray-500"}`}>
                   {(c.probabilite_defaut * 100).toFixed(0)} %

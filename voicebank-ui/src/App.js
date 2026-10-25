@@ -8,6 +8,7 @@ import EcranAccueil from "./panneaux/Accueil";
 import { BandeauAcces, PanelAbonnement, PanelAbonnements } from "./panneaux/Abonnement";
 import { LectureSeule, useLectureSeule, TITRE_LECTURE_SEULE } from "./lectureSeule";
 import PanelSources from "./panneaux/Connecteur";
+import { FournisseurDevise, useDevise, SelecteurDevise, libelleColonne } from "./devise";
 import { useSessionActive } from "./session";
 import { useAPI } from "./useAPI";
 import PanelAlertes from "./panneaux/Alertes";
@@ -185,7 +186,7 @@ function PanelGraphiques({ dark, stats }) {
 // COMPOSANT — GRAPHIQUE DYNAMIQUE (affiché dans l'UI)
 // ════════════════════════════════════════
 
-function GraphiqueDynamique({ colonnes, data, question, dark, sql }) {
+function GraphiqueDynamique({ colonnes, data, question, dark, sql, item }) {
   const type     = detecterTypeGraphique(colonnes, data);
   const cleNum   = trouverCleNumerique(data[0] || {}, sql);
   const cleCateg = trouverCleCateg(data[0] || {});
@@ -277,7 +278,7 @@ function GraphiqueDynamique({ colonnes, data, question, dark, sql }) {
         <thead>
           <tr className={dark ? "bg-gray-700" : "bg-gray-50"}>
             {colonnes.slice(0, 7).map(c => (
-              <th key={c} className={`text-left px-3 py-2 font-medium ${dark ? "text-gray-300" : "text-gray-600"}`}>{c}</th>
+              <th key={c} className={`text-left px-3 py-2 font-medium ${dark ? "text-gray-300" : "text-gray-600"}`}>{libelleColonne(c, item)}</th>
             ))}
           </tr>
         </thead>
@@ -299,7 +300,7 @@ function GraphiqueDynamique({ colonnes, data, question, dark, sql }) {
 // COMPOSANT — GRAPHIQUE POUR PDF (dimensions fixes, fond blanc)
 // ════════════════════════════════════════
 
-function GraphiquePourPDF({ colonnes, data, sql }) {
+function GraphiquePourPDF({ colonnes, data, sql, item }) {
   const type     = detecterTypeGraphique(colonnes, data);
   const cleNum   = trouverCleNumerique(data[0] || {}, sql);
   const cleCateg = trouverCleCateg(data[0] || {});
@@ -378,7 +379,7 @@ function GraphiquePourPDF({ colonnes, data, sql }) {
       <thead>
         <tr style={{ background: "#F3F4F6" }}>
           {colonnes.slice(0, 7).map(c => (
-            <th key={c} style={{ textAlign: "left", padding: "6px 10px", fontWeight: 600, color: "#374151", borderBottom: "1px solid #E5E7EB" }}>{c}</th>
+            <th key={c} style={{ textAlign: "left", padding: "6px 10px", fontWeight: 600, color: "#374151", borderBottom: "1px solid #E5E7EB" }}>{libelleColonne(c, item)}</th>
           ))}
         </tr>
       </thead>
@@ -415,7 +416,13 @@ function CarteResultat({ item, dark, onSupprimer, role }) {
           {item.suite && item.question_precedente && (
             <p className={`flex items-center gap-1 text-xs truncate ${dark ? "text-foret-300" : "text-foret-700"}`}><CornerDownRight size={12} /> suite de « {item.question_precedente} »</p>
           )}
-          {item.nom_source && <p className={`text-xs truncate ${dark ? "text-laiton-300" : "text-laiton-600"}`}>Base : {item.nom_source}</p>}
+          {(item.nom_source || (item.devise && item.devise !== "XAF" && item.colonnes_monetaires?.length > 0)) && (
+            <p className={`text-xs truncate ${dark ? "text-laiton-300" : "text-laiton-600"}`}>
+              {[item.nom_source && `Base : ${item.nom_source}`,
+                item.devise && item.colonnes_monetaires?.length > 0 && `Montants en ${item.devise === "XAF" || item.devise === "XOF" ? "FCFA" : item.devise}`]
+                .filter(Boolean).join(" · ")}
+            </p>
+          )}
           <p className={`text-sm font-medium truncate ${dark ? "text-white" : "text-gray-900"}`}>{item.question}</p>
           <div className="flex items-center gap-2 mt-0.5">
             <span className={discret}>{item.total} résultats · {item.duree_ms}ms</span>
@@ -461,7 +468,7 @@ function CarteResultat({ item, dark, onSupprimer, role }) {
       {ouvert && item.data && item.data.length > 0 && (
         <div className="px-5 pb-3">
           <code className={`text-xs block mb-3 truncate ${dark ? "text-foret-300" : "text-foret-600"}`}>{item.sql}</code>
-          <GraphiqueDynamique colonnes={item.colonnes} data={item.data} question={item.question} dark={dark} sql={item.sql} />
+          <GraphiqueDynamique colonnes={item.colonnes} data={item.data} question={item.question} dark={dark} sql={item.sql} item={item} />
         </div>
       )}
       {ouvert && (!item.data || item.data.length === 0) && (
@@ -753,7 +760,7 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
             ref={el => { if (el) chartRefs.current[item.id] = el; }}
             style={{ width: 560, background: "#ffffff", padding: 16, fontFamily: "sans-serif" }}
           >
-            <GraphiquePourPDF colonnes={item.colonnes} data={item.data} sql={item.sql} />
+            <GraphiquePourPDF colonnes={item.colonnes} data={item.data} sql={item.sql} item={item} />
           </div>
         ))}
       </div>
@@ -1094,6 +1101,7 @@ function KpiCard({ titre, valeur, icone: Icone, couleur, dark }) {
 // ════════════════════════════════════════
 
 function PanelAnalyse({ dark }) {
+  const devise = useDevise();
   const { appeler, chargement, erreur } = useAPI();
   const [ref, setRef]       = useState(null);
   const [form, setForm]     = useState({ montant_fcfa: 250000, est_internationale: "Non", heure: "14:00" });
@@ -1144,9 +1152,10 @@ function PanelAnalyse({ dark }) {
       ) : (
         <form onSubmit={analyser} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label>
-            <span className={etiquette}>Montant (FCFA)</span>
-            <input type="number" min="1" step="1" required value={form.montant_fcfa}
-              onChange={e => setForm({ ...form, montant_fcfa: e.target.value })} className={champ} />
+            <span className={etiquette}>Montant ({devise.libelle})</span>
+            <input type="number" min="0" step="any" required
+              value={form.montant_fcfa === "" ? "" : Math.round(devise.convertir(form.montant_fcfa) * 100) / 100}
+              onChange={e => setForm({ ...form, montant_fcfa: e.target.value === "" ? "" : devise.versFcfa(e.target.value) })} className={champ} />
           </label>
           {listes.map(([cle, nom]) => (
             <label key={cle}>
@@ -1221,14 +1230,18 @@ export default function App() {
     setSession(null);
   }, [session]);
 
-  if (!session) return <EcranAccueil onConnecte={setSession} />;
-  if (session.doitChangerMdp) {
-    return <EcranMotDePasseProvisoire session={session} onTermine={setSession} onDeconnexion={seDeconnecter} />;
-  }
-  return <Tableau key={session.utilisateur} session={session} onDeconnexion={seDeconnecter} onSession={setSession} />;
+  return (
+    <FournisseurDevise>
+      {!session ? <EcranAccueil onConnecte={setSession} />
+        : session.doitChangerMdp
+          ? <EcranMotDePasseProvisoire session={session} onTermine={setSession} onDeconnexion={seDeconnecter} />
+          : <Tableau key={session.utilisateur} session={session} onDeconnexion={seDeconnecter} onSession={setSession} />}
+    </FournisseurDevise>
+  );
 }
 
 function Tableau({ session, onDeconnexion, onSession }) {
+  const devise = useDevise();
   const { resteMs, rester } = useSessionActive({ session, onSession, onDeconnexion });
   const [fenetreMdp, setFenetreMdp] = useState(false);
   const [dark, setDark]             = useState(true);
@@ -1404,8 +1417,9 @@ function Tableau({ session, onDeconnexion, onSession }) {
       ? { question: derniere.question, sql: derniere.sql } : null;
     // Base de l'organisation (connecteur) ou base VoiceBank principale
     const res = src
-      ? await appelerQuestion("post", `/sources/${src.id}/question`, { texte: q }, { timeout: 90000 })
-      : await appelerQuestion("post", "/vocal/question", { texte: q, langue: "fr", contexte: contexte && !historique[0]?.nom_source ? contexte : null });
+      ? await appelerQuestion("post", `/sources/${src.id}/question`, { texte: q, devise: devise.code }, { timeout: 90000 })
+      : await appelerQuestion("post", "/vocal/question", { texte: q, langue: "fr", devise: devise.code,
+          contexte: contexte && !historique[0]?.nom_source ? contexte : null });
     if (!res) return;  // le message d'erreur est affiché via `erreur`
     if (externe) setAcces(a => a ? { ...a, questions_jour: a.questions_jour + 1 } : a);
     setHistorique(prev => [{
@@ -1415,6 +1429,7 @@ function Tableau({ session, onDeconnexion, onSession }) {
       data: res.data, duree_ms: res.duree_ms, avertissement: res.avertissement || null,
       resume: res.resume || null, commentaire: res.commentaire || null, relance: res.relance || null,
       suite: !!res.suite, question_precedente: res.question_precedente || null, nom_source: src ? src.nom : null,
+      devise: res.devise || "XAF", colonnes_monetaires: res.colonnes_monetaires || [],
     }, ...prev].slice(0, MAX_HISTORIQUE));
     // Le résumé (affiché) est lu en premier, puis l'analyse plus poussée et la relance
     // (uniquement à l'oral). En mode conversation, on écoute ensuite la réponse, sans clic.
@@ -1455,7 +1470,7 @@ function Tableau({ session, onDeconnexion, onSession }) {
     { titre: "Transactions",   valeur: Number(dashboard.total_transactions || 0).toLocaleString("fr"),   icone: Activity,    couleur: "#3E6FB0" },
     { titre: "Fraudes",        valeur: Number(dashboard.total_fraudes || 0).toLocaleString("fr"),        icone: ShieldAlert, couleur: "#EF4444" },
     { titre: "Crédits en cours", valeur: Number(dashboard.encours_credit_fcfa || 0) > 0
-        ? (Number(dashboard.encours_credit_fcfa) / 1_000_000_000).toFixed(1).replace(".", ",") + " Mds FCFA" : "--",
+        ? devise.formater(dashboard.encours_credit_fcfa, { compact: true }) : "--",
       icone: CreditCard, couleur: "#A9852A" },
   ] : [];
 
@@ -1548,6 +1563,8 @@ function Tableau({ session, onDeconnexion, onSession }) {
               <Square size={11} fill="currentColor" />
             </button>
           )}
+          <SelecteurDevise compact className={`text-xs px-2 py-1.5 rounded-lg border outline-none ${dark
+            ? "bg-gray-900 border-gray-700 text-gray-200" : "bg-white border-gray-200 text-gray-700"}`} />
           {voix && (
             <button onClick={basculerConversation} aria-pressed={conversation}
               aria-label={conversation ? "Désactiver le mode conversation" : "Activer le mode conversation"}

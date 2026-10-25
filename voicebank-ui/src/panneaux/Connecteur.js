@@ -8,6 +8,7 @@ import {
 import { useAPI } from "../useAPI";
 import { http } from "../api";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate } from "../ui";
+import { useDevise } from "../devise";
 
 const ICONES = { postgresql: Database, mysql: Database, sqlserver: Server, fichier: FileSpreadsheet, demo: Sparkles };
 const LIB_ROLES = {
@@ -247,6 +248,30 @@ function TableProfil({ t, dark }) {
   );
 }
 
+function MonnaieSource({ d, dark }) {
+  const { liste } = useDevise();
+  const [choix, setChoix] = useState(d.devise_choisie || "");
+  const [ok, setOk] = useState(false);
+  if (d.demo) return null;
+  const changer = async (e) => {
+    const v = e.target.value;
+    setChoix(v); setOk(false);
+    try { await http.post(`/sources/${d.id}/devise`, { devise: v || null }); setOk(true); } catch (err) { /* rien */ }
+  };
+  return (
+    <label className={`flex flex-wrap items-center gap-2 mt-3 ${texteDiscret(dark)}`}>
+      Les montants de cette base sont en
+      <select value={choix} onChange={changer} aria-label="Monnaie de la base"
+        className={`text-xs px-2 py-1 rounded-lg border outline-none ${dark ? "bg-gray-700 border-gray-600 text-gray-200" : "bg-gray-50 border-gray-200"}`}>
+        <option value="">détection automatique ({d.devise_detectee || "XAF par défaut"})</option>
+        {liste.map(x => <option key={x.code} value={x.code}>{x.nom}</option>)}
+      </select>
+      {ok && <Check size={13} className="text-emerald-500" />}
+      <span>— l'affichage suit la monnaie choisie en haut de l'écran.</span>
+    </label>
+  );
+}
+
 function DetailSource({ dark, id, onRetour, onInterroger }) {
   const { appeler, erreur } = useAPI();
   const [d, setD] = useState(null);
@@ -271,6 +296,7 @@ function DetailSource({ dark, id, onRetour, onInterroger }) {
           </div>
           <button onClick={() => onInterroger(d)} className={`${boutonPrincipal} flex items-center gap-2`}><Search size={15} /> Interroger cette base</button>
         </div>
+        <MonnaieSource d={d} dark={dark} />
         <div className="flex flex-wrap gap-1 mt-4">
           {onglets.map(([k, l]) => (
             <button key={k} onClick={() => setOnglet(k)} className={`text-xs px-3 py-1.5 rounded-full ${onglet === k

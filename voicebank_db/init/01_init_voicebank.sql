@@ -366,6 +366,8 @@ CREATE TABLE IF NOT EXISTS voicebank.sources_donnees (
     date_analyse        TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_sources_proprietaire ON voicebank.sources_donnees (proprietaire);
+-- Monnaie des montants de la base (NULL : détectée automatiquement, sinon FCFA)
+ALTER TABLE voicebank.sources_donnees ADD COLUMN IF NOT EXISTS devise CHAR(3);
 
 CREATE TABLE IF NOT EXISTS voicebank.sources_fichiers (
     id_fichier          SERIAL       PRIMARY KEY,

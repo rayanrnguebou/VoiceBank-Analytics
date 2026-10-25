@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 
-from .. import config, db, resume
+from .. import config, db, devises, resume
 from ..masquage import est_colonne_personnelle, masquer_valeur
 from . import analyse, fichiers, garde
 from . import questions as Q
@@ -27,7 +27,7 @@ class SourceRefusee(Exception):
 
 def _ligne(id_source: int, proprietaire: str):
     r = db.ecrire("SELECT id_source, proprietaire, nom, type_source, config_chiffree, resume_connexion, statut, "
-                  "erreur, profil, masquer_pii, date_creation, date_analyse FROM voicebank.sources_donnees "
+                  "erreur, profil, masquer_pii, devise, date_creation, date_analyse FROM voicebank.sources_donnees "
                   "WHERE id_source = :i AND proprietaire = :p", {"i": id_source, "p": proprietaire})
     if not r.lignes:
         raise SourceRefusee("Source introuvable")
@@ -39,6 +39,7 @@ def _resume_public(l) -> dict:
     return {"id": l.id_source, "nom": l.nom, "type": l.type_source, "libelle_type": TYPES[l.type_source]["libelle"],
             "connexion": l.resume_connexion, "statut": l.statut, "erreur": l.erreur, "masquer_pii": l.masquer_pii,
             "domaine": p.get("domaine"), "score_qualite": p.get("score_qualite"), "resume": p.get("resume"),
+            "devise": devise_source(l), "devise_choisie": l.devise, "devise_detectee": p.get("devise_detectee"),
             "date_analyse": l.date_analyse.isoformat() if l.date_analyse else None, "demo": False}
 
 
@@ -53,13 +54,14 @@ def source_demo_publique() -> dict:
     p = _demo["profil"] or {}
     return {"id": DEMO_ID, "nom": "Démonstration VoiceBank", "type": "demo", "libelle_type": TYPES["demo"]["libelle"],
             "connexion": "Données fictives de la banque de démonstration", "statut": "pret", "erreur": None,
-            "masquer_pii": True, "domaine": p.get("domaine", "banque"), "score_qualite": p.get("score_qualite"),
+            "masquer_pii": True, "devise": "XAF", "devise_choisie": None, "devise_detectee": "XAF",
+            "domaine": p.get("domaine", "banque"), "score_qualite": p.get("score_qualite"),
             "resume": p.get("resume"), "date_analyse": p.get("date_analyse"), "demo": True}
 
 
 def lister(proprietaire: str) -> list[dict]:
     r = db.ecrire("SELECT id_source, proprietaire, nom, type_source, config_chiffree, resume_connexion, statut, erreur, "
-                  "profil, masquer_pii, date_creation, date_analyse FROM voicebank.sources_donnees "
+                  "profil, masquer_pii, devise, date_creation, date_analyse FROM voicebank.sources_donnees "
                   "WHERE proprietaire = :p ORDER BY date_creation DESC", {"p": proprietaire})
     return [source_demo_publique()] + [_resume_public(l) for l in r.lignes]
 
@@ -183,6 +185,7 @@ def analyser(id_source: int, proprietaire: str):
         cfg = dechiffrer(l.config_chiffree) if l.config_chiffree else {}
         eng = _moteur_source(l)
         profil = analyse.analyser(eng, l.type_source, TYPES[l.type_source]["dialecte"], _schema(l.type_source, cfg))
+        profil["devise_detectee"] = devises.detecter_devise(profil)
         db.ecrire("UPDATE voicebank.sources_donnees SET statut = 'pret', profil = CAST(:p AS JSONB), date_analyse = NOW() "
                   "WHERE id_source = :i", {"i": id_source, "p": json.dumps(profil, ensure_ascii=False, default=str)})
     except Exception as e:
@@ -205,6 +208,17 @@ def supprimer(id_source: int, proprietaire: str):
         raise SourceRefusee("Source introuvable")
     for f in fichiers.CACHE.glob(f"source_{int(id_source)}_*.sqlite"):
         f.unlink(missing_ok=True)
+
+
+def devise_source(l) -> str:
+    return (l.devise or (l.profil or {}).get("devise_detectee") or "XAF").strip().upper()
+
+
+def modifier_devise(id_source: int, proprietaire: str, devise: str | None):
+    r = db.ecrire("UPDATE voicebank.sources_donnees SET devise = :d WHERE id_source = :i AND proprietaire = :p",
+                  {"i": id_source, "p": proprietaire, "d": devise})
+    if not r.rowcount:
+        raise SourceRefusee("Source introuvable")
 
 
 def modifier_masquage(id_source: int, proprietaire: str, masquer: bool):
@@ -240,16 +254,18 @@ def _masquer(colonnes, lignes, perso: dict[str, str]):
     return [{**l, **{c: masquer_valeur(fmt, l.get(c)) for c, fmt in a_masquer.items()}} for l in lignes]
 
 
-def repondre(id_source: int, proprietaire: str, role: str, question: str) -> dict:
+def repondre(id_source: int, proprietaire: str, role: str, question: str, devise: str = "XAF") -> dict:
     debut = time.time()
     if id_source == DEMO_ID:
         profil, type_source, eng, masquer = profil_demo(), "demo", db.moteur_lecture, role != "admin"
+        devise_base = "XAF"
     else:
         l = _ligne(id_source, proprietaire)
         if l.statut != "pret" or not l.profil:
             raise SourceRefusee("Analyse de la source en cours : réessaie dans un instant." if l.statut == "analyse"
                                 else "La source n'a pas pu être analysée : relance l'analyse.")
         profil, type_source, masquer = l.profil, l.type_source, l.masquer_pii
+        devise_base = devise_source(l)
         eng = _moteur_source(l)
     dialecte = profil["dialecte"]
     autorisees = {t["nom"].lower() for t in profil["tables"] if not t.get("erreur")}
@@ -290,15 +306,21 @@ def repondre(id_source: int, proprietaire: str, role: str, question: str) -> dic
     lignes = [{c: l[c] for c in colonnes} for l in lignes]
     if masquer:
         lignes = _masquer(colonnes, lignes, perso)
+    # Montants : de la monnaie de la base vers la monnaie choisie par l'utilisateur
+    montants = {c["nom"].lower() for t in profil["tables"] for c in t["colonnes"] if c["role"] == "montant"}
+    monetaires = {c.lower() for c in colonnes
+                  if c.lower() in montants or any(m in c.lower() for m in montants if len(m) >= 4)}
+    lignes, converties = devises.convertir_lignes(colonnes, lignes, devise, devise_base, monetaires)
     sans_perso = [c for c in colonnes if c.lower() not in perso and not est_colonne_personnelle(c)]
-    r = resume.resumer(question, sans_perso, [{c: l[c] for c in sans_perso} for l in lignes])
+    r = resume.resumer(question, sans_perso, [{c: l[c] for c in sans_perso} for l in lignes], devise)
     suggestion = next((s for s in profil.get("suggestions", []) if s.lower() != question.strip().lower()), None)
     relance = ({"texte": f"Veux-tu voir aussi : {suggestion[0].lower() + suggestion[1:]} ?", "question": suggestion}
                if suggestion else None)
     return {"status": "ok", "question": question, "sql": sur, "source": "gemini" if source == "gemini" else "rule",
             "source_donnees": id_source, "avertissement": avertissement, "colonnes": colonnes, "total": len(lignes),
             "data": lignes, "duree_ms": int((time.time() - debut) * 1000), "resume": r["resume"],
-            "commentaire": r["commentaire"], "relance": relance, "suite": False}
+            "commentaire": r["commentaire"], "relance": relance, "suite": False,
+            "devise": devise, "devise_base": devise_base, "colonnes_monetaires": [c for c in colonnes if c.lower() in monetaires]}
 
 
 def _colonnes_citees(sql: str, dialecte: str) -> set[str]:

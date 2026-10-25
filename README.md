@@ -34,6 +34,7 @@ des corrections, mesure de la fiabilité et journal d'audit.
 | **Données personnelles** | Noms, e-mails, téléphones masqués pour le rôle analyste ; jamais envoyés à Gemini pour les résumés. |
 | **Essai et abonnements** | Accueil « Visiteur ou Organisation », essai gratuit 3 jours en lecture seule, formules jour / semaine / mois / année payées en FCFA (MTN MoMo, Orange Money, carte). |
 | **Connecteur « Mes données »** | Branche une base PostgreSQL, MySQL/MariaDB, SQL Server ou des fichiers Excel/CSV : analyse de la structure et du sens métier, diagnostic de qualité, puis questions en français dans le dialecte de la base. |
+| **Monnaie d'affichage** | Sélecteur en haut de l'écran (FCFA CEMAC / UEMOA, euro, dollar, livre, dollar canadien, franc suisse, yuan, naira) : réponses, résumé parlé, graphiques, indicateurs, alertes, crédit et tarifs suivent la monnaie choisie. FCFA ↔ euro à la parité officielle (655,957), autres taux BCE mis à jour toutes les 12 h. Les abonnements restent débités en FCFA. Pour une base connectée, la monnaie de ses montants est détectée (colonne « currency ») ou choisie. |
 | **Comptes** | Créés par l'administrateur (pas d'inscription libre), mot de passe provisoire à changer à la 1re connexion, blocage après 5 échecs, désactivation sans suppression. |
 | **Audit** | Connexions, consultations de fiches, corrections, alertes traitées, gestion des comptes : journal en ajout seul. |
 

@@ -3,7 +3,8 @@ import { useState, useEffect, useCallback } from "react";
 import { ShieldAlert, CircleCheck, CircleX } from "lucide-react";
 import { useAPI } from "../useAPI";
 import { useLectureSeule, TITRE_LECTURE_SEULE } from "../lectureSeule";
-import { carte, champ, titre, texteDiscret, boutonSecondaire, formaterFcfa, formaterDate } from "../ui";
+import { carte, champ, titre, texteDiscret, boutonSecondaire, formaterDate } from "../ui";
+import { useDevise } from "../devise";
 
 const NIVEAUX = ["Tous", "Critique", "Élevé", "Moyen"];
 const COULEUR_NIVEAU = {
@@ -14,6 +15,7 @@ const COULEUR_NIVEAU = {
 function LigneAlerte({ a, dark, onTraitee }) {
   const { appeler, chargement, erreur } = useAPI();
   const ls = useLectureSeule();
+  const devise = useDevise();
   const [ouvert, setOuvert] = useState(false);
   const [commentaire, setCommentaire] = useState("");
 
@@ -35,8 +37,8 @@ function LigneAlerte({ a, dark, onTraitee }) {
           <p className={texteDiscret(dark)}>{[a.banque, a.ville, a.type_transaction].filter(Boolean).join(" · ")}</p>
         </div>
         <div className="text-right">
-          <p className={`text-sm font-bold ${dark ? "text-white" : "text-gray-900"}`}>{a.montant_fcfa ? formaterFcfa(a.montant_fcfa) : "--"}</p>
-          <p className={texteDiscret(dark)}>FCFA</p>
+          <p className={`text-sm font-bold ${dark ? "text-white" : "text-gray-900"}`}>{a.montant_fcfa ? devise.formater(a.montant_fcfa, { compact: true }).replace(` ${devise.libelle}`, "") : "--"}</p>
+          <p className={texteDiscret(dark)}>{devise.libelle}</p>
         </div>
       </div>
 

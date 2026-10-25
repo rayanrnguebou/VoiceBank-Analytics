@@ -6,6 +6,8 @@ import {
 import { http, API, connexion, inscriptionEssai, messageErreur, lireMotifDeconnexion } from "../api";
 import { Logo } from "./BarreLaterale";
 import { reglesMotDePasse } from "./Comptes";
+import { Prix } from "./Abonnement";
+import { SelecteurDevise } from "../devise";
 
 const CHAMP = "w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white text-sm outline-none focus:border-foret-500";
 const LIB = "block text-xs text-gray-400 mb-1";
@@ -166,8 +168,9 @@ export default function EcranAccueil({ onConnecte }) {
           {prixMin && (
             <p className="mt-6 text-sm text-foret-100/60">
               Essai gratuit {formules.essai_jours} jours, puis à partir de{" "}
-              <strong className="text-white">{prixMin.prix.toLocaleString("fr-FR")} FCFA / {prixMin.libelle.toLowerCase()}</strong>
-              {" "}— MTN MoMo, Orange Money ou carte.
+              <strong className="text-white"><Prix fcfa={prixMin.prix} dark /> / {prixMin.libelle.toLowerCase()}</strong>
+              {" "}— MTN MoMo, Orange Money ou carte.{" "}
+              <SelecteurDevise compact className="ml-1 text-xs px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-200" />
             </p>
           )}
         </section>

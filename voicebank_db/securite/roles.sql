@@ -43,6 +43,10 @@ GRANT INSERT ON voicebank.signalements, voicebank.journal_audit, voicebank.evalu
 -- Comptes : créés et modifiés par l'API, jamais supprimés ; invisibles pour le lecteur.
 GRANT SELECT, INSERT, UPDATE ON voicebank.utilisateurs TO voicebank_app;
 REVOKE ALL ON voicebank.utilisateurs FROM voicebank_reader;
+-- Abonnements : facturation et paiements, invisibles pour le lecteur et l'IA.
+GRANT SELECT, INSERT, UPDATE ON voicebank.profils_facturation, voicebank.paiements TO voicebank_app;
+GRANT USAGE ON SEQUENCE voicebank.paiements_id_paiement_seq TO voicebank_app;
+REVOKE ALL ON voicebank.profils_facturation, voicebank.paiements FROM voicebank_reader;
 GRANT UPDATE (statut, traite_par, date_traitement) ON voicebank.signalements TO voicebank_app;
 GRANT UPDATE (traitee, decision, commentaire, traitee_par, date_traitement)
       ON voicebank.alertes_fraude TO voicebank_app;

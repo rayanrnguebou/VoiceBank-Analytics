@@ -47,6 +47,16 @@ services:
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       WHISPER_LOCAL: ${WHISPER_LOCAL:-auto}            # utilisé si GROQ_API_KEY est vide
       WHISPER_LOCAL_MODELE: ${WHISPER_LOCAL_MODELE:-base}
+      # Offre publique : essai gratuit, abonnements, paiement
+      ESSAI_JOURS: ${ESSAI_JOURS:-3}
+      PRIX_JOUR: ${PRIX_JOUR:-500}
+      PRIX_SEMAINE: ${PRIX_SEMAINE:-2000}
+      PRIX_MOIS: ${PRIX_MOIS:-6000}
+      PRIX_ANNEE: ${PRIX_ANNEE:-60000}
+      NOTCHPAY_PUBLIC_KEY: ${NOTCHPAY_PUBLIC_KEY:-}
+      NOTCHPAY_HASH_KEY: ${NOTCHPAY_HASH_KEY:-}
+      URL_INTERFACE: ${URL_INTERFACE:-http://localhost:3000}
+      PAIEMENT_SIMULATION: ${PAIEMENT_SIMULATION:-false}   # true : tester sans compte marchand (local)
     volumes:
       - whisper_modeles:/app/modeles_whisper
     ports:

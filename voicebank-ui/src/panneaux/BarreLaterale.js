@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 import {
   AudioLines, LayoutDashboard, ShieldAlert, ScanSearch, Landmark, History,
-  GraduationCap, Target, ScrollText, ChartColumn, ExternalLink, LogOut, X, UsersRound, KeyRound,
+  GraduationCap, Target, ScrollText, ChartColumn, ExternalLink, LogOut, X, UsersRound, KeyRound, CreditCard, Wallet,
 } from "lucide-react";
 
 const POWER_BI_URL = process.env.REACT_APP_POWER_BI_URL || "";
@@ -40,7 +40,7 @@ function Lien({ id, libelle, Icone, page, allerA, badge, badgeAlerte }) {
   );
 }
 
-export default function BarreLaterale({ page, allerA, estAdmin, session, nbHistorique, compteurs, ouverte, onFermer, onDeconnexion, onMotDePasse }) {
+export default function BarreLaterale({ page, allerA, estAdmin, voitAdmin, externe, session, nbHistorique, compteurs, ouverte, onFermer, onDeconnexion, onMotDePasse }) {
   useEffect(() => {
     if (!ouverte) return;
     const echap = e => e.key === "Escape" && onFermer();
@@ -90,13 +90,24 @@ export default function BarreLaterale({ page, allerA, estAdmin, session, nbHisto
             </a>
           )}
 
-          {estAdmin && (
+          {externe && (
             <>
-              <p className="px-4 pt-5 pb-1.5 text-xs text-foret-100/45">Administration</p>
+              <p className="px-4 pt-5 pb-1.5 text-xs text-foret-100/45">Mon compte</p>
+              <Lien id="abonnement" libelle="Abonnement" Icone={CreditCard} {...props} />
+            </>
+          )}
+
+          {voitAdmin && (
+            <>
+              <p className="px-4 pt-5 pb-1.5 text-xs text-foret-100/45 flex items-center gap-2">
+                Administration
+                {externe && <span className="px-1.5 py-0.5 rounded bg-white/10 text-[10px] uppercase tracking-wide text-foret-100/70">Démo</span>}
+              </p>
               <Lien id="apprentissage" libelle="Apprentissage" Icone={GraduationCap} badge={compteurs.signalements} {...props} />
               <Lien id="fiabilite" libelle="Fiabilité" Icone={Target} {...props} />
               <Lien id="audit" libelle="Audit" Icone={ScrollText} {...props} />
               <Lien id="comptes" libelle="Comptes" Icone={UsersRound} {...props} />
+              {estAdmin && <Lien id="abonnements" libelle="Abonnements" Icone={Wallet} {...props} />}
             </>
           )}
         </nav>
@@ -107,7 +118,8 @@ export default function BarreLaterale({ page, allerA, estAdmin, session, nbHisto
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{session.utilisateur}</p>
-            <p className="text-xs text-foret-100/60">{session.role === "admin" ? "Administrateur" : "Analyste"}</p>
+            <p className="text-xs text-foret-100/60">{{ admin: "Administrateur", analyste: "Analyste",
+              visiteur: "Essai gratuit", client: "Abonné" }[session.role] || session.role}</p>
           </div>
           <button onClick={() => { onMotDePasse(); onFermer(); }} aria-label="Changer mon mot de passe" title="Changer mon mot de passe"
             className="p-2 rounded-lg text-foret-100/70 hover:text-white hover:bg-white/10">

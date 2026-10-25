@@ -96,3 +96,28 @@ ALLOWED_ORIGINS = [o.strip().rstrip("/") for o in _env(
 
 TAILLE_MAX_AUDIO = int(_env("TAILLE_MAX_AUDIO_MO", "10")) * 1024 * 1024
 RATE_LIMIT_ACTIF = _env("RATE_LIMIT_ACTIF", "true").lower() == "true"
+
+# ── Offre publique : essai gratuit et abonnements ─────────────
+INSCRIPTION_ESSAI = _env("INSCRIPTION_ESSAI", "true").lower() == "true"
+ESSAI_JOURS = int(_env("ESSAI_JOURS", "3"))
+MAX_ESSAIS_PAR_JOUR = int(_env("MAX_ESSAIS_PAR_JOUR", "200"))     # protège les coûts IA
+QUOTA_QUESTIONS_ESSAI = int(_env("QUOTA_QUESTIONS_ESSAI", "30"))  # par jour
+QUOTA_QUESTIONS_CLIENT = int(_env("QUOTA_QUESTIONS_CLIENT", "500"))
+# Formules : (libellé, durée en jours, prix en FCFA). Prix modifiables sans toucher au code.
+FORMULES = {
+    "jour":    ("Journée", 1, int(_env("PRIX_JOUR", "500"))),
+    "semaine": ("Semaine", 7, int(_env("PRIX_SEMAINE", "2000"))),
+    "mois":    ("Mois", 30, int(_env("PRIX_MOIS", "6000"))),
+    "annee":   ("Année", 365, int(_env("PRIX_ANNEE", "60000"))),
+}
+DEVISE = "XAF"
+
+# ── Paiement (NotchPay : MTN MoMo, Orange Money, cartes) ─────
+NOTCHPAY_URL = _env("NOTCHPAY_URL", "https://api.notchpay.co").rstrip("/")
+NOTCHPAY_PUBLIC_KEY = _env("NOTCHPAY_PUBLIC_KEY")
+NOTCHPAY_HASH_KEY = _env("NOTCHPAY_HASH_KEY")          # clé de signature des webhooks
+# Adresse de l'interface (retour après paiement). Par défaut : la première de ALLOWED_ORIGINS.
+URL_INTERFACE = (_env("URL_INTERFACE") or ALLOWED_ORIGINS[0]).rstrip("/")
+# Simulation (sans compte marchand) : jamais sur Render, jamais avec une vraie clé.
+PAIEMENT_SIMULATION = (_env("PAIEMENT_SIMULATION", "false").lower() == "true"
+                       and not os.environ.get("RENDER") and not NOTCHPAY_PUBLIC_KEY)

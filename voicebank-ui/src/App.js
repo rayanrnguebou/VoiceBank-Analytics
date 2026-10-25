@@ -3,12 +3,15 @@
 // v3 : connexion sécurisée, corrections de bugs, analyse de transaction IA
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { http, API, lireSession, connexion, deconnexion, messageErreur, lireMotifDeconnexion } from "./api";
+import { http, lireSession, deconnexion, messageErreur, appliquerJeton } from "./api";
+import EcranAccueil from "./panneaux/Accueil";
+import { BandeauAcces, PanelAbonnement, PanelAbonnements } from "./panneaux/Abonnement";
+import { LectureSeule, useLectureSeule, TITRE_LECTURE_SEULE } from "./lectureSeule";
 import { useSessionActive } from "./session";
 import { useAPI } from "./useAPI";
 import PanelAlertes from "./panneaux/Alertes";
 import PanelCredit from "./panneaux/Credit";
-import BarreLaterale, { Logo } from "./panneaux/BarreLaterale";
+import BarreLaterale from "./panneaux/BarreLaterale";
 import { FormulaireSignalement, EditeurCorrection, PanelApprentissage, PanelFiabilite, PanelAudit } from "./panneaux/Admin";
 import { EcranMotDePasseProvisoire, FenetreMotDePasse, PanelComptes } from "./panneaux/Comptes";
 import { lireAVoixHaute, arreterLecture, telechargerCsv, nomFichier } from "./ui";
@@ -22,7 +25,7 @@ import {
   Mic, MicOff, Sun, Moon, RefreshCw, Send,
   Activity, Users, CreditCard,
   ShieldAlert, Trash2, ChevronDown, ChevronUp, Download,
-  History, CheckSquare, Square, FileText, Lock, AlertTriangle, X,
+  History, CheckSquare, Square, FileText, AlertTriangle, X,
   Volume2, VolumeX, Flag, Wrench, Menu, MessagesSquare, CornerDownRight, Calendar, Clock, Timer,
   ChartColumn, ChartLine, ChartPie, ChartArea, Gauge, Table2, BookCheck, Zap, Sparkles,
 } from "lucide-react";
@@ -376,6 +379,7 @@ function GraphiquePourPDF({ colonnes, data, sql }) {
 // ════════════════════════════════════════
 
 function CarteResultat({ item, dark, onSupprimer, role }) {
+  const lectureSeule = useLectureSeule();
   const [ouvert, setOuvert] = useState(true);
   const [action, setAction] = useState(null);   // "signaler" | "corriger"
   const discret = `text-xs ${dark ? "text-gray-400" : "text-gray-500"}`;
@@ -444,8 +448,9 @@ function CarteResultat({ item, dark, onSupprimer, role }) {
       {ouvert && (
         <div className="px-5 pb-4">
           <div className="flex flex-wrap gap-3">
-            <button onClick={() => setAction(action === "signaler" ? null : "signaler")}
-              className={`flex items-center gap-1 text-xs hover:underline ${dark ? "text-gray-400" : "text-gray-500"}`}>
+            <button onClick={() => setAction(action === "signaler" ? null : "signaler")} disabled={lectureSeule}
+              title={lectureSeule ? TITRE_LECTURE_SEULE : undefined}
+              className={`flex items-center gap-1 text-xs hover:underline disabled:opacity-50 disabled:no-underline ${dark ? "text-gray-400" : "text-gray-500"}`}>
               <Flag size={12} /> Réponse incorrecte ?
             </button>
             {role === "admin" && (
@@ -1174,78 +1179,6 @@ function PanelAnalyse({ dark }) {
 // ÉCRAN DE CONNEXION
 // ════════════════════════════════════════
 
-function EcranConnexion({ onConnecte }) {
-  const [nom, setNom]       = useState("");
-  const [mdp, setMdp]       = useState("");
-  const [erreur, setErreur] = useState(null);
-  const [envoi, setEnvoi]   = useState(false);
-  const [motif]             = useState(() => lireMotifDeconnexion());
-  const [serveur, setServeur] = useState("verification");   // verification | reveil | pret | injoignable
-
-  // Sur l'offre gratuite de Render, l'API s'endort : on la réveille dès l'arrivée sur la page.
-  useEffect(() => {
-    let fini = false;
-    const lent = setTimeout(() => !fini && setServeur("reveil"), 2500);
-    http.get("/health", { timeout: 90000 })
-      .then(() => setServeur("pret"))
-      .catch(() => setServeur("injoignable"))
-      .finally(() => { fini = true; clearTimeout(lent); });
-    return () => clearTimeout(lent);
-  }, []);
-
-  const valider = async (e) => {
-    e.preventDefault();
-    setErreur(null);
-    setEnvoi(true);
-    try {
-      onConnecte(await connexion(nom.trim(), mdp));
-    } catch (err) {
-      setErreur(messageErreur(err));
-      setMdp("");
-    } finally {
-      setEnvoi(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-foret-950 flex items-center justify-center px-4">
-      <form onSubmit={valider} className="w-full max-w-sm bg-gray-900 border border-foret-800 rounded-2xl p-8 shadow-2xl">
-        <div className="flex items-center gap-3 mb-6">
-          <Logo />
-          <div>
-            <h1 className="text-white font-bold">VoiceBank Analytics</h1>
-            <p className="text-gray-400 text-xs">Accès réservé</p>
-          </div>
-        </div>
-        <label className="block mb-4">
-          <span className="block text-xs text-gray-400 mb-1">Identifiant</span>
-          <input value={nom} onChange={e => setNom(e.target.value)} autoComplete="username" required maxLength={64}
-            className="w-full px-4 py-3 rounded-xl bg-gray-700 border border-gray-600 text-white text-sm outline-none focus:border-foret-500" />
-        </label>
-        <label className="block mb-5">
-          <span className="block text-xs text-gray-400 mb-1">Mot de passe</span>
-          <input type="password" value={mdp} onChange={e => setMdp(e.target.value)} autoComplete="current-password" required maxLength={128}
-            className="w-full px-4 py-3 rounded-xl bg-gray-700 border border-gray-600 text-white text-sm outline-none focus:border-foret-500" />
-        </label>
-        {motif && !erreur && <p className="text-sm text-amber-400 mb-4">{motif}</p>}
-        {erreur && <p role="alert" className="text-sm text-red-400 mb-4">{erreur}</p>}
-        {serveur === "reveil" && (
-          <p className="flex items-center gap-2 text-xs text-laiton-300 mb-4" role="status">
-            <RefreshCw size={12} className="animate-spin" /> Démarrage du serveur… jusqu'à une minute après une période sans visite.
-          </p>
-        )}
-        {serveur === "injoignable" && (
-          <p className="text-xs text-red-400 mb-4" role="status">Serveur injoignable ({API}). Réessaie dans un instant.</p>
-        )}
-        <button type="submit" disabled={envoi}
-          className="w-full flex items-center justify-center gap-2 py-3 bg-foret-600 hover:bg-foret-700 text-white font-semibold rounded-xl disabled:opacity-50">
-          <Lock size={15} /> {envoi ? "Connexion…" : "Se connecter"}
-        </button>
-      </form>
-    </div>
-  );
-}
-
 // ════════════════════════════════════════
 // APP PRINCIPALE
 // ════════════════════════════════════════
@@ -1266,7 +1199,7 @@ export default function App() {
     setSession(null);
   }, [session]);
 
-  if (!session) return <EcranConnexion onConnecte={setSession} />;
+  if (!session) return <EcranAccueil onConnecte={setSession} />;
   if (session.doitChangerMdp) {
     return <EcranMotDePasseProvisoire session={session} onTermine={setSession} onDeconnexion={seDeconnecter} />;
   }
@@ -1287,6 +1220,7 @@ function Tableau({ session, onDeconnexion, onSession }) {
   const [compteurs, setCompteurs]   = useState({ alertes: 0, signalements: 0 });
   const [stats, setStats]           = useState(null);
   const [message, setMessage]       = useState(null);
+  const [info, setInfo]             = useState(null);
   const [parle, setParle]           = useState(false);
   const [ecoute, setEcoute]         = useState(null);        // null | "attente" | "parole" | "transcription"
   const [conversation, setConversation] = useState(() => {
@@ -1302,6 +1236,50 @@ function Tableau({ session, onDeconnexion, onSession }) {
   const { appeler } = useAPI();
   const { appeler: appelerQuestion, chargement, erreur } = useAPI();
   const estAdmin = session.role === "admin";
+  const externe = session.role === "visiteur" || session.role === "client";
+  const voitAdmin = estAdmin || externe;      // visiteurs : administration visible, en lecture seule
+  const [acces, setAcces] = useState(null);
+  const rafraichirAcces = useCallback(() => {
+    http.get("/auth/moi").then(r => setAcces(r.data.acces)).catch(() => {});
+  }, []);
+  useEffect(() => { rafraichirAcces(); }, [rafraichirAcces, session.role]);
+  useEffect(() => {
+    const surExpiration = () => rafraichirAcces();
+    window.addEventListener("voicebank:acces-expire", surExpiration);
+    return () => window.removeEventListener("voicebank:acces-expire", surExpiration);
+  }, [rafraichirAcces]);
+
+  // Retour de la page de paiement : ?paiement=<référence> → vérification par le serveur
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("paiement");
+    if (!ref) return;
+    let essais = 0, fini = false;
+    const verifier = async () => {
+      try {
+        const { data } = await http.get(`/abonnement/verifier/${encodeURIComponent(ref)}`);
+        if (data.statut === "paye") {
+          fini = true;
+          if (data.jeton) onSession(appliquerJeton(data.jeton));
+          setInfo(`Paiement confirmé : abonnement ${data.formule} actif jusqu'au ${new Date(data.abonnement_fin).toLocaleDateString("fr-FR")}. Merci !`);
+          rafraichirAcces();
+        } else if (data.statut === "en_attente" && ++essais < 10) {
+          setInfo("Paiement en cours de confirmation…");
+          setTimeout(verifier, 3000);
+          return;
+        } else {
+          fini = true;
+          setMessage(data.statut === "en_attente" ? "Paiement pas encore confirmé. Il s'activera automatiquement dès réception."
+            : "Le paiement n'a pas abouti. Tu peux réessayer depuis la page Abonnement.");
+          if (data.statut === "en_attente") setInfo(null);
+        }
+      } catch (e) {
+        fini = true;
+        setMessage(messageErreur(e));
+      }
+      if (fini) window.history.replaceState(null, "", window.location.pathname);
+    };
+    verifier();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const arreterEcoute = useCallback(() => {
     ecouteRef.current?.annuler?.();
@@ -1377,9 +1355,9 @@ function Tableau({ session, onDeconnexion, onSession }) {
   // Compteurs de la barre latérale : alertes à traiter, signalements en attente (admin)
   const rafraichirCompteurs = useCallback(() => {
     appeler("get", "/alertes/stats").then(r => r && setCompteurs(c => ({ ...c, alertes: Number(r.a_traiter) || 0 })));
-    if (estAdmin) appeler("get", "/signalements?statut=Ouvert&limit=200")
+    if (voitAdmin) appeler("get", "/signalements?statut=Ouvert&limit=200")
       .then(r => r && setCompteurs(c => ({ ...c, signalements: r.total || 0 })));
-  }, [appeler, estAdmin]);
+  }, [appeler, voitAdmin]);
   useEffect(() => { rafraichirCompteurs(); }, [rafraichirCompteurs]);
 
   useEffect(() => { sauverHistorique(session.utilisateur, historique); }, [historique, session.utilisateur]);
@@ -1398,6 +1376,7 @@ function Tableau({ session, onDeconnexion, onSession }) {
       ? { question: derniere.question, sql: derniere.sql } : null;
     const res = await appelerQuestion("post", "/vocal/question", { texte: q, langue: "fr", contexte });
     if (!res) return;  // le message d'erreur est affiché via `erreur`
+    if (externe) setAcces(a => a ? { ...a, questions_jour: a.questions_jour + 1 } : a);
     setHistorique(prev => [{
       id: Date.now(), timestamp: new Date().toISOString(),
       question: q, sql: res.sql, source: res.source,
@@ -1451,13 +1430,16 @@ function Tableau({ session, onDeconnexion, onSession }) {
     fiabilite:     { titre: "Fiabilité",               sousTitre: "Taux de bonnes réponses sur les questions de référence" },
     audit:         { titre: "Audit",                   sousTitre: "Qui a fait quoi, et quand" },
     comptes:       { titre: "Comptes",                 sousTitre: "Qui peut se connecter, avec quels droits" },
+    abonnement:    { titre: "Abonnement",              sousTitre: "Formules, paiement et factures" },
+    abonnements:   { titre: "Abonnements",             sousTitre: "Visiteurs, abonnés et paiements reçus" },
   };
-  const page = PAGES[onglet] ? onglet : "assistant";
+  // Essai ou abonnement échu : seule la page Abonnement reste accessible.
+  const page = acces?.expire ? "abonnement" : PAGES[onglet] ? onglet : "assistant";
 
   return (
     <div className={`min-h-screen flex ${dark ? "bg-gray-950 text-gray-100" : "bg-gray-50 text-gray-900"}`}>
       <BarreLaterale
-        page={page} allerA={allerA} estAdmin={estAdmin} session={session}
+        page={page} allerA={allerA} estAdmin={estAdmin} voitAdmin={voitAdmin} externe={externe} session={session}
         nbHistorique={historique.length} compteurs={compteurs}
         ouverte={menuOuvert} onFermer={() => setMenuOuvert(false)} onDeconnexion={onDeconnexion}
         onMotDePasse={() => setFenetreMdp(true)}
@@ -1537,7 +1519,15 @@ function Tableau({ session, onDeconnexion, onSession }) {
           </button>
         </header>
 
+        <LectureSeule.Provider value={externe}>
         <main className="w-full max-w-5xl mx-auto px-4 sm:px-8 py-6 flex-1">
+          {page !== "abonnement" && <BandeauAcces acces={acces} dark={dark} onChoisir={() => allerA("abonnement")} />}
+          {info && (
+            <div role="status" className="mb-4 flex items-start gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 text-sm">
+              <span className="flex-1">{info}</span>
+              <button onClick={() => setInfo(null)} aria-label="Fermer"><X size={14} /></button>
+            </div>
+          )}
           {message && (
             <div role="alert" className="mb-4 flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-500 text-sm">
               <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
@@ -1646,11 +1636,14 @@ function Tableau({ session, onDeconnexion, onSession }) {
           {page === "historique" && (
             <PanelHistorique historique={historique} dark={dark} onSupprimerItem={supprimerItem} onToutEffacer={toutEffacer} />
           )}
-          {estAdmin && page === "apprentissage" && <PanelApprentissage dark={dark} onChange={rafraichirCompteurs} />}
-          {estAdmin && page === "fiabilite"     && <PanelFiabilite dark={dark} />}
-          {estAdmin && page === "audit"         && <PanelAudit dark={dark} />}
-          {estAdmin && page === "comptes"       && <PanelComptes dark={dark} session={session} />}
+          {voitAdmin && page === "apprentissage" && <PanelApprentissage dark={dark} onChange={rafraichirCompteurs} />}
+          {voitAdmin && page === "fiabilite"     && <PanelFiabilite dark={dark} />}
+          {voitAdmin && page === "audit"         && <PanelAudit dark={dark} />}
+          {voitAdmin && page === "comptes"       && <PanelComptes dark={dark} session={session} />}
+          {externe && page === "abonnement"      && <PanelAbonnement dark={dark} acces={acces} utilisateur={session.utilisateur} />}
+          {estAdmin && page === "abonnements"    && <PanelAbonnements dark={dark} />}
         </main>
+        </LectureSeule.Provider>
 
         <footer className={`px-4 sm:px-8 py-4 text-xs ${dark ? "text-gray-600" : "text-gray-400"}`}>
           &copy; {new Date().getFullYear()} VoiceBank Analytics — Rayan Nguebou Temgoua

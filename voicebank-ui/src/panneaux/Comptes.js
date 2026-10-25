@@ -200,12 +200,18 @@ export function PanelComptes({ dark, session }) {
     if (res) charger();
   };
 
-  const gestion = donnees?.gestion_comptes;
+  const gestion = donnees?.gestion_comptes && !donnees?.lecture_seule;
   const comptes = donnees?.data || [];
 
   return (
     <div className="space-y-4">
-      {donnees && !gestion && (
+      {donnees?.lecture_seule && (
+        <div className={`p-4 rounded-xl text-sm ${dark ? "bg-foret-900/40 text-foret-100" : "bg-foret-50 text-foret-900"}`}>
+          Démonstration : voici comment l'administrateur gère les comptes de son organisation (création avec mot de passe
+          provisoire, blocage, désactivation). Les noms sont anonymisés et les actions désactivées.
+        </div>
+      )}
+      {donnees && !donnees.gestion_comptes && (
         <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 text-sm">
           Les comptes sont encore lus dans la configuration (VOICEBANK_USERS). Mets la base à jour avec
           <code className="mx-1">docker compose exec postgres sh /voicebank_securite/migrer.sh</code>

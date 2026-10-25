@@ -181,7 +181,7 @@ Restaurer une sauvegarde en ligne (Git Bash ou macOS / Linux) :
 
 ```bash
 openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in voicebank_en_ligne_….dump.enc -out en_ligne.dump
-docker run --rm -i -e URL="<External Database URL>" postgres:17-alpine \
+docker run --rm -i -e URL="<External Database URL>" postgres:18-alpine \
   sh -c 'pg_restore --clean --if-exists --no-owner -d "$URL"' < en_ligne.dump
 ```
 

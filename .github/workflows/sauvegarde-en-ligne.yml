@@ -40,7 +40,7 @@ jobs:
           set -euo pipefail
           FICHIER="voicebank_en_ligne_$(date -u +%Y-%m-%d_%H%M).dump"
           # Client PostgreSQL 17 : compatible avec toutes les versions proposées par Render
-          docker run --rm -e URL postgres:17-alpine sh -c 'pg_dump "$URL" -Fc --no-owner' > "$FICHIER"
+          docker run --rm -e URL postgres:18-alpine sh -c 'pg_dump "$URL" -Fc --no-owner' > "$FICHIER"
           test -s "$FICHIER"
           openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:MDP -in "$FICHIER" -out "$FICHIER.enc"
           shred -u "$FICHIER"

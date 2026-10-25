@@ -48,3 +48,7 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Sauvegardes de la base (données réelles : jamais sur GitHub)
+/sauvegardes/
+*.dump

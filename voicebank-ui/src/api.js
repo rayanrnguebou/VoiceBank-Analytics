@@ -33,6 +33,7 @@ http.interceptors.response.use(
   r => r,
   e => {
     if (e.response?.status === 401 && !e.config?.url?.includes("/auth/login")) {
+      if (lireSession()) noterMotifDeconnexion("Ta session a expiré ou a été fermée. Reconnecte-toi.");
       ecrireSession(null);
       window.dispatchEvent(new Event("voicebank:deconnexion"));
     }
@@ -52,8 +53,26 @@ export function appliquerJeton(data) {
 }
 
 export async function connexion(nom, motDePasse) {
-  const { data } = await http.post("/auth/login", { nom, mot_de_passe: motDePasse });
+  // Délai long : sur l'offre gratuite de Render, l'API peut mettre ~1 min à se réveiller.
+  const { data } = await http.post("/auth/login", { nom, mot_de_passe: motDePasse }, { timeout: 90000 });
   return appliquerJeton(data);
+}
+
+export async function renouvelerJeton() {
+  const { data } = await http.post("/auth/renouveler");
+  return appliquerJeton(data);
+}
+
+// Motif de la dernière déconnexion automatique, affiché sur l'écran de connexion
+export function noterMotifDeconnexion(motif) {
+  try { sessionStorage.setItem("voicebank_motif", motif); } catch (e) { /* rien */ }
+}
+export function lireMotifDeconnexion() {
+  try {
+    const m = sessionStorage.getItem("voicebank_motif");
+    sessionStorage.removeItem("voicebank_motif");
+    return m;
+  } catch (e) { return null; }
 }
 
 export function deconnexion() {

@@ -56,6 +56,16 @@ services:
       - path: /*
         name: Referrer-Policy
         value: no-referrer
+      - path: /*
+        name: Permissions-Policy
+        value: microphone=(self), camera=(), geolocation=()
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=31536000; includeSubDomains
+      # Si l'API change d'adresse (domaine personnalisé), mets-la aussi dans connect-src.
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://voicebank-api.onrender.com; media-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     envVars:
       - key: REACT_APP_API_URL         # ex. https://voicebank-api.onrender.com
         sync: false

@@ -3,14 +3,15 @@
 // v3 : connexion sécurisée, corrections de bugs, analyse de transaction IA
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { http, lireSession, connexion, deconnexion, messageErreur } from "./api";
+import { http, API, lireSession, connexion, deconnexion, messageErreur, lireMotifDeconnexion } from "./api";
+import { useSessionActive } from "./session";
 import { useAPI } from "./useAPI";
 import PanelAlertes from "./panneaux/Alertes";
 import PanelCredit from "./panneaux/Credit";
 import BarreLaterale, { Logo } from "./panneaux/BarreLaterale";
 import { FormulaireSignalement, EditeurCorrection, PanelApprentissage, PanelFiabilite, PanelAudit } from "./panneaux/Admin";
 import { EcranMotDePasseProvisoire, FenetreMotDePasse, PanelComptes } from "./panneaux/Comptes";
-import { lireAVoixHaute, arreterLecture } from "./ui";
+import { lireAVoixHaute, arreterLecture, telechargerCsv, nomFichier } from "./ui";
 import { ecouterReponse, interpreterReponse } from "./conversation";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -400,6 +401,14 @@ function CarteResultat({ item, dark, onSupprimer, role }) {
           </div>
         </div>
         <div className="flex items-center gap-2 ml-3">
+          {item.data && item.data.length > 0 && (
+            <button onClick={e => { e.stopPropagation(); telechargerCsv(nomFichier(item.question, "csv"), item.colonnes, item.data); }}
+              aria-label="Exporter en CSV (Excel)" title={item.total > item.data.length
+                ? `Exporter en CSV (Excel) — ${item.data.length} premières lignes` : "Exporter en CSV (Excel)"}
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs ${dark ? "hover:bg-gray-600 text-gray-300" : "hover:bg-gray-100 text-gray-500"}`}>
+              <Download size={13} /> CSV
+            </button>
+          )}
           <button onClick={e => { e.stopPropagation(); onSupprimer(item.id); }} aria-label="Supprimer ce résultat"
             className={`p-1.5 rounded-lg ${dark ? "hover:bg-gray-600 text-gray-400" : "hover:bg-gray-100 text-gray-400"}`}>
             <Trash2 size={13} />
@@ -1170,6 +1179,19 @@ function EcranConnexion({ onConnecte }) {
   const [mdp, setMdp]       = useState("");
   const [erreur, setErreur] = useState(null);
   const [envoi, setEnvoi]   = useState(false);
+  const [motif]             = useState(() => lireMotifDeconnexion());
+  const [serveur, setServeur] = useState("verification");   // verification | reveil | pret | injoignable
+
+  // Sur l'offre gratuite de Render, l'API s'endort : on la réveille dès l'arrivée sur la page.
+  useEffect(() => {
+    let fini = false;
+    const lent = setTimeout(() => !fini && setServeur("reveil"), 2500);
+    http.get("/health", { timeout: 90000 })
+      .then(() => setServeur("pret"))
+      .catch(() => setServeur("injoignable"))
+      .finally(() => { fini = true; clearTimeout(lent); });
+    return () => clearTimeout(lent);
+  }, []);
 
   const valider = async (e) => {
     e.preventDefault();
@@ -1205,7 +1227,16 @@ function EcranConnexion({ onConnecte }) {
           <input type="password" value={mdp} onChange={e => setMdp(e.target.value)} autoComplete="current-password" required maxLength={128}
             className="w-full px-4 py-3 rounded-xl bg-gray-700 border border-gray-600 text-white text-sm outline-none focus:border-foret-500" />
         </label>
+        {motif && !erreur && <p className="text-sm text-amber-400 mb-4">{motif}</p>}
         {erreur && <p role="alert" className="text-sm text-red-400 mb-4">{erreur}</p>}
+        {serveur === "reveil" && (
+          <p className="flex items-center gap-2 text-xs text-laiton-300 mb-4" role="status">
+            <RefreshCw size={12} className="animate-spin" /> Démarrage du serveur… jusqu'à une minute après une période sans visite.
+          </p>
+        )}
+        {serveur === "injoignable" && (
+          <p className="text-xs text-red-400 mb-4" role="status">Serveur injoignable ({API}). Réessaie dans un instant.</p>
+        )}
         <button type="submit" disabled={envoi}
           className="w-full flex items-center justify-center gap-2 py-3 bg-foret-600 hover:bg-foret-700 text-white font-semibold rounded-xl disabled:opacity-50">
           <Lock size={15} /> {envoi ? "Connexion…" : "Se connecter"}
@@ -1228,12 +1259,12 @@ export default function App() {
     return () => window.removeEventListener("voicebank:deconnexion", surDeconnexion);
   }, []);
 
-  const seDeconnecter = () => {
+  const seDeconnecter = useCallback(() => {
     arreterLecture();
     if (session) sessionStorage.removeItem(`${CLE_STORAGE}_${session.utilisateur}`);
     deconnexion();
     setSession(null);
-  };
+  }, [session]);
 
   if (!session) return <EcranConnexion onConnecte={setSession} />;
   if (session.doitChangerMdp) {
@@ -1243,6 +1274,7 @@ export default function App() {
 }
 
 function Tableau({ session, onDeconnexion, onSession }) {
+  const { resteMs, rester } = useSessionActive({ session, onSession, onDeconnexion });
   const [fenetreMdp, setFenetreMdp] = useState(false);
   const [dark, setDark]             = useState(true);
   const [question, setQuestion]     = useState("");
@@ -1430,6 +1462,21 @@ function Tableau({ session, onDeconnexion, onSession }) {
         ouverte={menuOuvert} onFermer={() => setMenuOuvert(false)} onDeconnexion={onDeconnexion}
         onMotDePasse={() => setFenetreMdp(true)}
       />
+      {resteMs !== null && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center px-4">
+          <div role="alertdialog" aria-modal="true" aria-labelledby="titre-inactivite"
+            className={`w-full max-w-sm rounded-2xl border p-6 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}`}>
+            <h2 id="titre-inactivite" className="text-lg font-bold flex items-center gap-2 mb-2"><Timer size={18} /> Toujours là ?</h2>
+            <p className={`text-sm mb-4 ${dark ? "text-gray-300" : "text-gray-600"}`}>
+              Sans activité, tu seras déconnecté dans <strong>{Math.ceil(resteMs / 1000)} s</strong>, pour protéger les données des clients.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={rester} autoFocus className="px-4 py-2 bg-foret-600 hover:bg-foret-700 text-white text-sm font-semibold rounded-xl">Rester connecté</button>
+              <button onClick={onDeconnexion} className={`px-4 py-2 rounded-xl text-sm ${dark ? "hover:bg-gray-700" : "hover:bg-gray-100"}`}>Se déconnecter</button>
+            </div>
+          </div>
+        </div>
+      )}
       {fenetreMdp && (
         <FenetreMotDePasse dark={dark} session={session} onTermine={onSession} onFermer={() => setFenetreMdp(false)} />
       )}

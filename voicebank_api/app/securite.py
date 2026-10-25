@@ -228,6 +228,12 @@ def _depuis_jeton(cred: HTTPAuthorizationCredentials | None) -> Utilisateur:
     return Utilisateur(data["sub"], l.role, l.doit_changer_mdp)
 
 
+def version_jeton(nom: str) -> int:
+    if not mode_base():
+        return 0
+    return db.ecrire("SELECT version_jeton FROM voicebank.utilisateurs WHERE nom = :n", {"n": nom}).scalar() or 0
+
+
 def utilisateur_authentifie(cred: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> Utilisateur:
     """Accepte aussi un compte dont le mot de passe provisoire doit être changé."""
     return _depuis_jeton(cred)

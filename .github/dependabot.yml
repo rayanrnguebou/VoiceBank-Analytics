@@ -1,0 +1,19 @@
+# Mises à jour de sécurité des dépendances : Dependabot ouvre une pull request par mise à jour,
+# testée automatiquement par la CI avant fusion.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /voicebank_api
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 5
+    groups:
+      securite-python: { applies-to: security-updates, patterns: ["*"] }
+  - package-ecosystem: npm
+    directory: /voicebank-ui
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 5
+    groups:
+      securite-npm: { applies-to: security-updates, patterns: ["*"] }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }

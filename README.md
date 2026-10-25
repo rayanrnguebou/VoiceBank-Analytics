@@ -147,6 +147,19 @@ Le script crée le superutilisateur du `.env`, ajoute ce qui manque au schéma, 
 Tant que la table des comptes n'existe pas, l'API reste utilisable avec `VOICEBANK_USERS` seul.
 **Ne lance jamais `docker compose down -v`** : `-v` supprime le volume, donc les données.
 
+## Sauvegarder la base (Docker local)
+
+Tes données réelles n'existent que dans le volume Docker : sauvegarde-les régulièrement.
+
+| | Windows | macOS / Linux |
+|---|---|---|
+| Sauvegarder | double-clic sur `sauvegarde\sauvegarder.bat` | `sh sauvegarde/sauvegarder.sh` |
+| Restaurer | `sauvegarde\restaurer.bat sauvegardes\voicebank_AAAA-MM-JJ_HHMM.dump` | `sh sauvegarde/restaurer.sh sauvegardes/…dump` |
+
+Les fichiers vont dans `sauvegardes/` (exclu de Git, les 10 plus récents sont conservés).
+Copie-les de temps en temps hors de l'ordinateur (clé USB, disque externe, cloud chiffré).
+La restauration demande de taper `OUI`, remplace le contenu de la base, puis remet les droits à niveau.
+
 ## Mesurer la fiabilité
 
 Dans l'interface (admin) : onglet **Fiabilité** → « Lancer l'évaluation ». En ligne de commande :
@@ -176,6 +189,17 @@ docker compose up -d --build api
 3. Au premier démarrage, l'API crée le schéma (`INITIALISER_BASE=true`) et remplit la base vide
    avec des **données fictives** (`DONNEES_DEMO=true`) : aucune vraie donnée en ligne.
 4. Mets le lien de l'interface sur ton CV / GitHub.
+
+**Limites de l'offre gratuite**
+- L'API s'endort après 15 min sans visite : la page de connexion la réveille et affiche
+  « Démarrage du serveur… » (jusqu'à une minute).
+- La base PostgreSQL gratuite de Render **expire au bout de 30 jours**. Comme elle ne contient que des
+  données de démonstration, il suffit de la recréer (Render → voicebank-db → supprimer, puis
+  Blueprint → **Manual sync**) : l'API recrée le schéma et les données au démarrage, et le compte
+  administrateur de `VOICEBANK_USERS`. Pour une base sans expiration, crée une base gratuite chez
+  [Neon](https://neon.tech) et mets son URL dans `DATABASE_URL` (voicebank-api → Environment).
+- Si l'adresse de l'API change (domaine personnalisé), mets-la à jour dans `REACT_APP_API_URL`
+  et dans la ligne `connect-src` de `render.yaml`.
 
 Générer les mêmes données de démo ailleurs (refuse d'écrire dans une base déjà remplie) :
 
@@ -226,6 +250,10 @@ audio dangereux, CORS, limitation des tentatives de connexion.
 - Comptes créés par l'administrateur uniquement ; mot de passe provisoire à usage unique (72 h),
   politique de mot de passe, blocage après 5 échecs, révocation immédiate des sessions.
 - La table des comptes est invisible pour le compte lecture seule et pour le SQL généré par l'IA.
+- Déconnexion automatique après 15 min d'inactivité (avertissement 1 min avant) ; le jeton est
+  renouvelé tant que l'utilisateur est actif, donc pas de coupure en pleine analyse.
+- Interface sur Render : Content-Security-Policy, HSTS, micro autorisé uniquement pour le site.
+- Dependabot propose chaque mois les mises à jour de sécurité des dépendances (testées par la CI).
 - 5 tentatives de connexion par minute et par IP ; limites sur les endpoints IA.
 - Le SQL dynamique est validé (sqlglot) **et** exécuté avec un compte PostgreSQL en lecture seule.
 - L'API se connecte avec un compte sans privilèges d'administration (`voicebank_app`).

@@ -6,19 +6,18 @@ import time
 from datetime import date, datetime, time as heure_t
 from typing import Literal
 
-from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Path, Query, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from . import audit, config, credit, db, evaluation, fraude, nl2sql, paiement, resume, transcription
 from .garde_sql import SQLRefuse, valider_sql
 from .masquage import masquer_ligne, masquer_lignes
 from . import securite
+from .connecteur import service as sources
 from .paiement import PaiementRefuse
 from .securite import (CompteRefuse, Utilisateur, admin_ou_decouverte, admin_requis, authentifier, creer_jeton,
                        interne_requis, utilisateur_authentifie, utilisateur_courant, utilisateur_valide)
@@ -35,19 +34,7 @@ app = FastAPI(
     openapi_url=None if config.EST_PROD else "/openapi.json",
 )
 
-def ip_client(request: Request) -> str:
-    """Adresse du client pour les limites de débit et l'audit. Derrière un proxy (Render), on prend
-    la DERNIÈRE adresse de X-Forwarded-For, ajoutée par le proxy lui-même : les premières peuvent
-    être inventées par le client pour contourner les limites."""
-    xff = request.headers.get("x-forwarded-for")
-    if xff:
-        derniere = xff.split(",")[-1].strip()
-        if derniere:
-            return derniere[:64]
-    return get_remote_address(request)
-
-
-limiter = Limiter(key_func=ip_client, enabled=config.RATE_LIMIT_ACTIF)
+from .limites import ip_client, limiter  # noqa: E402
 app.state.limiter = limiter
 
 
@@ -162,6 +149,33 @@ class Commande(BaseModel):
     organisation: InfosOrganisation | None = None
     particulier: InfosParticulier | None = None
     accepte_conditions: bool
+
+
+class ConnexionBase(BaseModel):
+    type_source: Literal["postgresql", "mysql", "sqlserver"]
+    hote: str = Field(min_length=1, max_length=253)
+    port: int | None = Field(None, ge=1, le=65535)
+    base: str = Field(min_length=1, max_length=128)
+    utilisateur: str = Field(min_length=1, max_length=128)
+    mot_de_passe: str = Field("", max_length=256)
+    ssl: Literal["prefere", "exige", "desactive"] = "prefere"
+    schema_bd: str | None = Field(None, max_length=128, pattern=r"^[A-Za-z0-9_]+$", alias="schema")
+
+    def config(self) -> dict:
+        return {"hote": self.hote.strip(), "port": self.port, "base": self.base, "utilisateur": self.utilisateur,
+                "mot_de_passe": self.mot_de_passe, "ssl": self.ssl, "schema": self.schema_bd}
+
+
+class NouvelleSource(ConnexionBase):
+    nom: str = Field(min_length=2, max_length=80)
+
+
+class QuestionSource(BaseModel):
+    texte: str = Field(min_length=2, max_length=500)
+
+
+class Masquage(BaseModel):
+    masquer: bool
 
 
 class ContexteQuestion(BaseModel):
@@ -925,6 +939,121 @@ def modifier_utilisateur(request: Request, body: ModificationCompte, nom: str = 
     if changements:
         audit.journaliser(u.nom, "compte_modifie", {"compte": nom, **changements}, ip_client(request))
     return {"status": "ok", "nom": nom, "changements": changements}
+
+
+# ════════════════════════════════════════
+# CONNECTEUR : bases et fichiers des organisations
+# ════════════════════════════════════════
+
+def proprietaire_sources(u: Utilisateur = Depends(utilisateur_courant)) -> Utilisateur:
+    """Brancher ses propres données : abonnés et administrateur (pas pendant l'essai gratuit)."""
+    if u.role not in ("client", "admin"):
+        raise HTTPException(403, "Brancher tes propres données est réservé aux abonnés. Pendant l'essai, "
+                                 "explore la source de démonstration." if u.role == "visiteur" else
+                                 "Réservé aux administrateurs.")
+    return u
+
+
+def _src(action):
+    try:
+        return action()
+    except sources.SourceRefusee as e:
+        raise HTTPException(404 if str(e) == "Source introuvable" else 400, str(e))
+
+
+@app.get("/sources")
+def lister_sources(u: Utilisateur = Depends(utilisateur_courant)):
+    return {"status": "ok", "data": _src(lambda: sources.lister(u.nom)),
+            "peut_ajouter": u.role in ("client", "admin"), "types": [
+                {"code": k, "libelle": v["libelle"], "port": v["port"]} for k, v in sources.TYPES.items() if k != "demo"]}
+
+
+@app.get("/sources/{id_source}")
+def detail_source(id_source: int = Path(ge=0), u: Utilisateur = Depends(utilisateur_courant)):
+    if id_source == sources.DEMO_ID:
+        return {"status": "ok", "data": _detail_demo()}
+    return {"status": "ok", "data": _src(lambda: sources.detail(id_source, u.nom))}
+
+
+def _detail_demo():
+    try:
+        return sources.detail(sources.DEMO_ID, "")
+    except Exception:
+        log.exception("Analyse de la démonstration impossible")
+        raise HTTPException(503, "Analyse de démonstration indisponible pour le moment")
+
+
+@app.post("/sources/tester")
+@limiter.limit("10/minute")
+def tester_source(request: Request, body: ConnexionBase, u: Utilisateur = Depends(proprietaire_sources)):
+    return _src(lambda: sources.tester(body.type_source, body.config()))
+
+
+@app.post("/sources")
+@limiter.limit("10/hour")
+def creer_source(request: Request, body: NouvelleSource, synchrone: bool = Query(False),
+                 u: Utilisateur = Depends(proprietaire_sources)):
+    id_source = _src(lambda: sources.creer(u.nom, u.role, body.nom.strip(), body.type_source, body.config()))
+    audit.journaliser(u.nom, "source_ajoutee", {"id_source": id_source, "type": body.type_source},
+                      ip_client(request))
+    sources.analyser_en_arriere_plan(id_source, u.nom, synchrone)
+    return {"status": "ok", "id": id_source}
+
+
+@app.post("/sources/fichiers")
+@limiter.limit("10/hour")
+async def importer_fichiers(request: Request, nom: str = Form(..., min_length=2, max_length=80),
+                            fichiers: list[UploadFile] = File(...), synchrone: bool = Query(False),
+                            u: Utilisateur = Depends(proprietaire_sources)):
+    limite = config.CONNECTEUR_TAILLE_FICHIER_MO * 1024 * 1024
+    contenus = []
+    for f in fichiers[:6]:
+        contenu = await f.read(limite + 1)
+        if len(contenu) > limite:
+            raise HTTPException(413, f"{f.filename} : fichier trop volumineux ({config.CONNECTEUR_TAILLE_FICHIER_MO} Mo maximum)")
+        contenus.append(((f.filename or "fichier.csv")[:200], contenu))
+    id_source = await run_in_threadpool(lambda: _src(lambda: sources.creer_depuis_fichiers(u.nom, u.role, nom.strip(), contenus)))
+    audit.journaliser(u.nom, "source_ajoutee", {"id_source": id_source, "type": "fichier", "fichiers": len(contenus)},
+                      ip_client(request))
+    await run_in_threadpool(sources.analyser_en_arriere_plan, id_source, u.nom, synchrone)
+    return {"status": "ok", "id": id_source}
+
+
+@app.post("/sources/{id_source}/analyser")
+@limiter.limit("10/hour")
+def reanalyser_source(request: Request, id_source: int = Path(ge=1), synchrone: bool = Query(False),
+                      u: Utilisateur = Depends(proprietaire_sources)):
+    _src(lambda: sources.detail(id_source, u.nom))
+    sources.analyser_en_arriere_plan(id_source, u.nom, synchrone)
+    return {"status": "ok"}
+
+
+@app.post("/sources/{id_source}/masquage")
+def masquage_source(body: Masquage, id_source: int = Path(ge=1), u: Utilisateur = Depends(proprietaire_sources)):
+    _src(lambda: sources.modifier_masquage(id_source, u.nom, body.masquer))
+    return {"status": "ok"}
+
+
+@app.post("/sources/{id_source}/supprimer")
+def supprimer_source(request: Request, id_source: int = Path(ge=1), u: Utilisateur = Depends(proprietaire_sources)):
+    _src(lambda: sources.supprimer(id_source, u.nom))
+    audit.journaliser(u.nom, "source_supprimee", {"id_source": id_source}, ip_client(request))
+    return {"status": "ok"}
+
+
+@app.post("/sources/{id_source}/question")
+@limiter.limit("30/minute")
+def question_source(request: Request, body: QuestionSource, id_source: int = Path(ge=0),
+                    u: Utilisateur = Depends(utilisateur_courant)):
+    _verifier_quota(u)
+    debut = time.time()
+    try:
+        res = sources.repondre(id_source, u.nom, u.role, body.texte.strip())
+    except sources.SourceRefusee as e:
+        _journaliser(body.texte, None, False, int((time.time() - debut) * 1000), u)
+        raise HTTPException(404 if str(e) == "Source introuvable" else 422, str(e))
+    _journaliser(body.texte, res["sql"], True, res["duree_ms"], u)
+    return res
 
 
 @app.post("/admin/evaluation")

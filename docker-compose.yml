@@ -57,6 +57,10 @@ services:
       NOTCHPAY_HASH_KEY: ${NOTCHPAY_HASH_KEY:-}
       URL_INTERFACE: ${URL_INTERFACE:-http://localhost:3000}
       PAIEMENT_SIMULATION: ${PAIEMENT_SIMULATION:-false}   # true : tester sans compte marchand (local)
+      # Connecteur : bases des organisations. En local, les bases du réseau de l'entreprise sont permises
+      # (pour une base installée sur ce PC, utilise l'hôte host.docker.internal).
+      CLE_SOURCES: ${CLE_SOURCES:-}
+      CONNECTEUR_RESEAU_PRIVE: ${CONNECTEUR_RESEAU_PRIVE:-true}
     volumes:
       - whisper_modeles:/app/modeles_whisper
     ports:

@@ -7,6 +7,7 @@ import { http, lireSession, deconnexion, messageErreur, appliquerJeton } from ".
 import EcranAccueil from "./panneaux/Accueil";
 import { BandeauAcces, PanelAbonnement, PanelAbonnements } from "./panneaux/Abonnement";
 import { LectureSeule, useLectureSeule, TITRE_LECTURE_SEULE } from "./lectureSeule";
+import PanelSources from "./panneaux/Connecteur";
 import { useSessionActive } from "./session";
 import { useAPI } from "./useAPI";
 import PanelAlertes from "./panneaux/Alertes";
@@ -67,36 +68,48 @@ function detecterTypeGraphique(colonnes, data) {
   if (!data || data.length === 0) return "table";
   const cols = colonnes.map(c => c.toLowerCase());
   const aDate   = cols.some(c => c.includes("date") || c.includes("mois"));
-  const aNombre = cols.some(c => c.includes("count") || c.includes("nb_") || c.includes("total") || c.includes("montant") || c.includes("solde") || c.includes("volume"));
+  const aNombre = cols.some(c => c.includes("count") || c.includes("nb_") || c.includes("total") || c.includes("montant") || c.includes("solde") || c.includes("volume")
+    || c === "nombre" || c.startsWith("moyenne") || c.startsWith("maximum") || c.startsWith("minimum"));
   const aCateg  = cols.some(c => c.includes("banque") || c.includes("ville") || c.includes("statut") || c.includes("type") || c.includes("pays") || c.includes("canal"));
   if (data.length === 1) return "kpi";
   if (aDate && aNombre) return "line";
   if (aCateg && aNombre && data.length <= 15) return "bar";
   if (aCateg && data.length <= 8 && !aNombre) return "pie";
   if (aNombre && data.length > 15) return "area";
+  // Bases connectées (noms de colonnes inconnus) : une catégorie et une valeur → barres
+  const ligne = data[0];
+  const nums = colonnes.filter(c => typeof ligne[c] === "number");
+  const categ = colonnes.find(c => typeof ligne[c] === "string") || (/(^id_|_id$|^id$)/i.test(colonnes[0]) ? colonnes[0] : null);
+  if (categ && nums.some(c => c !== categ) && data.length <= 20 && colonnes.length <= 4) return "bar";
   return "table";
 }
 
 function trouverCleNumerique(row, sql) {
+  const categ = trouverCleCateg(row);
   // La colonne de tri de la requête est celle que l'utilisateur veut comparer (ORDER BY nb_fraudes…)
   const tri = /order\s+by\s+(?:\w+\.)?"?(\w+)"?/i.exec(sql || "");
   if (tri) {
     const cle = Object.keys(row).find(k => k.toLowerCase() === tri[1].toLowerCase());
     if (cle && typeof row[cle] === "number") return cle;
   }
-  const priorites = ["montant_fcfa","solde_fcfa","nb_clients","nb_transactions","total","count","volume","score"];
+  const priorites = ["montant_fcfa","solde_fcfa","nb_clients","nb_transactions","total","count","volume","score",
+    "nombre","moyenne","maximum","minimum"];
   for (const p of priorites)
     for (const k of Object.keys(row))
       if (k.toLowerCase().includes(p)) return k;
-  return Object.keys(row).find(k => typeof row[k] === "number" && !isNaN(row[k]));
+  return Object.keys(row).find(k => k !== categ && typeof row[k] === "number" && !isNaN(row[k]))
+    || Object.keys(row).find(k => typeof row[k] === "number" && !isNaN(row[k]));
 }
 
 function trouverCleCateg(row) {
   const priorites = ["banque","ville","statut","type","pays","canal","nom","prenom"];
+  // Mot entier : « nom » ne doit pas désigner la colonne « nombre »
+  const contient = (k, p) => k.toLowerCase().split(/[^a-z0-9]+/).includes(p);
   for (const p of priorites)
     for (const k of Object.keys(row))
-      if (k.toLowerCase().includes(p)) return k;
-  return Object.keys(row).find(k => typeof row[k] === "string");
+      if (contient(k, p) && typeof row[k] !== "number") return k;
+  const cles = Object.keys(row);
+  return cles.find(k => typeof row[k] === "string") || cles.find(k => /(^id_|_id$|^id$)/i.test(k));
 }
 
 function formaterValeur(val) {
@@ -211,7 +224,11 @@ function GraphiqueDynamique({ colonnes, data, question, dark, sql }) {
     );
   }
   if (type === "line" && cleNum) {
-    const cleDateKey = colonnes.find(c => c.toLowerCase().includes("date") || c.toLowerCase().includes("mois"));
+    // Séries « annee / mois » des bases connectées : axe 2025-01, 2025-02…
+    if (colonnes.includes("annee") && colonnes.includes("mois")) {
+      data = data.map(l => ({ ...l, periode: `${l.annee}-${String(l.mois).padStart(2, "0")}` }));
+    }
+    const cleDateKey = data[0]?.periode ? "periode" : colonnes.find(c => c.toLowerCase().includes("date") || c.toLowerCase().includes("mois"));
     return (
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={data.slice(0, 50)}>
@@ -316,7 +333,11 @@ function GraphiquePourPDF({ colonnes, data, sql }) {
     );
   }
   if (type === "line" && cleNum) {
-    const cleDateKey = colonnes.find(c => c.toLowerCase().includes("date") || c.toLowerCase().includes("mois"));
+    // Séries « annee / mois » des bases connectées : axe 2025-01, 2025-02…
+    if (colonnes.includes("annee") && colonnes.includes("mois")) {
+      data = data.map(l => ({ ...l, periode: `${l.annee}-${String(l.mois).padStart(2, "0")}` }));
+    }
+    const cleDateKey = data[0]?.periode ? "periode" : colonnes.find(c => c.toLowerCase().includes("date") || c.toLowerCase().includes("mois"));
     return (
       <LineChart width={540} height={240} data={data.slice(0, 50)}>
         <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
@@ -394,6 +415,7 @@ function CarteResultat({ item, dark, onSupprimer, role }) {
           {item.suite && item.question_precedente && (
             <p className={`flex items-center gap-1 text-xs truncate ${dark ? "text-foret-300" : "text-foret-700"}`}><CornerDownRight size={12} /> suite de « {item.question_precedente} »</p>
           )}
+          {item.nom_source && <p className={`text-xs truncate ${dark ? "text-laiton-300" : "text-laiton-600"}`}>Base : {item.nom_source}</p>}
           <p className={`text-sm font-medium truncate ${dark ? "text-white" : "text-gray-900"}`}>{item.question}</p>
           <div className="flex items-center gap-2 mt-0.5">
             <span className={discret}>{item.total} résultats · {item.duree_ms}ms</span>
@@ -445,7 +467,7 @@ function CarteResultat({ item, dark, onSupprimer, role }) {
       {ouvert && (!item.data || item.data.length === 0) && (
         <div className={`px-5 pb-3 text-sm ${dark ? "text-gray-400" : "text-gray-500"}`}>Aucun résultat trouvé pour cette question.</div>
       )}
-      {ouvert && (
+      {ouvert && !item.nom_source && (
         <div className="px-5 pb-4">
           <div className="flex flex-wrap gap-3">
             <button onClick={() => setAction(action === "signaler" ? null : "signaler")} disabled={lectureSeule}
@@ -1222,6 +1244,11 @@ function Tableau({ session, onDeconnexion, onSession }) {
   const [message, setMessage]       = useState(null);
   const [info, setInfo]             = useState(null);
   const [parle, setParle]           = useState(false);
+  // Source interrogée : null = base VoiceBank ; sinon une base / des fichiers de l'organisation
+  const [sourceActive, setSourceActive] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem("voicebank_source") || "null"); } catch (e) { return null; }
+  });
+  const [sourcesPretes, setSourcesPretes] = useState([]);
   const [ecoute, setEcoute]         = useState(null);        // null | "attente" | "parole" | "transcription"
   const [conversation, setConversation] = useState(() => {
     try { return localStorage.getItem("voicebank_conversation") !== "non"; } catch (e) { return true; }
@@ -1363,9 +1390,10 @@ function Tableau({ session, onDeconnexion, onSession }) {
   useEffect(() => { sauverHistorique(session.utilisateur, historique); }, [historique, session.utilisateur]);
   useEffect(() => { if (erreur) setMessage(erreur); }, [erreur]);
 
-  const poserQuestion = async (texte) => {
+  const poserQuestion = async (texte, sourceForcee) => {
     const q = (texte ?? question).trim();
     if (!q || chargement) return;
+    const src = sourceForcee !== undefined ? sourceForcee : sourceActive;
     if (ecouteRef.current) arreterEcoute();
     setQuestion("");
     setMessage(null);
@@ -1374,7 +1402,10 @@ function Tableau({ session, onDeconnexion, onSession }) {
     const derniere = historique[0];
     const contexte = derniere && derniere.sql && Date.now() - new Date(derniere.timestamp).getTime() < 15 * 60 * 1000
       ? { question: derniere.question, sql: derniere.sql } : null;
-    const res = await appelerQuestion("post", "/vocal/question", { texte: q, langue: "fr", contexte });
+    // Base de l'organisation (connecteur) ou base VoiceBank principale
+    const res = src
+      ? await appelerQuestion("post", `/sources/${src.id}/question`, { texte: q }, { timeout: 90000 })
+      : await appelerQuestion("post", "/vocal/question", { texte: q, langue: "fr", contexte: contexte && !historique[0]?.nom_source ? contexte : null });
     if (!res) return;  // le message d'erreur est affiché via `erreur`
     if (externe) setAcces(a => a ? { ...a, questions_jour: a.questions_jour + 1 } : a);
     setHistorique(prev => [{
@@ -1383,7 +1414,7 @@ function Tableau({ session, onDeconnexion, onSession }) {
       colonnes: res.colonnes, total: res.total,
       data: res.data, duree_ms: res.duree_ms, avertissement: res.avertissement || null,
       resume: res.resume || null, commentaire: res.commentaire || null, relance: res.relance || null,
-      suite: !!res.suite, question_precedente: res.question_precedente || null,
+      suite: !!res.suite, question_precedente: res.question_precedente || null, nom_source: src ? src.nom : null,
     }, ...prev].slice(0, MAX_HISTORIQUE));
     // Le résumé (affiché) est lu en premier, puis l'analyse plus poussée et la relance
     // (uniquement à l'oral). En mode conversation, on écoute ensuite la réponse, sans clic.
@@ -1395,6 +1426,24 @@ function Tableau({ session, onDeconnexion, onSession }) {
     }
   };
   poserRef.current = poserQuestion;
+
+  const choisirSource = useCallback(async (s, question) => {
+    let choix = null;
+    if (s && !s.demo) {
+      choix = { id: s.id, nom: s.nom, suggestions: s.profil?.suggestions || [] };
+      if (!choix.suggestions.length) {
+        try { choix.suggestions = (await http.get(`/sources/${s.id}`)).data.data.profil?.suggestions || []; } catch (e) { /* rien */ }
+      }
+    }
+    setSourceActive(choix);
+    try { sessionStorage.setItem("voicebank_source", JSON.stringify(choix)); } catch (e) { /* rien */ }
+    setOnglet("assistant"); ongletRef.current = "assistant"; window.scrollTo(0, 0);
+    if (question) setTimeout(() => poserRef.current(question, choix), 0);
+  }, []);
+
+  useEffect(() => {
+    http.get("/sources").then(r => setSourcesPretes(r.data.data.filter(x => !x.demo && x.statut === "pret"))).catch(() => {});
+  }, [onglet]);
 
   const supprimerItem = (id) => setHistorique(prev => prev.filter(item => item.id !== id));
   const toutEffacer = () => {
@@ -1410,7 +1459,7 @@ function Tableau({ session, onDeconnexion, onSession }) {
       icone: CreditCard, couleur: "#A9852A" },
   ] : [];
 
-  const suggestions = [
+  const suggestions = sourceActive?.suggestions?.length ? sourceActive.suggestions.slice(0, 6) : [
     "Top 10 clients par solde",
     "Crédits en défaut",
     "Transactions frauduleuses par banque",
@@ -1421,6 +1470,7 @@ function Tableau({ session, onDeconnexion, onSession }) {
 
   const PAGES = {
     assistant:     { titre: "Assistant vocal",        sousTitre: "Pose une question sur tes données, à la voix ou au clavier" },
+    donnees:       { titre: "Mes données",            sousTitre: "Brancher, diagnostiquer et interroger les données de ton organisation" },
     tableau:       { titre: "Tableau de bord",         sousTitre: "Vue d'ensemble des clients, des transactions et des crédits" },
     alertes:       { titre: "Alertes de fraude",       sousTitre: "Alertes à vérifier et décisions prises" },
     analyse:       { titre: "Analyse de transaction",  sousTitre: "Estimer le risque de fraude d'une opération" },
@@ -1545,6 +1595,18 @@ function Tableau({ session, onDeconnexion, onSession }) {
               )}
               {/* ── Zone saisie ──────────────────────────────── */}
               <div className={`rounded-2xl border p-5 mb-6 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
+                {(sourcesPretes.length > 0 || sourceActive) && (
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
+                    <span className={`text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>Données interrogées :</span>
+                    <select aria-label="Données interrogées" value={sourceActive ? String(sourceActive.id) : ""}
+                      onChange={e => choisirSource(e.target.value ? sourcesPretes.find(x => String(x.id) === e.target.value) : null)}
+                      className={`text-xs px-2 py-1.5 rounded-lg border outline-none ${dark ? "bg-gray-700 border-gray-600" : "bg-gray-50 border-gray-200"}`}>
+                      <option value="">Base VoiceBank (démonstration)</option>
+                      {sourcesPretes.map(x => <option key={x.id} value={String(x.id)}>{x.nom} · {x.libelle_type}</option>)}
+                      {sourceActive && !sourcesPretes.some(x => x.id === sourceActive.id) && <option value={String(sourceActive.id)}>{sourceActive.nom}</option>}
+                    </select>
+                  </div>
+                )}
                 <div className="flex items-center gap-4 mb-4">
                   <BoutonMicro
                     onDebut={() => { arreterEcoute(); arreterLecture(); setMessage(null); setQuestion(""); setDictee(true); }}
@@ -1630,6 +1692,7 @@ function Tableau({ session, onDeconnexion, onSession }) {
           {page === "tableau" && (stats
             ? <PanelGraphiques dark={dark} stats={stats} />
             : <p className={`text-sm ${dark ? "text-gray-500" : "text-gray-400"}`}>Statistiques indisponibles.</p>)}
+          {page === "donnees"    && <PanelSources dark={dark} onInterroger={choisirSource} onAbonnement={() => allerA("abonnement")} />}
           {page === "alertes"    && <PanelAlertes dark={dark} onChange={rafraichirCompteurs} />}
           {page === "analyse"    && <PanelAnalyse dark={dark} />}
           {page === "credit"     && <PanelCredit dark={dark} />}

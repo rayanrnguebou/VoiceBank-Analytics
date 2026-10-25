@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   api:
-    name: API (pytest + PostgreSQL)
+    name: API (pytest + PostgreSQL + MariaDB)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -21,6 +21,14 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 10
+      mariadb:            # base externe de test pour le connecteur
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,6 +44,7 @@ jobs:
         working-directory: voicebank_api
         env:
           TEST_PG_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          TEST_MYSQL_ROOT_URL: mysql://root:root@127.0.0.1:3306/
         run: pytest -q
 
   interface:

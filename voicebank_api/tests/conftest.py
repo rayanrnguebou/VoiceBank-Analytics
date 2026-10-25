@@ -64,6 +64,7 @@ os.environ.update({
                        f"rayan:admin:{_hash('motdepasse-admin')}",
     "GEMINI_API_KEY": "", "GROQ_API_KEY": "",
     "RATE_LIMIT_ACTIF": "false",
+    "CONNECTEUR_RESEAU_PRIVE": "true",          # les bases de test sont sur 127.0.0.1
     "ALLOWED_ORIGINS": "http://localhost:3000",
 })
 

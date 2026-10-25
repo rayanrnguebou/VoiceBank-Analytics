@@ -121,3 +121,15 @@ URL_INTERFACE = (_env("URL_INTERFACE") or ALLOWED_ORIGINS[0]).rstrip("/")
 # Simulation (sans compte marchand) : jamais sur Render, jamais avec une vraie clé.
 PAIEMENT_SIMULATION = (_env("PAIEMENT_SIMULATION", "false").lower() == "true"
                        and not os.environ.get("RENDER") and not NOTCHPAY_PUBLIC_KEY)
+
+# ── Connecteur : bases et fichiers des organisations ─────────
+# Clé de chiffrement des identifiants de connexion (n'importe quelle chaîne longue et secrète).
+# À défaut, dérivée de JWT_SECRET (changer JWT_SECRET rendrait alors les identifiants illisibles).
+CLE_SOURCES = _env("CLE_SOURCES") or JWT_SECRET
+# false (en ligne) : refuse les adresses privées (127.0.0.1, 10.x, 192.168.x…) pour éviter qu'un
+# utilisateur fasse sonder le réseau interne du serveur. true en local (base sur le réseau de l'entreprise).
+CONNECTEUR_RESEAU_PRIVE = _env("CONNECTEUR_RESEAU_PRIVE", "false").lower() == "true"
+CONNECTEUR_TIMEOUT_S = int(_env("CONNECTEUR_TIMEOUT_S", "20"))
+CONNECTEUR_MAX_SOURCES = int(_env("CONNECTEUR_MAX_SOURCES", "5"))
+CONNECTEUR_MAX_TABLES = int(_env("CONNECTEUR_MAX_TABLES", "150"))
+CONNECTEUR_TAILLE_FICHIER_MO = int(_env("CONNECTEUR_TAILLE_FICHIER_MO", "10"))

@@ -306,3 +306,40 @@ def test_audit_en_ajout_seul():
         db.ecrire("DELETE FROM voicebank.journal_audit")
     with pytest.raises(Exception):
         db.ecrire("UPDATE voicebank.journal_audit SET action = 'x'")
+
+
+# ── Monnaie d'affichage ───────────────────────────────────────────────
+from app import devises  # noqa: E402
+
+
+def test_conversion_des_montants_et_resume(client, admin, monkeypatch):
+    monkeypatch.setitem(devises._cache, "taux", dict(devises.INDICATIFS_PAR_EUR))
+    monkeypatch.setitem(devises._cache, "maj", 1e18)        # pas d'appel réseau
+    xaf = _q(client, admin, "Volume transactions par ville")
+    eur = _q(client, admin, "Volume transactions par ville", devise="EUR")
+    usd = _q(client, admin, "Volume transactions par ville", devise="USD")
+    assert eur["devise"] == "EUR" and eur["colonnes_monetaires"]
+    col = eur["colonnes_monetaires"][0]
+    nb = next(c for c in xaf["colonnes"] if c.startswith("nb_"))
+    for a, b, c in zip(xaf["data"], eur["data"], usd["data"]):
+        assert abs(b[col] - a[col] / 655.957) < 0.01                       # parité officielle
+        assert abs(c[col] - b[col] * 1.08) < 1                             # taux (indicatif ici)
+        assert a[nb] == b[nb]                                              # les comptages ne changent pas
+    r_xaf = _q(client, admin, "Top 10 clients par solde")["resume"]
+    r_eur = _q(client, admin, "Top 10 clients par solde", devise="EUR")["resume"]
+    assert "FCFA" in r_xaf and "euros" in r_eur and "FCFA" not in r_eur, (r_xaf, r_eur)
+    assert _q(client, admin, "Volume transactions par ville", devise="XOF")["data"] == xaf["data"]
+    r = client.post("/vocal/question", headers=admin, json={"texte": "Volume transactions par ville", "devise": "BTC"})
+    assert r.status_code == 422
+
+
+def test_liste_des_devises(client, monkeypatch):
+    monkeypatch.setitem(devises._cache, "taux", dict(devises.INDICATIFS_PAR_EUR))
+    monkeypatch.setitem(devises._cache, "maj", 1e18)
+    j = client.get("/devises").json()
+    codes = {d["code"]: d for d in j["devises"]}
+    assert codes["XAF"]["taux_par_fcfa"] == 1 and codes["XOF"]["taux_par_fcfa"] == 1
+    assert abs(codes["EUR"]["taux_par_fcfa"] * 655.957 - 1) < 1e-9 and codes["EUR"]["libelle"] == "€"
+    assert devises.est_colonne_monetaire("montant_fcfa") and devises.est_colonne_monetaire("total_balance")
+    assert not devises.est_colonne_monetaire("nb_transactions") and not devises.est_colonne_monetaire("taux_interet")
+    assert devises.convertir(655957, "XAF", "EUR") == 1000.0 and devises.convertir(1000, "EUR", "XAF") == 655957

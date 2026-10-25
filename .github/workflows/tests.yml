@@ -45,7 +45,16 @@ jobs:
         env:
           TEST_PG_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/postgres
           TEST_MYSQL_ROOT_URL: mysql://root:root@127.0.0.1:3306/
-        run: pytest -q
+          PYTHONFAULTHANDLER: "1"
+        # En cas d'échec, la fin du journal est remontée en annotation (visible sans télécharger les logs)
+        run: |
+          set +e
+          pytest -q 2>&1 | tee sortie.txt
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            echo "::error title=pytest (code $code)::$(tail -n 60 sortie.txt | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')"
+          fi
+          exit $code
 
   interface:
     name: Interface (tests + build)

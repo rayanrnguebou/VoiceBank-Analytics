@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from slowapi.errors import RateLimitExceeded
 
-from . import audit, config, credit, db, evaluation, fraude, nl2sql, paiement, resume, transcription
+from . import audit, config, credit, db, devises, evaluation, fraude, nl2sql, paiement, resume, transcription
 from .garde_sql import SQLRefuse, valider_sql
 from .masquage import masquer_ligne, masquer_lignes
 from . import securite
@@ -87,6 +87,9 @@ except Exception:
 # ════════════════════════════════════════
 # SCHÉMAS
 # ════════════════════════════════════════
+CodeDevise = Literal["XAF", "XOF", "EUR", "USD", "GBP", "CAD", "CHF", "CNY", "NGN"]
+
+
 class Identifiants(BaseModel):
     nom: str = Field(min_length=1, max_length=64)
     mot_de_passe: str = Field(min_length=1, max_length=128)
@@ -172,6 +175,11 @@ class NouvelleSource(ConnexionBase):
 
 class QuestionSource(BaseModel):
     texte: str = Field(min_length=2, max_length=500)
+    devise: CodeDevise = "XAF"
+
+
+class DeviseSource(BaseModel):
+    devise: CodeDevise | None = None               # None : détection automatique
 
 
 class Masquage(BaseModel):
@@ -184,6 +192,7 @@ class ContexteQuestion(BaseModel):
 
 
 class QuestionVocale(BaseModel):
+    devise: CodeDevise = "XAF"                     # monnaie d'affichage des montants
     texte: str = Field(min_length=2, max_length=500)
     langue: str | None = "fr"
     contexte: ContexteQuestion | None = None      # question précédente, pour « et à Douala ? »
@@ -308,7 +317,7 @@ def _colonnes_de(sql: str) -> list[str]:
 
 
 def _question_vers_resultat(texte: str, u: Utilisateur, contexte: ContexteQuestion | None = None,
-                            resumer: bool = True) -> dict:
+                            resumer: bool = True, devise: str = "XAF") -> dict:
     debut = time.time()
     question = nl2sql.normaliser_question(texte)
     ctx = contexte.model_dump() if contexte else None
@@ -325,14 +334,16 @@ def _question_vers_resultat(texte: str, u: Utilisateur, contexte: ContexteQuesti
         _journaliser(texte, sql, False, int((time.time() - debut) * 1000), u)
         raise
     lignes = masquer_lignes(colonnes, lignes, u.role)
-    r = resume.resumer(texte, colonnes, lignes) if resumer else {}
+    lignes, monetaires = devises.convertir_lignes(colonnes, lignes, devise)     # données stockées en FCFA
+    r = resume.resumer(texte, colonnes, lignes, devise) if resumer else {}
     duree = int((time.time() - debut) * 1000)
     _journaliser(texte, sql, True, duree, u)
     return {"status": "ok", "question": texte, "sql": sql, "source": source,
             "score_rag": score, "avertissement": avertissement, "colonnes": colonnes, "total": len(lignes),
             "data": lignes, "duree_ms": duree, "resume": r.get("resume"), "resume_source": r.get("source"),
             "commentaire": r.get("commentaire"), "relance": r.get("relance"),
-            "suite": suite, "question_precedente": ctx["question"] if suite else None}
+            "suite": suite, "question_precedente": ctx["question"] if suite else None,
+            "devise": devise, "colonnes_monetaires": monetaires}
 
 
 # ════════════════════════════════════════
@@ -466,6 +477,12 @@ def inscription_essai(request: Request, body: InscriptionEssai):
         raise HTTPException(400, str(e))
     audit.journaliser(u.nom, "essai_cree", {"profil": body.profil}, ip_client(request))
     return _reponse_jeton(u, securite.version_jeton(u.nom))
+
+
+@app.get("/devises")
+def liste_devises():
+    """Monnaies d'affichage et taux (1 FCFA = x unités). Public : utilisé aussi par la page d'accueil."""
+    return devises.liste()
 
 
 @app.get("/abonnement/formules")
@@ -681,7 +698,7 @@ def portefeuille_credit(statut: Literal["En cours", "Remboursé", "En retard", "
 @limiter.limit("30/minute")
 def question_vocale(request: Request, body: QuestionVocale, u: Utilisateur = Depends(utilisateur_courant)):
     _verifier_quota(u)
-    return _question_vers_resultat(body.texte, u, body.contexte, body.resumer)
+    return _question_vers_resultat(body.texte, u, body.contexte, body.resumer, body.devise)
 
 
 @app.post("/vocal/transcrire")
@@ -695,12 +712,12 @@ async def transcrire_audio(request: Request, fichier: UploadFile = File(...),
 
 @app.post("/vocal/pipeline-complet")
 @limiter.limit("10/minute")
-async def pipeline_vocal_complet(request: Request, fichier: UploadFile = File(...),
+async def pipeline_vocal_complet(request: Request, fichier: UploadFile = File(...), devise: CodeDevise = Query("XAF"),
                                  u: Utilisateur = Depends(utilisateur_courant)):
     await run_in_threadpool(_verifier_quota, u)
     contenu, extension = await _lire_audio(fichier)
     texte, moteur = await _transcrire(contenu, extension)
-    resultat = await run_in_threadpool(_question_vers_resultat, texte, u)
+    resultat = await run_in_threadpool(_question_vers_resultat, texte, u, None, True, devise)
     return {"texte_audio": texte, "moteur_transcription": moteur, **resultat}
 
 
@@ -1034,6 +1051,13 @@ def masquage_source(body: Masquage, id_source: int = Path(ge=1), u: Utilisateur 
     return {"status": "ok"}
 
 
+@app.post("/sources/{id_source}/devise")
+def devise_source(body: DeviseSource, id_source: int = Path(ge=1), u: Utilisateur = Depends(proprietaire_sources)):
+    """Monnaie dans laquelle sont stockés les montants de la base (None : détection automatique)."""
+    _src(lambda: sources.modifier_devise(id_source, u.nom, body.devise))
+    return {"status": "ok"}
+
+
 @app.post("/sources/{id_source}/supprimer")
 def supprimer_source(request: Request, id_source: int = Path(ge=1), u: Utilisateur = Depends(proprietaire_sources)):
     _src(lambda: sources.supprimer(id_source, u.nom))
@@ -1048,7 +1072,7 @@ def question_source(request: Request, body: QuestionSource, id_source: int = Pat
     _verifier_quota(u)
     debut = time.time()
     try:
-        res = sources.repondre(id_source, u.nom, u.role, body.texte.strip())
+        res = sources.repondre(id_source, u.nom, u.role, body.texte.strip(), body.devise)
     except sources.SourceRefusee as e:
         _journaliser(body.texte, None, False, int((time.time() - debut) * 1000), u)
         raise HTTPException(404 if str(e) == "Source introuvable" else 422, str(e))

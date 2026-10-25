@@ -3,8 +3,24 @@ import { useState, useEffect, useCallback } from "react";
 import { Sparkles, Building2, UserRound, CreditCard, ShieldCheck, CircleCheck, Clock, Smartphone, Lock } from "lucide-react";
 import { useAPI } from "../useAPI";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate } from "../ui";
+import { useDevise, SelecteurDevise } from "../devise";
 
+// Les abonnements sont facturés en FCFA (mobile money) ; dans une autre monnaie, on montre l'équivalent.
 const fcfa = n => `${Number(n || 0).toLocaleString("fr-FR")} FCFA`;
+
+export function Prix({ fcfa: montant, dark, grand = false }) {
+  const devise = useDevise();
+  if (devise.fcfa) {
+    return grand
+      ? <>{Number(montant).toLocaleString("fr-FR")}<span className="text-sm font-medium"> FCFA</span></>
+      : <>{fcfa(montant)}</>;
+  }
+  const equiv = devise.formater(montant);
+  return grand ? (
+    <>≈ {equiv.replace(` ${devise.libelle}`, "")}<span className="text-sm font-medium"> {devise.libelle}</span>
+      <span className={`block text-xs font-normal ${dark ? "text-gray-400" : "text-gray-500"}`}>soit {fcfa(montant)}</span></>
+  ) : <>≈ {equiv} ({fcfa(montant)})</>;
+}
 
 export function dureeRestante(secondes) {
   const s = Math.max(0, Number(secondes) || 0);
@@ -72,7 +88,7 @@ function FormulaireCommande({ dark, formule, compte, onAnnuler }) {
   return (
     <form onSubmit={payer} className={`${carte(dark)} space-y-4`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className={titre(dark)}>Formule {formule.libelle} — {fcfa(formule.prix)}</h2>
+        <h2 className={titre(dark)}>Formule {formule.libelle} — <Prix fcfa={formule.prix} dark={dark} /></h2>
         <button type="button" onClick={onAnnuler} className={boutonSecondaire(dark)}>Changer de formule</button>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -128,7 +144,7 @@ function FormulaireCommande({ dark, formule, compte, onAnnuler }) {
           <CreditCard size={15} /> {chargement ? "Préparation…" : `Payer ${fcfa(formule.prix)}`}
         </button>
         <span className={`${texteDiscret(dark)} flex items-center gap-1`}>
-          <Smartphone size={12} /> MTN MoMo, Orange Money ou carte, sur la page sécurisée de NotchPay
+          <Smartphone size={12} /> MTN MoMo, Orange Money ou carte, sur la page sécurisée de NotchPay · débité en FCFA
         </span>
       </div>
     </form>
@@ -163,7 +179,10 @@ export function PanelAbonnement({ dark, acces, utilisateur }) {
       ) : (
         <div className={carte(dark)}>
           <h2 className={titre(dark)}>Choisis ta formule</h2>
-          <p className={`${texteDiscret(dark)} mb-4`}>Sans engagement ni reconduction automatique. Un nouvel achat s'ajoute à la durée restante.</p>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <p className={texteDiscret(dark)}>Sans engagement ni reconduction automatique. Un nouvel achat s'ajoute à la durée restante.</p>
+            <SelecteurDevise compact className={`text-xs px-2 py-1.5 rounded-lg border outline-none ${dark ? "bg-gray-700 border-gray-600" : "bg-gray-50 border-gray-200"}`} />
+          </div>
           {indisponible && (
             <p className="mb-4 text-sm text-amber-600">Le paiement en ligne sera ouvert très bientôt.</p>
           )}
@@ -173,7 +192,7 @@ export function PanelAbonnement({ dark, acces, utilisateur }) {
                 ? "border-laiton-400 bg-laiton-400/5" : dark ? "border-gray-700" : "border-gray-200"}`}>
                 {f.code === "mois" && <span className="absolute -top-2.5 left-4 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-laiton-400 text-foret-900">Populaire</span>}
                 <p className="text-sm font-semibold">{f.libelle}</p>
-                <p className="text-2xl font-bold mt-1">{f.prix.toLocaleString("fr-FR")}<span className="text-sm font-medium"> FCFA</span></p>
+                <p className="text-2xl font-bold mt-1"><Prix fcfa={f.prix} dark={dark} grand /></p>
                 <p className={texteDiscret(dark)}>{f.duree_jours} jour{f.duree_jours > 1 ? "s" : ""}{f.economie_pct > 0 ? ` · −${f.economie_pct} %` : ""}</p>
                 <ul className={`mt-3 mb-4 space-y-1 text-xs ${dark ? "text-gray-300" : "text-gray-600"}`}>
                   <li className="flex gap-1.5"><CircleCheck size={13} className="text-emerald-500 flex-shrink-0" /> Jusqu'à {offre.quota_client} questions par jour</li>

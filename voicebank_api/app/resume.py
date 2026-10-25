@@ -6,6 +6,7 @@ L'interface lit le résumé à voix haute, puis enchaîne sur le commentaire, qu
 """
 import json
 import logging
+from contextvars import ContextVar
 
 from . import config
 from .masquage import est_colonne_personnelle
@@ -28,15 +29,20 @@ def formater_nombre(v) -> str:
         return f"{signe}{x / 1e9:.1f} milliards".replace(".", ",")
     if x >= 1e6:
         return f"{signe}{x / 1e6:.1f} millions".replace(".", ",")
-    if x == int(x):
-        return signe + f"{int(x):,}".replace(",", " ")
+    if x == int(x) or x >= 1000:          # pas de centimes à l'oral au-delà de 1 000
+        return signe + f"{round(x):,}".replace(",", " ")
     return signe + f"{x:,.2f}".replace(",", " ").replace(".", ",")
 
 
+# Monnaie d'affichage de la requête en cours (les montants reçus sont déjà convertis)
+MONNAIE = ContextVar("monnaie", default="FCFA")
+
+
 def _unite(colonne: str) -> str:
+    from .devises import est_colonne_monetaire
     c = colonne.lower()
-    if "fcfa" in c or "montant" in c or "solde" in c or "volume" in c or "encours" in c:
-        return " FCFA"
+    if est_colonne_monetaire(c) or "fcfa" in c:
+        return " " + MONNAIE.get()
     if "taux" in c or "pct" in c:
         return " %"
     return ""
@@ -80,8 +86,8 @@ def resume_local(question: str, colonnes: list[str], lignes: list[dict]) -> str:
     if liste_detaillee and num:
         valeurs = [l[num] for l in lignes if isinstance(l.get(num), (int, float))]
         if valeurs and any(m in num.lower() for m in ("montant", "solde", "volume")):
-            phrase += f" Montant total : {formater_nombre(sum(valeurs))} FCFA"
-            phrase += f", le plus élevé : {formater_nombre(max(valeurs))} FCFA."
+            phrase += f" Montant total : {formater_nombre(sum(valeurs))} {MONNAIE.get()}"
+            phrase += f", le plus élevé : {formater_nombre(max(valeurs))} {MONNAIE.get()}."
         return phrase
     if cat and num and n <= 50:
         tri = sorted((l for l in lignes if l.get(num) is not None), key=lambda l: l[num], reverse=True)
@@ -93,7 +99,7 @@ def resume_local(question: str, colonnes: list[str], lignes: list[dict]) -> str:
             phrase += "."
     elif num and any(m in num.lower() for m in ("montant", "solde", "volume")):
         total = sum(l[num] for l in lignes if isinstance(l.get(num), (int, float)))
-        phrase += f" Montant total : {formater_nombre(total)} FCFA."
+        phrase += f" Montant total : {formater_nombre(total)} {MONNAIE.get()}."
     return phrase
 
 
@@ -217,7 +223,7 @@ def resume_gemini(question: str, colonnes: list[str], lignes: list[dict]) -> dic
     sures = [c for c in colonnes if not est_colonne_personnelle(c)]
     extrait = [{c: l.get(c) for c in sures} for l in lignes[:30]]
     prompt = (
-        "Tu es l'assistant vocal d'une banque en Afrique centrale (montants en FCFA). Tu réponds à un "
+        f"Tu es l'assistant vocal d'une banque en Afrique centrale (montants exprimés en {MONNAIE.get()}). Tu réponds à un "
         "analyste bancaire. Les textes seront lus à voix haute : phrases courtes, pas de listes, "
         "pas de symboles, nombres arrondis (millions/milliards en toutes lettres), jamais de SQL.\n"
         "Réponds UNIQUEMENT avec un objet JSON contenant ces clés :\n"
@@ -251,8 +257,11 @@ def resume_gemini(question: str, colonnes: list[str], lignes: list[dict]) -> dic
     return {"resume": texte, "commentaire": comm, "relance": relance} if texte else None
 
 
-def resumer(question: str, colonnes: list[str], lignes: list[dict]) -> dict:
-    """Retourne {resume, commentaire, relance, source} ; source = 'gemini' ou 'local'."""
+def resumer(question: str, colonnes: list[str], lignes: list[dict], devise: str = "XAF") -> dict:
+    """Retourne {resume, commentaire, relance, source} ; source = 'gemini' ou 'local'.
+    `devise` : monnaie dans laquelle les montants de `lignes` sont déjà exprimés."""
+    from .devises import DEVISES
+    MONNAIE.set(DEVISES.get(devise, DEVISES["XAF"])["en_toutes_lettres"])
     if lignes:
         r = resume_gemini(question, colonnes, lignes)
         if r:

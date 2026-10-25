@@ -65,6 +65,9 @@ os.environ.update({
     "GEMINI_API_KEY": "", "GROQ_API_KEY": "",
     "RATE_LIMIT_ACTIF": "false",
     "CONNECTEUR_RESEAU_PRIVE": "true",          # les bases de test sont sur 127.0.0.1
+    # Pas de chargement du Whisper local en arrière-plan : son fil C++ encore actif à la fin des tests
+    # faisait planter l'interpréteur (« terminate called without an active exception »).
+    "WHISPER_LOCAL_PRECHARGER": "false",
     "ALLOWED_ORIGINS": "http://localhost:3000",
 })
 

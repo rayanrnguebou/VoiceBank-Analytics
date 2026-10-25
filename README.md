@@ -114,6 +114,21 @@ de mot de passe, de rôle ou désactiver un compte **déconnecte immédiatement*
 compte n'est supprimé (l'audit reste lisible) ; on ne peut ni se désactiver soi-même ni retirer le
 dernier administrateur. Chacun peut changer son mot de passe (icône 🔑 en bas de la barre latérale).
 
+#### Mot de passe oublié (code par e-mail)
+
+Sur l'écran de connexion, **Mot de passe oublié ?** envoie un **code à 6 chiffres** valable 15 minutes à
+l'adresse du compte (e-mail des visiteurs et abonnés ; pour les comptes internes, l'adresse saisie à la
+création ou dans 🔑 → **E-mail de récupération**). Le code ne sert qu'une fois, est détruit après 5 essais
+faux, 3 demandes par heure au plus ; la réponse est identique que le compte existe ou non ; le changement
+débloque le compte, déconnecte toutes les sessions et un e-mail de confirmation est envoyé.
+
+Envoi des e-mails (sans configuration, le lien est remplacé par « demande à ton administrateur ») :
+- **Brevo** (recommandé, gratuit jusqu'à 300 e-mails/jour, fonctionne sur Render) : crée un compte sur
+  brevo.com, valide ton adresse d'expéditeur (**Expéditeurs**), crée une clé (**SMTP & API → Clés API**),
+  puis renseigne `BREVO_API_KEY` et `EMAIL_EXPEDITEUR` ;
+- ou **SMTP** (`SMTP_HOTE`, `SMTP_PORT`, `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE`, `EMAIL_EXPEDITEUR`),
+  par exemple Gmail avec un « mot de passe d'application ». Render bloque le SMTP en offre gratuite.
+
 ## Clés IA (Gemini et Groq)
 
 Les deux sont facultatives : sans elles, les questions fréquentes marchent (règles locales + RAG),
@@ -212,6 +227,13 @@ démonstration est explorable).
 - **diagnostic de qualité** avec une note sur 100 : références orphelines, doublons, valeurs manquantes,
   montants négatifs, dates futures ou improbables, colonnes constantes, données anciennes ;
 - **questions suggérées** adaptées à la base.
+
+**Indicateurs et tableau de bord adaptés à la base** : quand une source est choisie dans « Données interrogées »,
+les quatre indicateurs de l'assistant et le **Tableau de bord** sont calculés d'après sa structure — effectifs des
+entités principales (clients, comptes, transactions…), nombre de fraudes s'il existe un indicateur de fraude,
+montant total (encours de crédits en priorité), évolution mensuelle (nombre et montant, sans les dates futures)
+et répartitions par lieu, statut ou catégorie. Jamais de regroupement sur une donnée personnelle ; montants dans
+la monnaie choisie ; résultat gardé 10 minutes.
 
 **Questions en français** (assistant, sélecteur « Données interrogées ») : Gemini écrit la requête dans le dialecte
 de la base (PostgreSQL, MySQL, T-SQL, SQLite) à partir de la carte des données ; sans Gemini, un moteur local

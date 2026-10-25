@@ -16,7 +16,7 @@ from slowapi.errors import RateLimitExceeded
 from . import audit, config, credit, db, devises, evaluation, fraude, nl2sql, paiement, resume, transcription
 from .garde_sql import SQLRefuse, valider_sql
 from .masquage import masquer_ligne, masquer_lignes
-from . import securite
+from . import recuperation, securite
 from .connecteur import service as sources
 from .paiement import PaiementRefuse
 from .securite import (CompteRefuse, Utilisateur, admin_ou_decouverte, admin_requis, authentifier, creer_jeton,
@@ -100,9 +100,25 @@ class ChangementMdp(BaseModel):
     nouveau: str = Field(min_length=1, max_length=128)
 
 
+class DemandeCode(BaseModel):
+    identifiant: str = Field(min_length=3, max_length=64)
+
+
+class ConfirmationCode(BaseModel):
+    identifiant: str = Field(min_length=3, max_length=64)
+    code: str = Field(min_length=6, max_length=12)
+    nouveau: str = Field(min_length=1, max_length=128)
+
+
+class EmailRecuperation(BaseModel):
+    mot_de_passe: str = Field(min_length=1, max_length=128)
+    email: str | None = Field(None, max_length=64)
+
+
 class NouveauCompte(BaseModel):
     nom: str = Field(min_length=3, max_length=32)
     role: Literal["analyste", "admin"] = "analyste"
+    email: str | None = Field(None, max_length=64)      # pour « mot de passe oublié »
 
 
 class ModificationCompte(BaseModel):
@@ -407,14 +423,64 @@ def changer_mon_mot_de_passe(request: Request, body: ChangementMdp,
     return _reponse_jeton(Utilisateur(u.nom, u.role, False), version)
 
 
+# ── Mot de passe oublié : code envoyé par e-mail ─────────────────────
+
+MESSAGE_CODE = ("Si un compte avec une adresse e-mail correspond, un code à 6 chiffres vient d'y être envoyé. "
+                "Pense à regarder dans les courriers indésirables.")
+
+
+@app.get("/auth/options")
+def options_connexion():
+    """Ce que l'écran de connexion peut proposer."""
+    return {"oubli_par_email": recuperation.disponible()}
+
+
+@app.post("/auth/oubli")
+@limiter.limit("5/hour")
+def mot_de_passe_oublie(request: Request, body: DemandeCode):
+    if not recuperation.disponible():
+        raise HTTPException(503, "La récupération par e-mail n'est pas activée : contacte ton administrateur.")
+    ip = ip_client(request)
+    nom = recuperation.demander(body.identifiant, ip)
+    if nom:
+        audit.journaliser(nom, "code_recuperation_envoye", None, ip)
+    return {"status": "ok", "message": MESSAGE_CODE}
+
+
+@app.post("/auth/oubli/confirmer")
+@limiter.limit("10/hour")
+def confirmer_code(request: Request, body: ConfirmationCode):
+    try:
+        nom = recuperation.confirmer(body.identifiant, body.code, body.nouveau)
+    except CompteRefuse as e:
+        raise HTTPException(400, str(e))
+    audit.journaliser(nom, "mot_de_passe_recupere", None, ip_client(request))
+    return {"status": "ok", "message": "Mot de passe changé. Tu peux te connecter."}
+
+
+@app.post("/auth/email")
+@limiter.limit("5/minute")
+def email_recuperation(request: Request, body: EmailRecuperation, u: Utilisateur = Depends(utilisateur_authentifie)):
+    """Adresse e-mail de récupération d'un compte interne (mot de passe actuel exigé)."""
+    try:
+        email = recuperation.definir_email(u.nom, body.mot_de_passe, body.email or None)
+    except CompteRefuse as e:
+        raise HTTPException(400, str(e))
+    audit.journaliser(u.nom, "email_recuperation", {"defini": bool(email)}, ip_client(request))
+    return {"status": "ok", "email": email}
+
+
 # ════════════════════════════════════════
 # CONSULTATION (authentifié)
 # ════════════════════════════════════════
 
 @app.get("/auth/moi")
 def moi(u: Utilisateur = Depends(utilisateur_authentifie)):
+    email = (db.ecrire("SELECT email FROM voicebank.utilisateurs WHERE nom = :n", {"n": u.nom}).scalar()
+             if securite.mode_base() else None)
     return {"utilisateur": u.nom, "role": u.role, "doit_changer_mot_de_passe": u.doit_changer,
-            "gestion_comptes": securite.mode_base(), "acces": _acces(u)}
+            "gestion_comptes": securite.mode_base(), "acces": _acces(u), "email": email,
+            "oubli_par_email": recuperation.disponible()}
 
 
 def _acces(u: Utilisateur) -> dict:
@@ -933,7 +999,7 @@ def lister_utilisateurs(u: Utilisateur = Depends(admin_ou_decouverte)):
 @limiter.limit("20/minute")
 def creer_utilisateur(request: Request, body: NouveauCompte, u: Utilisateur = Depends(admin_requis)):
     nom = body.nom.strip().lower()
-    mdp = _compte(lambda: securite.creer_compte(nom, body.role, u.nom))
+    mdp = _compte(lambda: securite.creer_compte(nom, body.role, u.nom, body.email or None))
     audit.journaliser(u.nom, "compte_cree", {"compte": nom, "role": body.role}, ip_client(request))
     return {"status": "ok", "nom": nom, "role": body.role, "mot_de_passe_provisoire": mdp,
             "valable_heures": int(securite.DUREE_MDP_PROVISOIRE.total_seconds() // 3600)}
@@ -1063,6 +1129,17 @@ def supprimer_source(request: Request, id_source: int = Path(ge=1), u: Utilisate
     _src(lambda: sources.supprimer(id_source, u.nom))
     audit.journaliser(u.nom, "source_supprimee", {"id_source": id_source}, ip_client(request))
     return {"status": "ok"}
+
+
+@app.get("/sources/{id_source}/tableau")
+@limiter.limit("30/minute")
+def tableau_source(request: Request, id_source: int = Path(ge=0), devise: CodeDevise = Query("XAF"),
+                   u: Utilisateur = Depends(utilisateur_courant)):
+    """Indicateurs et graphiques calculés d'après la structure de la base (mis en cache 10 minutes)."""
+    try:
+        return {"status": "ok", "data": sources.tableau_de_bord(id_source, u.nom, devise)}
+    except sources.SourceRefusee as e:
+        raise HTTPException(404 if str(e) == "Source introuvable" else 422, str(e))
 
 
 @app.post("/sources/{id_source}/question")

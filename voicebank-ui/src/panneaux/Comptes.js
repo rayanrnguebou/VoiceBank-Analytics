@@ -3,10 +3,10 @@
 // provisoire (affiché une seule fois, valable 72 h) que la personne change à sa première connexion.
 import { useState, useEffect, useCallback } from "react";
 import {
-  KeyRound, UserPlus, Copy, Check, RotateCcw, Lock, ShieldCheck, UserX, UserCheck, X, Circle, CircleCheck,
+  KeyRound, UserPlus, Copy, Check, RotateCcw, Lock, ShieldCheck, UserX, UserCheck, X, Circle, CircleCheck, Mail,
 } from "lucide-react";
 import { useAPI } from "../useAPI";
-import { appliquerJeton } from "../api";
+import { appliquerJeton, http } from "../api";
 import { Logo } from "./BarreLaterale";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate } from "../ui";
 
@@ -118,6 +118,7 @@ export function FenetreMotDePasse({ dark, session, onTermine, onFermer }) {
           <h2 id="titre-mdp" className={`${titre(dark)} flex items-center gap-2`}><KeyRound size={18} /> Changer mon mot de passe</h2>
           <button onClick={onFermer} aria-label="Fermer" className={boutonSecondaire(dark)}><X size={14} /></button>
         </div>
+        <EmailRecuperation dark={dark} session={session} />
         {fait ? (
           <div className="space-y-3">
             <p className="text-sm text-emerald-500 flex items-center gap-2"><ShieldCheck size={16} /> Mot de passe changé.</p>
@@ -129,6 +130,62 @@ export function FenetreMotDePasse({ dark, session, onTermine, onFermer }) {
             onTermine={s => { setFait(true); onTermine(s); }} />
         )}
       </div>
+    </div>
+  );
+}
+
+// Adresse e-mail de récupération (comptes internes) : permet de recevoir un code si le mot de passe est oublié
+function EmailRecuperation({ dark, session }) {
+  const { appeler, chargement, erreur } = useAPI();
+  const [infos, setInfos] = useState(null);
+  const [edition, setEdition] = useState(false);
+  const [email, setEmail] = useState("");
+  const [mdp, setMdp] = useState("");
+  useEffect(() => {
+    http.get("/auth/moi").then(r => setInfos(r.data)).catch(() => {});
+  }, []);
+  if (!infos || ["visiteur", "client"].includes(infos.role)) return null;
+  const enregistrer = async (e) => {
+    e.preventDefault();
+    const res = await appeler("post", "/auth/email", { mot_de_passe: mdp, email: email.trim() || null });
+    if (res) { setInfos({ ...infos, email: res.email }); setEdition(false); setMdp(""); }
+  };
+  return (
+    <div className={`mb-5 p-3 rounded-xl text-sm ${dark ? "bg-gray-700/50" : "bg-gray-50"}`}>
+      <p className={`flex items-center gap-2 font-medium ${dark ? "text-gray-200" : "text-gray-800"}`}>
+        <Mail size={15} /> E-mail de récupération
+      </p>
+      {!edition ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 mt-1">
+          <span className={texteDiscret(dark)}>
+            {infos.email ? infos.email : "Aucune adresse : en cas d'oubli, seul l'administrateur pourra te débloquer."}
+          </span>
+          <button type="button" onClick={() => { setEmail(infos.email || ""); setEdition(true); }} className={boutonSecondaire(dark)}>
+            {infos.email ? "Modifier" : "Ajouter"}
+          </button>
+        </div>
+      ) : (
+        <form onSubmit={enregistrer} className="space-y-2 mt-2">
+          <input type="text" autoComplete="username" value={session.utilisateur} readOnly hidden />
+          <label className="block">
+            <span className={etiquette(dark)}>Adresse e-mail (vide pour la retirer)</span>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} maxLength={64} autoComplete="email" className={champ(dark)} />
+          </label>
+          <label className="block">
+            <span className={etiquette(dark)}>Mot de passe actuel (pour confirmer)</span>
+            <input type="password" value={mdp} onChange={e => setMdp(e.target.value)} required maxLength={128}
+              autoComplete="current-password" className={champ(dark)} />
+          </label>
+          {erreur && <p role="alert" className="text-sm text-red-500">{erreur}</p>}
+          <div className="flex gap-2">
+            <button type="submit" disabled={chargement} className={boutonPrincipal}>{chargement ? "Enregistrement…" : "Enregistrer l'adresse"}</button>
+            <button type="button" onClick={() => setEdition(false)} className={boutonSecondaire(dark)}>Annuler</button>
+          </div>
+        </form>
+      )}
+      {!infos.oubli_par_email && infos.email && (
+        <p className="text-xs text-amber-500 mt-2">L'envoi d'e-mails n'est pas encore configuré sur le serveur.</p>
+      )}
     </div>
   );
 }
@@ -177,6 +234,7 @@ export function PanelComptes({ dark, session }) {
   const [donnees, setDonnees] = useState(null);
   const [nom, setNom] = useState("");
   const [role, setRole] = useState("analyste");
+  const [email, setEmail] = useState("");
   const [provisoire, setProvisoire] = useState(null);
 
   const charger = useCallback(() => {
@@ -186,8 +244,8 @@ export function PanelComptes({ dark, session }) {
 
   const creer = async (e) => {
     e.preventDefault();
-    const res = await action.appeler("post", "/admin/utilisateurs", { nom: nom.trim().toLowerCase(), role });
-    if (res) { setProvisoire(res); setNom(""); setRole("analyste"); charger(); }
+    const res = await action.appeler("post", "/admin/utilisateurs", { nom: nom.trim().toLowerCase(), role, email: email.trim() || null });
+    if (res) { setProvisoire(res); setNom(""); setRole("analyste"); setEmail(""); charger(); }
   };
   const reinitialiser = async (c) => {
     if (!window.confirm(`Générer un nouveau mot de passe provisoire pour ${c.nom} ? Ses sessions en cours seront fermées.`)) return;
@@ -226,12 +284,17 @@ export function PanelComptes({ dark, session }) {
             Pas d'inscription libre : seuls les comptes créés ici peuvent se connecter.
             Un analyste consulte les données (noms des clients masqués) ; un administrateur gère aussi les comptes, les corrections et l'audit.
           </p>
-          <form onSubmit={creer} className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3 items-end">
+          <form onSubmit={creer} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-3 items-end">
             <label>
               <span className={etiquette(dark)}>Identifiant</span>
               <input value={nom} onChange={e => setNom(e.target.value)} required minLength={3} maxLength={32}
                 pattern={"[a-zA-Z0-9][a-zA-Z0-9._\\-]{2,31}"} placeholder="ex. jean.mballa" autoComplete="off"
                 title="3 à 32 caractères : lettres, chiffres, point, tiret, souligné" className={champ(dark)} />
+            </label>
+            <label>
+              <span className={etiquette(dark)}>E-mail (facultatif)</span>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} maxLength={64} autoComplete="off"
+                placeholder="pour « mot de passe oublié »" className={champ(dark)} />
             </label>
             <label>
               <span className={etiquette(dark)}>Rôle</span>

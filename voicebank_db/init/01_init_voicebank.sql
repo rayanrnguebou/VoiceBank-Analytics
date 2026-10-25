@@ -348,6 +348,23 @@ CREATE INDEX IF NOT EXISTS idx_paiements_utilisateur ON voicebank.paiements (uti
 
 
 -- ══════════════════════════════════════════════════════════
+-- TABLE 11 bis : CODES DE RÉCUPÉRATION DU MOT DE PASSE (envoyés par e-mail)
+-- Seule l'empreinte du code est conservée ; 15 minutes, 5 essais, un seul usage.
+-- ══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS voicebank.codes_recuperation (
+    id_code             SERIAL       PRIMARY KEY,
+    utilisateur         VARCHAR(64)  NOT NULL REFERENCES voicebank.utilisateurs(nom) ON DELETE CASCADE,
+    empreinte           CHAR(64)     NOT NULL,
+    expire              TIMESTAMP    NOT NULL,
+    tentatives          INTEGER      NOT NULL DEFAULT 0,
+    utilise             BOOLEAN      NOT NULL DEFAULT FALSE,
+    adresse_ip          VARCHAR(64),
+    date_creation       TIMESTAMP    NOT NULL DEFAULT LOCALTIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_codes_recuperation ON voicebank.codes_recuperation (utilisateur, date_creation DESC);
+
+
+-- ══════════════════════════════════════════════════════════
 -- TABLE 12 : SOURCES DE DONNÉES DES ORGANISATIONS (connecteur)
 -- Identifiants de connexion CHIFFRÉS ; seul le propriétaire peut interroger sa source.
 -- ══════════════════════════════════════════════════════════

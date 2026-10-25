@@ -37,6 +37,10 @@ services:
         sync: false
       - key: NOTCHPAY_HASH_KEY          # signature des webhooks (même page)
         sync: false
+      - key: BREVO_API_KEY              # e-mails « mot de passe oublié » (brevo.com → SMTP & API → Clés API)
+        sync: false
+      - key: EMAIL_EXPEDITEUR           # adresse validée dans Brevo (Expéditeurs)
+        sync: false
       - key: CLE_SOURCES                # chiffre les identifiants des bases connectées
         generateValue: true
       - key: INITIALISER_BASE           # crée le schéma au démarrage (idempotent)

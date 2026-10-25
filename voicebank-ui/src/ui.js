@@ -75,3 +75,27 @@ export function arreterLecture() {
   try { window.speechSynthesis?.cancel(); } catch (e) { /* rien */ }
   signalerLecture(false);
 }
+
+// Export CSV compatible Excel (séparateur « ; », BOM UTF-8 pour les accents)
+export function versCsv(colonnes, lignes) {
+  const cellule = v => {
+    if (v === null || v === undefined) return "";
+    const t = typeof v === "number" ? String(v).replace(".", ",") : String(v);
+    return /[";\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  return "\uFEFF" + [colonnes.join(";"), ...lignes.map(l => colonnes.map(c => cellule(l[c])).join(";"))].join("\r\n");
+}
+
+export function telechargerCsv(nomFichier, colonnes, lignes) {
+  const url = URL.createObjectURL(new Blob([versCsv(colonnes, lignes)], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = nomFichier;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export function nomFichier(question, extension) {
+  const slug = String(question || "resultat").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "resultat";
+  return `voicebank_${slug}_${new Date().toISOString().slice(0, 10)}.${extension}`;
+}

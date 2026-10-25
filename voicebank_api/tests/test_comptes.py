@@ -155,3 +155,15 @@ def test_politique_et_generation():
         mdp = securite.mdp_provisoire()
         securite.verifier_politique(mdp, "jean")
         assert not set(mdp) & set("0O1lI")
+
+
+def test_renouvellement_du_jeton(client, admin):
+    h = _activer(client, admin, "lea.tchami")
+    r = client.post("/auth/renouveler", headers=h)
+    assert r.status_code == 200 and r.json()["utilisateur"] == "lea.tchami"
+    nouveau = _h(r)
+    assert client.get("/dashboard", headers=nouveau).status_code == 200
+    # Compte désactivé : plus de renouvellement possible
+    client.post("/admin/utilisateurs/lea.tchami/modifier", headers=admin, json={"actif": False})
+    assert client.post("/auth/renouveler", headers=nouveau).status_code == 401
+    assert client.post("/auth/renouveler").status_code == 401

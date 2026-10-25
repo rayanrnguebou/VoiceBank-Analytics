@@ -1,3 +1,4 @@
 # Scripts shell exécutés dans des conteneurs Linux : toujours en fin de ligne LF
 *.sh text eol=lf
 *.sql text eol=lf
+*.bat text eol=crlf

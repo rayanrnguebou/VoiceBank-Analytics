@@ -304,6 +304,14 @@ def _reponse_jeton(u: Utilisateur, version: int) -> dict:
             "expire_dans_min": config.JWT_DUREE_MIN}
 
 
+@app.post("/auth/renouveler")
+@limiter.limit("30/minute")
+def renouveler_jeton(request: Request, u: Utilisateur = Depends(utilisateur_courant)):
+    """Nouveau jeton pour une session active (l'interface l'appelle tant que l'utilisateur est actif).
+    Un compte désactivé ou dont le mot de passe a changé est refusé par utilisateur_courant."""
+    return _reponse_jeton(u, securite.version_jeton(u.nom))
+
+
 @app.post("/auth/mot-de-passe")
 @limiter.limit("5/minute")
 def changer_mon_mot_de_passe(request: Request, body: ChangementMdp,

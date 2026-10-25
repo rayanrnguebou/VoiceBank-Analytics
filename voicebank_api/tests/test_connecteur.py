@@ -260,6 +260,10 @@ def test_mysql(client, client_abonne, base_mysql):
     assert j["colonnes"] == ["customer_id", "total_balance"] and len(j["data"]) == 10
     # L'autre organisation ne voit rien
     assert client.post(f"/sources/{sid}/question", headers=b, json={"texte": "Combien de clients ?"}).status_code == 404
+    # Tableau de bord dans le dialecte MySQL
+    t = client.get(f"/sources/{sid}/tableau", headers=a).json()["data"]
+    assert len(t["indicateurs"]) == 4 and any(g["id"] == "evolution" for g in t["graphiques"])
+    assert client.get(f"/sources/{sid}/tableau", headers=b).status_code == 404
 
 
 # ── Fichiers Excel / CSV ──────────────────────────────────────────────
@@ -305,6 +309,12 @@ def test_fichiers_excel_et_csv(client, client_abonne):
     assert j["colonnes"][:2] == ["annee", "mois"] and len(j["data"]) == 12
     j = _q(client, a, sid, "Nombre de remboursements en retard par ville")
     assert {l["ville"] for l in j["data"]} <= {"Douala", "Bafoussam"} and sum(l["nombre"] for l in j["data"]) == 20
+    # Tableau de bord d'un import de fichiers
+    t = client.get(f"/sources/{sid}/tableau", headers=a).json()["data"]
+    total = next(i for i in t["indicateurs"] if i["type"] == "montant")
+    assert total["table"] in ("ventes", "remboursements")
+    mois = next(g for g in t["graphiques"] if g["id"] == "evolution")
+    assert len(mois["donnees"]) >= 2
     # Fichiers refusés
     for nom, contenu in [("virus.exe", b"MZ..."), ("faux.xlsx", b"pas un zip"), ("vide.csv", b"")]:
         r = client.post("/sources/fichiers", headers=a, data={"nom": "Essai"}, files=[("fichiers", (nom, contenu, "text/plain"))])
@@ -350,3 +360,32 @@ def test_monnaie_des_bases_connectees(client, admin, source_pg):
     assert j["devise_base"] == "EUR" and abs(j["data"][0][col] - base["data"][0][col] * 655.957) < 1
     client.post(f"/sources/{source_pg}/devise", headers=admin, json={"devise": None})
     assert _q(client, admin, source_pg, "Combien de clients ?")["colonnes_monetaires"] == []
+
+
+# ── Tableau de bord adapté à la base ──────────────────────────────────
+
+def test_tableau_de_bord_adapte_a_la_base(client, admin, source_pg):
+    r = client.get(f"/sources/{source_pg}/tableau", headers=admin)
+    assert r.status_code == 200, r.text
+    t = r.json()["data"]
+    ind = {i["titre"]: i for i in t["indicateurs"]}
+    assert len(t["indicateurs"]) == 4
+    assert ind["Clients"]["valeur"] == 300 and ind["Clients"]["table"] == "customers"
+    assert ind["Fraudes"]["valeur"] == _scalaire("SELECT COUNT(*) FROM payments WHERE is_fraud = 1")[0][0]
+    montant = next(i for i in t["indicateurs"] if i["type"] == "montant")
+    assert montant["table"] == "loans"
+    assert round(montant["valeur"]) == round(float(_scalaire("SELECT SUM(principal) FROM loans")[0][0]))
+    g = {x["id"]: x for x in t["graphiques"]}
+    assert g["evolution"]["donnees"][0]["label"][:4].isdigit() and 2 <= len(g["evolution"]["donnees"]) <= 12
+    assert sum(p["nb"] for p in g["evolution"]["donnees"]) <= _scalaire("SELECT COUNT(*) FROM payments")[0][0]
+    rep = [x for x in t["graphiques"] if x["id"].startswith("repartition")]
+    assert rep and all(len(x["donnees"]) >= 2 for x in rep)
+    # Aucune donnée personnelle regroupée (ni e-mail, ni téléphone, ni nom)
+    assert not any(k in x["titre"].lower() for x in t["graphiques"] for k in ("email", "phone", "name", "password"))
+    # Montants convertis dans la monnaie choisie
+    e = client.get(f"/sources/{source_pg}/tableau?devise=EUR", headers=admin).json()["data"]
+    m_eur = next(i for i in e["indicateurs"] if i["type"] == "montant")["valeur"]
+    assert abs(m_eur * 655.957 - montant["valeur"]) < 655.957 * 0.01
+    # Démonstration et isolation
+    assert client.get("/sources/0/tableau", headers=admin).json()["data"]["indicateurs"]
+    assert client.get("/sources/999999/tableau", headers=admin).status_code == 404

@@ -12,6 +12,7 @@ import { FournisseurDevise, useDevise, SelecteurDevise, libelleColonne } from ".
 import { useSessionActive } from "./session";
 import { useAPI } from "./useAPI";
 import PanelAlertes from "./panneaux/Alertes";
+import { useTableauSource, kpisSource, SelecteurSource, PanelTableauSource } from "./panneaux/TableauSource";
 import PanelCredit from "./panneaux/Credit";
 import BarreLaterale from "./panneaux/BarreLaterale";
 import { FormulaireSignalement, EditeurCorrection, PanelApprentissage, PanelFiabilite, PanelAudit } from "./panneaux/Admin";
@@ -1442,7 +1443,7 @@ function Tableau({ session, onDeconnexion, onSession }) {
   };
   poserRef.current = poserQuestion;
 
-  const choisirSource = useCallback(async (s, question) => {
+  const choisirSource = useCallback(async (s, question, garderPage = false) => {
     let choix = null;
     if (s && !s.demo) {
       choix = { id: s.id, nom: s.nom, suggestions: s.profil?.suggestions || [] };
@@ -1452,7 +1453,7 @@ function Tableau({ session, onDeconnexion, onSession }) {
     }
     setSourceActive(choix);
     try { sessionStorage.setItem("voicebank_source", JSON.stringify(choix)); } catch (e) { /* rien */ }
-    setOnglet("assistant"); ongletRef.current = "assistant"; window.scrollTo(0, 0);
+    if (!garderPage) { setOnglet("assistant"); ongletRef.current = "assistant"; window.scrollTo(0, 0); }
     if (question) setTimeout(() => poserRef.current(question, choix), 0);
   }, []);
 
@@ -1465,7 +1466,8 @@ function Tableau({ session, onDeconnexion, onSession }) {
     if (window.confirm("Supprimer tout l'historique ?")) setHistorique([]);
   };
 
-  const kpis = dashboard ? [
+  const tableauSource = useTableauSource(sourceActive, devise.code);
+  const kpis = sourceActive ? kpisSource(tableauSource.donnees, devise) : dashboard ? [
     { titre: "Clients",        valeur: Number(dashboard.total_clients || 0).toLocaleString("fr"),       icone: Users,       couleur: "#1F654D" },
     { titre: "Transactions",   valeur: Number(dashboard.total_transactions || 0).toLocaleString("fr"),   icone: Activity,    couleur: "#3E6FB0" },
     { titre: "Fraudes",        valeur: Number(dashboard.total_fraudes || 0).toLocaleString("fr"),        icone: ShieldAlert, couleur: "#EF4444" },
@@ -1486,7 +1488,8 @@ function Tableau({ session, onDeconnexion, onSession }) {
   const PAGES = {
     assistant:     { titre: "Assistant vocal",        sousTitre: "Pose une question sur tes données, à la voix ou au clavier" },
     donnees:       { titre: "Mes données",            sousTitre: "Brancher, diagnostiquer et interroger les données de ton organisation" },
-    tableau:       { titre: "Tableau de bord",         sousTitre: "Vue d'ensemble des clients, des transactions et des crédits" },
+    tableau:       { titre: "Tableau de bord",         sousTitre: sourceActive ? `Vue d'ensemble de « ${sourceActive.nom} », calculée d'après sa structure`
+                                                                       : "Vue d'ensemble des clients, des transactions et des crédits" },
     alertes:       { titre: "Alertes de fraude",       sousTitre: "Alertes à vérifier et décisions prises" },
     analyse:       { titre: "Analyse de transaction",  sousTitre: "Estimer le risque de fraude d'une opération" },
     credit:        { titre: "Score de crédit",         sousTitre: "Risque de défaut d'une demande ou d'un crédit en cours" },
@@ -1613,15 +1616,8 @@ function Tableau({ session, onDeconnexion, onSession }) {
               {/* ── Zone saisie ──────────────────────────────── */}
               <div className={`rounded-2xl border p-5 mb-6 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
                 {(sourcesPretes.length > 0 || sourceActive) && (
-                  <div className="flex flex-wrap items-center gap-2 mb-4">
-                    <span className={`text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>Données interrogées :</span>
-                    <select aria-label="Données interrogées" value={sourceActive ? String(sourceActive.id) : ""}
-                      onChange={e => choisirSource(e.target.value ? sourcesPretes.find(x => String(x.id) === e.target.value) : null)}
-                      className={`text-xs px-2 py-1.5 rounded-lg border outline-none ${dark ? "bg-gray-700 border-gray-600" : "bg-gray-50 border-gray-200"}`}>
-                      <option value="">Base VoiceBank (démonstration)</option>
-                      {sourcesPretes.map(x => <option key={x.id} value={String(x.id)}>{x.nom} · {x.libelle_type}</option>)}
-                      {sourceActive && !sourcesPretes.some(x => x.id === sourceActive.id) && <option value={String(sourceActive.id)}>{sourceActive.nom}</option>}
-                    </select>
+                  <div className="mb-4">
+                    <SelecteurSource dark={dark} sourceActive={sourceActive} sourcesPretes={sourcesPretes} onChoisir={s => choisirSource(s)} />
                   </div>
                 )}
                 <div className="flex items-center gap-4 mb-4">
@@ -1706,9 +1702,25 @@ function Tableau({ session, onDeconnexion, onSession }) {
 
             </>
           )}
-          {page === "tableau" && (stats
-            ? <PanelGraphiques dark={dark} stats={stats} />
-            : <p className={`text-sm ${dark ? "text-gray-500" : "text-gray-400"}`}>Statistiques indisponibles.</p>)}
+          {page === "tableau" && (
+            <>
+              {(sourcesPretes.length > 0 || sourceActive) && (
+                <div className="mb-4">
+                  <SelecteurSource dark={dark} sourceActive={sourceActive} sourcesPretes={sourcesPretes} onChoisir={s => choisirSource(s, null, true)} />
+                </div>
+              )}
+              {kpis.length > 0 && (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                  {kpis.map((k, i) => <KpiCard key={i} {...k} dark={dark} />)}
+                </div>
+              )}
+              {sourceActive
+                ? <PanelTableauSource dark={dark} etat={tableauSource} devise={devise} />
+                : stats
+                  ? <PanelGraphiques dark={dark} stats={stats} />
+                  : <p className={`text-sm ${dark ? "text-gray-500" : "text-gray-400"}`}>Statistiques indisponibles.</p>}
+            </>
+          )}
           {page === "donnees"    && <PanelSources dark={dark} onInterroger={choisirSource} onAbonnement={() => allerA("abonnement")} />}
           {page === "alertes"    && <PanelAlertes dark={dark} onChange={rafraichirCompteurs} />}
           {page === "analyse"    && <PanelAnalyse dark={dark} />}

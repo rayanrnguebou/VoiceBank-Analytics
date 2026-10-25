@@ -169,14 +169,43 @@ def commentaire_local(question: str, colonnes: list[str], lignes: list[dict]) ->
         if any(m in q for m in mots):
             phrases.append(conseil)
             break
-    if cat and len(lignes) > 1:
-        phrases.append("Tu peux aussi poser une question de suite, par exemple « et à Douala ? » "
-                       "ou « et en 2024 ? », pour comparer.")
     return " ".join(phrases[:4]) or "Ouvre le graphique pour explorer le détail de ce résultat."
 
 
-def resume_gemini(question: str, colonnes: list[str], lignes: list[dict]) -> tuple[str, str | None] | None:
-    """Un seul appel Gemini pour le résumé ET le commentaire. Retourne (résumé, commentaire)."""
+# ── Relance : question posée à l'oral à la fin, à laquelle on répond de vive voix ──
+# Questions de suivi que les règles locales savent traiter sans IA.
+_SUIVIS = [
+    (("fraud", "alerte", "suspect"), "Veux-tu voir les alertes critiques encore à traiter ?", "Alertes critiques"),
+    (("défaut", "defaut", "crédit", "credit", "prêt", "pret"),
+     "Veux-tu que je te liste les crédits en défaut ?", "Crédits en défaut"),
+    (("solde", "client", "diaspora"), "Veux-tu voir les dix clients qui ont le plus gros solde ?",
+     "Top 10 clients par solde"),
+    (("transaction", "volume", "ville", "canal"), "Veux-tu voir les transactions frauduleuses par banque ?",
+     "Transactions frauduleuses par banque"),
+]
+RELANCE_OUVERTE = "As-tu une autre question ?"
+
+
+def relance_locale(question: str) -> dict:
+    q = question.lower()
+    for mots, texte, suivante in _SUIVIS:
+        if any(m in q for m in mots) and suivante.lower() not in q:
+            return {"texte": texte, "question": suivante}
+    return {"texte": RELANCE_OUVERTE, "question": None}
+
+
+def _relance(texte, question) -> dict | None:
+    texte = str(texte or "").strip().replace("\n", " ")[:200]
+    if not texte:
+        return None
+    if not texte.endswith("?"):
+        texte = texte.rstrip(" .!") + " ?"
+    question = str(question or "").strip()[:300] or None
+    return {"texte": texte, "question": question}
+
+
+def resume_gemini(question: str, colonnes: list[str], lignes: list[dict]) -> dict | None:
+    """Un seul appel Gemini : résumé, commentaire et relance."""
     from .nl2sql import client_gemini
     client = client_gemini()
     if client is None:
@@ -185,15 +214,20 @@ def resume_gemini(question: str, colonnes: list[str], lignes: list[dict]) -> tup
     extrait = [{c: l.get(c) for c in sures} for l in lignes[:30]]
     prompt = (
         "Tu es l'assistant vocal d'une banque en Afrique centrale (montants en FCFA). Tu réponds à un "
-        "analyste bancaire. Les deux textes seront lus à voix haute : phrases courtes, pas de listes, "
+        "analyste bancaire. Les textes seront lus à voix haute : phrases courtes, pas de listes, "
         "pas de symboles, nombres arrondis (millions/milliards en toutes lettres), jamais de SQL.\n"
-        "Réponds UNIQUEMENT avec un objet JSON contenant deux clés :\n"
+        "Réponds UNIQUEMENT avec un objet JSON contenant ces clés :\n"
         '- "resume" : une ou deux phrases avec les chiffres clés du résultat ;\n'
         '- "commentaire" : trois à cinq phrases qui vont PLUS LOIN que le résumé, sans le répéter : '
         "ce que le résultat révèle (concentration, écarts, tendance, anomalies), les risques ou "
-        "opportunités pour la banque, une ou deux actions concrètes à mener, et une question de suite "
-        "utile à poser. N'invente aucun chiffre absent des données ; si tu fais une hypothèse, "
-        "présente-la comme telle.\n\n"
+        "opportunités pour la banque, une ou deux actions concrètes à mener. Ne termine PAS par une "
+        "question. N'invente aucun chiffre absent des données ; une hypothèse doit être présentée "
+        "comme telle ;\n"
+        '- "relance" : UNE question courte posée à l\'analyste pour proposer l\'analyse suivante la plus '
+        "utile, à laquelle il peut répondre par oui ou non (ex. « Veux-tu voir l'évolution par mois ? ») ;\n"
+        '- "question_suivante" : cette même analyse écrite comme une demande autonome et courte à poser '
+        "à la base de données, compréhensible sans le contexte (ex. « Évolution mensuelle des "
+        "transactions frauduleuses à Douala »).\n\n"
         f"Question : <<<{question}>>>\nNombre total de lignes : {len(lignes)}\n"
         f"Extrait (30 lignes max) : {json.dumps(extrait, ensure_ascii=False, default=str)[:6000]}\n")
     try:
@@ -207,15 +241,21 @@ def resume_gemini(question: str, colonnes: list[str], lignes: list[dict]) -> tup
         data = json.loads(brut.removeprefix("```json").removesuffix("```").strip())
         texte = str(data.get("resume") or "").strip().replace("\n", " ")[:600]
         comm = str(data.get("commentaire") or "").strip().replace("\n", " ")[:1500] or None
+        relance = _relance(data.get("relance"), data.get("question_suivante"))
     except (ValueError, AttributeError):
-        texte, comm = brut.replace("\n", " ")[:600], None      # réponse en texte libre
-    return (texte, comm) if texte else None
+        texte, comm, relance = brut.replace("\n", " ")[:600], None, None      # réponse en texte libre
+    return {"resume": texte, "commentaire": comm, "relance": relance} if texte else None
 
 
-def resumer(question: str, colonnes: list[str], lignes: list[dict]) -> tuple[str, str, str]:
-    """Retourne (résumé, commentaire, source) avec source = 'gemini' ou 'local'."""
+def resumer(question: str, colonnes: list[str], lignes: list[dict]) -> dict:
+    """Retourne {resume, commentaire, relance, source} ; source = 'gemini' ou 'local'."""
     if lignes:
         r = resume_gemini(question, colonnes, lignes)
         if r:
-            return r[0], r[1] or commentaire_local(question, colonnes, lignes), "gemini"
-    return resume_local(question, colonnes, lignes), commentaire_local(question, colonnes, lignes), "local"
+            return {"resume": r["resume"],
+                    "commentaire": r["commentaire"] or commentaire_local(question, colonnes, lignes),
+                    "relance": r["relance"] or relance_locale(question), "source": "gemini"}
+    return {"resume": resume_local(question, colonnes, lignes),
+            "commentaire": commentaire_local(question, colonnes, lignes),
+            "relance": relance_locale(question) if lignes else {"texte": RELANCE_OUVERTE, "question": None},
+            "source": "local"}

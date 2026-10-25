@@ -254,14 +254,13 @@ def _question_vers_resultat(texte: str, u: Utilisateur, contexte: ContexteQuesti
         _journaliser(texte, sql, False, int((time.time() - debut) * 1000), u)
         raise
     lignes = masquer_lignes(colonnes, lignes, u.role)
-    texte_resume, commentaire, source_resume = (resume.resumer(texte, colonnes, lignes) if resumer
-                                                else (None, None, None))
+    r = resume.resumer(texte, colonnes, lignes) if resumer else {}
     duree = int((time.time() - debut) * 1000)
     _journaliser(texte, sql, True, duree, u)
     return {"status": "ok", "question": texte, "sql": sql, "source": source,
             "score_rag": score, "avertissement": avertissement, "colonnes": colonnes, "total": len(lignes),
-            "data": lignes, "duree_ms": duree, "resume": texte_resume, "resume_source": source_resume,
-            "commentaire": commentaire,
+            "data": lignes, "duree_ms": duree, "resume": r.get("resume"), "resume_source": r.get("source"),
+            "commentaire": r.get("commentaire"), "relance": r.get("relance"),
             "suite": suite, "question_precedente": ctx["question"] if suite else None}
 
 

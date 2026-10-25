@@ -24,6 +24,7 @@ des corrections, mesure de la fiabilité et journal d'audit.
 |---|---|
 | **Question vocale ou écrite** | Le texte s'écrit pendant qu'on parle, puis Whisper le finalise. |
 | **Réponse rédigée et parlée** | Résumé en 1-2 phrases (Gemini, ou calcul local), lu par le navigateur, puis une **analyse orale** plus poussée (tendance, concentration, risques, actions conseillées, question de suite) qui n'est pas affichée. Bouton « Lecture » pour arrêter, 🔊 pour couper la voix. |
+| **Mode conversation** | La réponse se termine par une question (« Veux-tu voir les alertes critiques ? ») : le micro s'ouvre tout seul, on répond « oui », « non merci » ou une autre question, sans cliquer. L'écoute s'arrête seule après un silence ou si personne ne parle (7 s). Icône 💬 pour désactiver. |
 | **Questions de suite** | « et à Douala ? », « seulement BICEC », « en 2025 » reprennent la question précédente. |
 | **Pertinence** | Une règle locale ne répond que si elle couvre toute la question ; sinon Gemini, ou réponse marquée « approximative ». |
 | **Apprentissage** | Bouton « Réponse incorrecte ? » ; l'admin corrige, teste et enregistre la requête (RAG). |

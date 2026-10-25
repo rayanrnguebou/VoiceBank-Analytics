@@ -33,7 +33,9 @@ def disponible() -> bool:
 
 def mode() -> str:
     if config.NOTCHPAY_PUBLIC_KEY:
-        return "test" if "test_" in config.NOTCHPAY_PUBLIC_KEY else "reel"
+        cle = config.NOTCHPAY_PUBLIC_KEY.lower()
+        # Anciennes clés « test_… », nouvelles « pk_test.… »
+        return "test" if cle.startswith(("test_", "pk_test", "pk.test")) or "_test." in cle else "reel"
     return "simulation" if config.PAIEMENT_SIMULATION else "indisponible"
 
 

@@ -330,7 +330,11 @@ export function PanelComptes({ dark, session }) {
                       {c.cree_par && <p className={texteDiscret(dark)}>créé par {c.cree_par}{c.date_creation ? ` le ${formaterDate(c.date_creation)}` : ""}</p>}
                     </td>
                     <td className="p-2">
-                      {gestion && !moi && c.actif ? (
+                      {c.role === "visiteur" ? <span>Essai gratuit</span>
+                        : c.role === "client" ? (
+                          <span>{c.role_org === "admin" ? "Admin" : "Analyste"} client
+                            {c.organisation && <span className={`block ${texteDiscret(dark)}`}>{c.organisation}</span>}</span>
+                        ) : gestion && !moi && c.actif ? (
                         <select value={c.role} aria-label={`Rôle de ${c.nom}`} className={`${champ(dark)} w-auto py-1`}
                           onChange={e => modifier(c, { role: e.target.value },
                             `Passer ${c.nom} en ${e.target.value === "admin" ? "administrateur" : "analyste"} ? Il devra se reconnecter.`)}>

@@ -262,7 +262,30 @@ L'accueil demande **« Tu es… » Visiteur ou Organisation** :
   effectif, ville, responsable, fonction, e-mail, téléphone, NIU et RCCM facultatifs) ou un
   **particulier** (nom, profession, ville, e-mail, téléphone), puis paie. Un achat s'ajoute à la
   durée restante ; pas de reconduction automatique.
-- L'administrateur suit visiteurs, abonnés, paiements et revenus dans **Administration → Abonnements**.
+- L'administrateur suit visiteurs, organisations clientes, paiements et revenus dans **Administration → Abonnements**.
+
+### Organisations clientes : un abonnement partagé
+
+- L'abonnement appartient à l'**organisation**. Celui qui paie le premier abonnement en devient
+  l'**administrateur** ; il voit **Mon organisation → Membres**.
+- Il **invite** ses collègues (nom, e-mail, rôle *Analyste* ou *Administrateur*). Chacun reçoit un
+  **e-mail d'invitation** avec un lien d'activation (72 h, usage unique) pour choisir son mot de passe.
+  Sans service d'e-mail, un mot de passe provisoire s'affiche une fois, à transmettre.
+- **Comptes inclus** (administrateur compris) : Jour et Semaine 3, Mois 10, Année 25 (`COMPTES_JOUR`,
+  `COMPTES_SEMAINE`, `COMPTES_MOIS`, `COMPTES_ANNEE`). Un **particulier** a un seul compte.
+- Tous les membres **partagent** l'abonnement : à son échéance, toute l'organisation est bloquée jusqu'au
+  renouvellement par un administrateur. Les analystes ne voient ni l'abonnement ni les paiements.
+- Les **bases connectées** sont partagées dans l'organisation : l'administrateur les branche, tous les membres
+  les interrogent. Une organisation ne voit jamais les membres ni les données d'une autre.
+- Les membres ne voient **pas** l'administration de la plateforme (comptes, audit, apprentissage…), réservée
+  au super-administrateur ; seuls les visiteurs en essai la découvrent, anonymisée et en lecture seule.
+
+**E-mails professionnels** (vouvoiement, en-tête, récapitulatif, bouton, signature) : bienvenue à l'essai,
+reçu de paiement, invitation, code de vérification, confirmation de changement de mot de passe. Signature
+réglable : `EMAIL_SIGNATURE_NOM`, `EMAIL_SIGNATURE_FONCTION`, `EMAIL_CONTACT` (adresse de réponse).
+**Administration → Abonnements → Envoyer un test** affiche la raison exacte d'un échec d'envoi.
+Avec Brevo, si le test répond « Unrecognised IP address » : dans Brevo, **Sécurité → IP autorisées**,
+désactive le blocage des adresses IP inconnues (l'adresse de Render change).
 
 ### Paiement (NotchPay : MTN MoMo, Orange Money, cartes)
 

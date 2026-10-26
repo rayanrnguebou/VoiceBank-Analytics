@@ -16,11 +16,11 @@ from slowapi.errors import RateLimitExceeded
 from . import audit, config, credit, db, devises, evaluation, fraude, nl2sql, paiement, resume, transcription
 from .garde_sql import SQLRefuse, valider_sql
 from .masquage import masquer_ligne, masquer_lignes
-from . import recuperation, securite
+from . import courriel, organisations, recuperation, securite
 from .connecteur import service as sources
 from .paiement import PaiementRefuse
-from .securite import (CompteRefuse, Utilisateur, admin_ou_decouverte, admin_requis, authentifier, creer_jeton,
-                       interne_requis, utilisateur_authentifie, utilisateur_courant, utilisateur_valide)
+from .securite import (CompteRefuse, Utilisateur, admin_organisation, admin_ou_decouverte, admin_requis, authentifier,
+                       creer_jeton, interne_requis, utilisateur_authentifie, utilisateur_courant, utilisateur_valide)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("voicebank")
@@ -98,6 +98,31 @@ class Identifiants(BaseModel):
 class ChangementMdp(BaseModel):
     actuel: str = Field(min_length=1, max_length=128)
     nouveau: str = Field(min_length=1, max_length=128)
+
+
+class Invitation(BaseModel):
+    email: str = Field(min_length=5, max_length=64)
+    nom_complet: str = Field(min_length=2, max_length=120)
+    role_org: Literal["analyste", "admin"] = "analyste"
+
+
+class ModificationMembre(BaseModel):
+    role_org: Literal["analyste", "admin"] | None = None
+    actif: bool | None = None
+
+
+class NomOrganisation(BaseModel):
+    nom: str = Field(min_length=2, max_length=150)
+
+
+class ActivationInvitation(BaseModel):
+    identifiant: str = Field(min_length=3, max_length=64)
+    jeton: str = Field(min_length=20, max_length=100)
+    nouveau: str = Field(min_length=1, max_length=128)
+
+
+class EmailTest(BaseModel):
+    destinataire: str | None = Field(None, max_length=64)
 
 
 class DemandeCode(BaseModel):
@@ -487,18 +512,23 @@ def _acces(u: Utilisateur) -> dict:
     """Statut d'accès affiché par l'interface (bandeau d'essai, abonnement)."""
     if not u.externe or not securite.mode_base():
         return {"type": "interne", "lecture_seule": False, "expire": False}
-    l = db.ecrire("SELECT essai_fin, abonnement_fin, formule, nom_complet, "
+    # Abonné : l'abonnement est celui de son organisation (partagé par tous ses membres)
+    l = db.ecrire("SELECT u.essai_fin, COALESCE(o.abonnement_fin, u.abonnement_fin) AS abonnement_fin, "
+                  "COALESCE(o.formule, u.formule) AS formule, u.nom_complet, o.nom AS organisation, o.type_org, "
                   "(SELECT COUNT(*) FROM voicebank.logs_vocaux WHERE utilisateur = :u "
                   " AND date_requete >= CURRENT_DATE) AS questions_jour, "
-                  "GREATEST(EXTRACT(EPOCH FROM (CASE WHEN role = 'visiteur' THEN essai_fin ELSE abonnement_fin END) "
-                  " - LOCALTIMESTAMP), 0) AS secondes_restantes "
-                  "FROM voicebank.utilisateurs WHERE nom = :u", {"u": u.nom}).lignes[0]
+                  "GREATEST(EXTRACT(EPOCH FROM (CASE WHEN u.role = 'visiteur' THEN u.essai_fin "
+                  " ELSE COALESCE(o.abonnement_fin, u.abonnement_fin) END) - LOCALTIMESTAMP), 0) AS secondes_restantes "
+                  "FROM voicebank.utilisateurs u LEFT JOIN voicebank.organisations o ON o.id_org = u.id_org "
+                  "WHERE u.nom = :u", {"u": u.nom}).lignes[0]
+    fin = l.essai_fin if u.role == "visiteur" else l.abonnement_fin
     return {"type": "essai" if u.role == "visiteur" else "abonnement", "lecture_seule": True,
             "expire": u.acces_expire, "formule": l.formule, "nom_complet": l.nom_complet,
-            "fin": (l.essai_fin if u.role == "visiteur" else l.abonnement_fin).isoformat()
-                   if (l.essai_fin if u.role == "visiteur" else l.abonnement_fin) else None,
+            "fin": fin.isoformat() if fin else None,
             "secondes_restantes": int(l.secondes_restantes or 0),
-            "questions_jour": int(l.questions_jour), "quota_questions": _quota(u)}
+            "questions_jour": int(l.questions_jour), "quota_questions": _quota(u),
+            "organisation": l.organisation, "type_organisation": l.type_org, "role_org": u.role_org,
+            "gere_abonnement": u.role == "visiteur" or u.id_org is None or u.admin_org}
 
 
 def _quota(u: Utilisateur) -> int | None:
@@ -542,6 +572,9 @@ def inscription_essai(request: Request, body: InscriptionEssai):
     except CompteRefuse as e:
         raise HTTPException(400, str(e))
     audit.journaliser(u.nom, "essai_cree", {"profil": body.profil}, ip_client(request))
+    if courriel.disponible():
+        courriel.envoyer_en_arriere_plan(u.nom, organisations.message_bienvenue_essai(body.nom_complet.strip(),
+                                                                                      config.ESSAI_JOURS))
     return _reponse_jeton(u, securite.version_jeton(u.nom))
 
 
@@ -560,7 +593,8 @@ def formules_abonnement():
 
 @app.get("/abonnement/moi")
 def mon_abonnement(u: Utilisateur = Depends(utilisateur_valide)):
-    return {"acces": _acces(u), "paiements": paiement.mes_paiements(u.nom) if u.externe else []}
+    voit_paiements = u.externe and (u.id_org is None or u.admin_org)
+    return {"acces": _acces(u), "paiements": paiement.mes_paiements(u.nom) if voit_paiements else []}
 
 
 @app.post("/abonnement/commander")
@@ -568,6 +602,8 @@ def mon_abonnement(u: Utilisateur = Depends(utilisateur_valide)):
 def commander_abonnement(request: Request, body: Commande, u: Utilisateur = Depends(utilisateur_valide)):
     if not u.externe:
         raise HTTPException(400, "Les comptes de l'organisation n'ont pas besoin d'abonnement.")
+    if u.id_org is not None and not u.admin_org:
+        raise HTTPException(403, "L'abonnement est géré par l'administrateur de ton organisation.")
     if not body.accepte_conditions:
         raise HTTPException(400, "Accepte les conditions de vente pour continuer.")
     infos = body.organisation if body.type_client == "organisation" else body.particulier
@@ -1025,15 +1061,103 @@ def modifier_utilisateur(request: Request, body: ModificationCompte, nom: str = 
 
 
 # ════════════════════════════════════════
+# ORGANISATION CLIENTE : membres, invitations (administrateur de l'organisation)
+# ════════════════════════════════════════
+
+def _membre_org(u: Utilisateur = Depends(utilisateur_valide)) -> Utilisateur:
+    if u.id_org is None:
+        raise HTTPException(404, "Ce compte n'appartient à aucune organisation cliente")
+    return u
+
+
+@app.get("/organisation")
+def mon_organisation(u: Utilisateur = Depends(_membre_org)):
+    return {"status": "ok", "data": _compte(lambda: organisations.infos(u))}
+
+
+@app.post("/organisation/membres")
+@limiter.limit("30/hour")
+def inviter_membre(request: Request, body: Invitation, u: Utilisateur = Depends(admin_organisation)):
+    res = _compte(lambda: organisations.inviter(u, body.email, body.nom_complet, body.role_org))
+    audit.journaliser(u.nom, "membre_invite", {"compte": res["nom"], "role_org": body.role_org, "org": u.id_org,
+                                               "email_envoye": res["invitation_envoyee"]}, ip_client(request))
+    return {"status": "ok", **res}
+
+
+@app.post("/organisation/membres/{nom}/inviter")
+@limiter.limit("30/hour")
+def renvoyer_invitation(request: Request, nom: str = Path(max_length=64), u: Utilisateur = Depends(admin_organisation)):
+    res = _compte(lambda: organisations.renvoyer_invitation(u, nom))
+    audit.journaliser(u.nom, "invitation_renvoyee", {"compte": nom, "org": u.id_org}, ip_client(request))
+    return {"status": "ok", **res}
+
+
+@app.post("/organisation/membres/{nom}/modifier")
+def modifier_membre(request: Request, body: ModificationMembre, nom: str = Path(max_length=64),
+                    u: Utilisateur = Depends(admin_organisation)):
+    changements = _compte(lambda: organisations.modifier_membre(u, nom, body.role_org, body.actif))
+    if changements:
+        audit.journaliser(u.nom, "membre_modifie", {"compte": nom, "org": u.id_org, **changements}, ip_client(request))
+    return {"status": "ok", "changements": changements}
+
+
+@app.post("/organisation/nom")
+def renommer_organisation(body: NomOrganisation, u: Utilisateur = Depends(admin_organisation)):
+    _compte(lambda: organisations.renommer(u, body.nom))
+    return {"status": "ok"}
+
+
+@app.post("/auth/invitation")
+@limiter.limit("10/hour")
+def activer_invitation(request: Request, body: ActivationInvitation):
+    """Lien reçu par e-mail : la personne choisit son mot de passe et elle est connectée."""
+    u, version = _compte(lambda: organisations.activer_invitation(body.identifiant, body.jeton, body.nouveau))
+    audit.journaliser(u.nom, "invitation_acceptee", {"org": u.id_org}, ip_client(request))
+    return _reponse_jeton(u, version)
+
+
+@app.get("/admin/organisations")
+def lister_organisations(u: Utilisateur = Depends(admin_requis)):
+    return {"status": "ok", "data": organisations.lister()}
+
+
+@app.post("/admin/email-test")
+@limiter.limit("10/hour")
+def email_de_test(request: Request, body: EmailTest, u: Utilisateur = Depends(admin_requis)):
+    """Envoie un e-mail de test et renvoie la raison exacte d'un échec (diagnostic Brevo / SMTP)."""
+    dest = (body.destinataire or db.ecrire("SELECT email FROM voicebank.utilisateurs WHERE nom = :n",
+                                           {"n": u.nom}).scalar() or "").strip().lower()
+    if not dest or not securite.EMAIL_VALIDE.fullmatch(dest):
+        raise HTTPException(400, "Indique une adresse, ou ajoute ton e-mail de récupération (icône 🔑).")
+    try:
+        courriel.envoyer_message(dest, courriel.Message(
+            sujet="Test d'envoi VoiceBank Analytics", titre="L'envoi d'e-mails fonctionne",
+            paragraphes=["Ce message confirme que VoiceBank Analytics peut envoyer des e-mails : codes de vérification, "
+                         "invitations des membres et reçus de paiement."],
+            details=[("Expéditeur", config.EMAIL_EXPEDITEUR or "—"),
+                     ("Service", "Brevo" if config.BREVO_API_KEY else "SMTP" if config.SMTP_HOTE else "aucun")],
+            bouton=("Ouvrir VoiceBank", config.URL_INTERFACE)))
+    except courriel.EnvoiImpossible as e:
+        raise HTTPException(502, str(e))
+    return {"status": "ok", "message": f"E-mail de test envoyé à {dest}. Vérifie aussi les courriers indésirables."}
+
+
+# ════════════════════════════════════════
 # CONNECTEUR : bases et fichiers des organisations
 # ════════════════════════════════════════
 
+def _peut_brancher(u: Utilisateur) -> bool:
+    return u.role == "admin" or (u.role == "client" and (u.id_org is None or u.role_org == "admin"))
+
+
 def proprietaire_sources(u: Utilisateur = Depends(utilisateur_courant)) -> Utilisateur:
-    """Brancher ses propres données : abonnés et administrateur (pas pendant l'essai gratuit)."""
-    if u.role not in ("client", "admin"):
+    """Brancher et gérer les données de l'organisation : son administrateur (et l'administrateur de la
+    plateforme). Les analystes les interrogent ; pas pendant l'essai gratuit."""
+    if not _peut_brancher(u):
         raise HTTPException(403, "Brancher tes propres données est réservé aux abonnés. Pendant l'essai, "
                                  "explore la source de démonstration." if u.role == "visiteur" else
-                                 "Réservé aux administrateurs.")
+                                 "Seul l'administrateur de ton organisation peut brancher ou modifier les données."
+                                 if u.role == "client" else "Réservé aux administrateurs.")
     return u
 
 
@@ -1047,7 +1171,7 @@ def _src(action):
 @app.get("/sources")
 def lister_sources(u: Utilisateur = Depends(utilisateur_courant)):
     return {"status": "ok", "data": _src(lambda: sources.lister(u.nom)),
-            "peut_ajouter": u.role in ("client", "admin"), "types": [
+            "peut_ajouter": _peut_brancher(u), "types": [
                 {"code": k, "libelle": v["libelle"], "port": v["port"]} for k, v in sources.TYPES.items() if k != "demo"]}
 
 

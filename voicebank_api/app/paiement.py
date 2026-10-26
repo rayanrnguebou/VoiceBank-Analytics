@@ -18,7 +18,7 @@ import secrets
 import httpx
 from sqlalchemy import text
 
-from . import config, db
+from . import config, db, organisations
 
 log = logging.getLogger("voicebank")
 
@@ -45,7 +45,8 @@ def formules() -> list[dict]:
     for code, (libelle, jours, prix) in config.FORMULES.items():
         economie = round(100 * (1 - prix / (jour * jours))) if jours > 1 and jour else 0
         res.append({"code": code, "libelle": libelle, "duree_jours": jours, "prix": prix,
-                    "devise": config.DEVISE, "economie_pct": max(economie, 0)})
+                    "devise": config.DEVISE, "economie_pct": max(economie, 0),
+                    "comptes_organisation": config.COMPTES_PAR_FORMULE.get(code)})
     return res
 
 
@@ -142,16 +143,16 @@ def _activer(p) -> bool:
                               {"r": p.reference}).scalar()
         if statut != "en_attente":
             return False
-        fin = conn.execute(text(
-            "UPDATE voicebank.utilisateurs SET "
-            "role = CASE WHEN role IN ('visiteur', 'client') THEN 'client' ELSE role END, "
-            "abonnement_fin = GREATEST(COALESCE(abonnement_fin, LOCALTIMESTAMP), LOCALTIMESTAMP) "
-            "                 + make_interval(days => :j), formule = :f "
-            "WHERE nom = :u RETURNING abonnement_fin"),
-            {"u": p.utilisateur, "j": p.duree_jours, "f": p.formule}).scalar()
+        # L'abonnement appartient à l'organisation du payeur (créée à son premier paiement)
+        id_org, fin = organisations.activer_abonnement(conn, p.utilisateur, p.formule, p.duree_jours)
         conn.execute(text("UPDATE voicebank.paiements SET statut = 'paye', date_paiement = LOCALTIMESTAMP, "
-                          "abonnement_fin = :fin WHERE reference = :r"), {"r": p.reference, "fin": fin})
-    log.info("Abonnement %s activé pour %s (paiement %s)", p.formule, p.utilisateur, p.reference)
+                          "abonnement_fin = :fin, id_org = :o WHERE reference = :r"),
+                     {"r": p.reference, "fin": fin, "o": id_org})
+    log.info("Abonnement %s activé pour l'organisation %s (paiement %s)", p.formule, id_org, p.reference)
+    try:
+        organisations.envoyer_recu(p.reference)
+    except Exception as e:                  # le reçu ne doit jamais bloquer l'activation
+        log.warning("Reçu non envoyé (%s) : %s", p.reference, e)
     return True
 
 
@@ -204,7 +205,9 @@ def traiter_webhook(corps_brut: bytes, signature: str | None) -> str:
 
 
 def mes_paiements(utilisateur: str) -> list[dict]:
-    r = db.ecrire("SELECT reference, formule, montant, devise, statut, date_creation, date_paiement, abonnement_fin "
-                  "FROM voicebank.paiements WHERE utilisateur = :u ORDER BY date_creation DESC LIMIT 20",
+    # Paiements du compte et de son organisation (renouvellements faits par un autre administrateur)
+    r = db.ecrire("SELECT reference, formule, montant, devise, statut, date_creation, date_paiement, abonnement_fin, "
+                  "utilisateur AS paye_par FROM voicebank.paiements WHERE utilisateur = :u OR (id_org IS NOT NULL AND "
+                  "id_org = (SELECT id_org FROM voicebank.utilisateurs WHERE nom = :u)) ORDER BY date_creation DESC LIMIT 20",
                   {"u": utilisateur})
     return [{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in l._mapping.items()} for l in r.lignes]

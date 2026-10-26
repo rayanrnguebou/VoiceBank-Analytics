@@ -8,6 +8,7 @@ import EcranAccueil from "./panneaux/Accueil";
 import { BandeauAcces, PanelAbonnement, PanelAbonnements } from "./panneaux/Abonnement";
 import { LectureSeule, useLectureSeule, TITRE_LECTURE_SEULE } from "./lectureSeule";
 import PanelSources from "./panneaux/Connecteur";
+import PanelOrganisation from "./panneaux/Organisation";
 import { FournisseurDevise, useDevise, SelecteurDevise, libelleColonne } from "./devise";
 import { useSessionActive } from "./session";
 import { useAPI } from "./useAPI";
@@ -1278,7 +1279,9 @@ function Tableau({ session, onDeconnexion, onSession }) {
   const { appeler: appelerQuestion, chargement, erreur } = useAPI();
   const estAdmin = session.role === "admin";
   const externe = session.role === "visiteur" || session.role === "client";
-  const voitAdmin = estAdmin || externe;      // visiteurs : administration visible, en lecture seule
+  // Administration de la plateforme : l'administrateur, et les visiteurs en essai (démonstration en lecture seule).
+  // Les membres d'une organisation cliente ne voient que leur organisation.
+  const voitAdmin = estAdmin || session.role === "visiteur";
   const [acces, setAcces] = useState(null);
   const rafraichirAcces = useCallback(() => {
     http.get("/auth/moi").then(r => setAcces(r.data.acces)).catch(() => {});
@@ -1499,6 +1502,8 @@ function Tableau({ session, onDeconnexion, onSession }) {
     audit:         { titre: "Audit",                   sousTitre: "Qui a fait quoi, et quand" },
     comptes:       { titre: "Comptes",                 sousTitre: "Qui peut se connecter, avec quels droits" },
     abonnement:    { titre: "Abonnement",              sousTitre: "Formules, paiement et factures" },
+    organisation:  { titre: acces?.type_organisation === "particulier" ? "Mon compte" : "Mon organisation",
+                     sousTitre: acces?.organisation ? `${acces.organisation} : membres et abonnement partagé` : "Membres et abonnement partagé" },
     abonnements:   { titre: "Abonnements",             sousTitre: "Visiteurs, abonnés et paiements reçus" },
   };
   // Essai ou abonnement échu : seule la page Abonnement reste accessible.
@@ -1507,7 +1512,7 @@ function Tableau({ session, onDeconnexion, onSession }) {
   return (
     <div className={`min-h-screen flex ${dark ? "bg-gray-950 text-gray-100" : "bg-gray-50 text-gray-900"}`}>
       <BarreLaterale
-        page={page} allerA={allerA} estAdmin={estAdmin} voitAdmin={voitAdmin} externe={externe} session={session}
+        page={page} allerA={allerA} estAdmin={estAdmin} voitAdmin={voitAdmin} externe={externe} session={session} acces={acces}
         nbHistorique={historique.length} compteurs={compteurs}
         ouverte={menuOuvert} onFermer={() => setMenuOuvert(false)} onDeconnexion={onDeconnexion}
         onMotDePasse={() => setFenetreMdp(true)}
@@ -1733,6 +1738,7 @@ function Tableau({ session, onDeconnexion, onSession }) {
           {voitAdmin && page === "audit"         && <PanelAudit dark={dark} />}
           {voitAdmin && page === "comptes"       && <PanelComptes dark={dark} session={session} />}
           {externe && page === "abonnement"      && <PanelAbonnement dark={dark} acces={acces} utilisateur={session.utilisateur} />}
+          {externe && page === "organisation"    && <PanelOrganisation dark={dark} onAbonnement={() => allerA("abonnement")} />}
           {estAdmin && page === "abonnements"    && <PanelAbonnements dark={dark} />}
         </main>
         </LectureSeule.Provider>

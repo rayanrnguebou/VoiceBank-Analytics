@@ -48,6 +48,10 @@ GRANT SELECT, INSERT, UPDATE ON voicebank.profils_facturation, voicebank.paiemen
 GRANT USAGE ON SEQUENCE voicebank.paiements_id_paiement_seq TO voicebank_app;
 REVOKE ALL ON voicebank.profils_facturation, voicebank.paiements FROM voicebank_reader;
 -- Connecteur : sources des organisations (le propriétaire peut supprimer les siennes)
+-- Organisations clientes (abonnement partagé), invisibles pour le lecteur et l'IA.
+GRANT SELECT, INSERT, UPDATE ON voicebank.organisations TO voicebank_app;
+GRANT USAGE ON SEQUENCE voicebank.organisations_id_org_seq TO voicebank_app;
+REVOKE ALL ON voicebank.organisations FROM voicebank_reader;
 -- Récupération du mot de passe : empreintes des codes, invisibles pour le lecteur et l'IA.
 GRANT SELECT, INSERT, UPDATE, DELETE ON voicebank.codes_recuperation TO voicebank_app;
 GRANT USAGE ON SEQUENCE voicebank.codes_recuperation_id_code_seq TO voicebank_app;

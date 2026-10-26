@@ -315,6 +315,27 @@ ALTER TABLE voicebank.utilisateurs ADD CONSTRAINT utilisateurs_role_check
 CREATE UNIQUE INDEX IF NOT EXISTS idx_utilisateurs_email ON voicebank.utilisateurs (LOWER(email));
 
 -- ══════════════════════════════════════════════════════════
+-- ORGANISATIONS CLIENTES : l'abonnement appartient à l'organisation et il est partagé par ses membres.
+-- Celui qui s'abonne en devient l'administrateur ; il invite des analystes (nombre selon la formule).
+-- Un particulier est une « organisation » d'une seule personne.
+-- ══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS voicebank.organisations (
+    id_org              SERIAL       PRIMARY KEY,
+    nom                 VARCHAR(150) NOT NULL,
+    type_org            VARCHAR(20)  NOT NULL DEFAULT 'organisation' CHECK (type_org IN ('organisation', 'particulier')),
+    formule             VARCHAR(20),
+    abonnement_fin      TIMESTAMP,
+    actif               BOOLEAN      NOT NULL DEFAULT TRUE,
+    cree_par            VARCHAR(64),
+    date_creation       TIMESTAMP    NOT NULL DEFAULT LOCALTIMESTAMP
+);
+ALTER TABLE voicebank.utilisateurs ADD COLUMN IF NOT EXISTS id_org   INTEGER REFERENCES voicebank.organisations(id_org);
+ALTER TABLE voicebank.utilisateurs ADD COLUMN IF NOT EXISTS role_org VARCHAR(20);
+ALTER TABLE voicebank.utilisateurs DROP CONSTRAINT IF EXISTS utilisateurs_role_org_check;
+ALTER TABLE voicebank.utilisateurs ADD CONSTRAINT utilisateurs_role_org_check CHECK (role_org IN ('admin', 'analyste'));
+CREATE INDEX IF NOT EXISTS idx_utilisateurs_org ON voicebank.utilisateurs (id_org);
+
+-- ══════════════════════════════════════════════════════════
 -- TABLE 10 : INFORMATIONS DE FACTURATION (organisation ou particulier)
 -- ══════════════════════════════════════════════════════════
 CREATE TABLE IF NOT EXISTS voicebank.profils_facturation (
@@ -345,6 +366,7 @@ CREATE TABLE IF NOT EXISTS voicebank.paiements (
     abonnement_fin      TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_paiements_utilisateur ON voicebank.paiements (utilisateur, date_creation DESC);
+ALTER TABLE voicebank.paiements ADD COLUMN IF NOT EXISTS id_org INTEGER REFERENCES voicebank.organisations(id_org);
 
 
 -- ══════════════════════════════════════════════════════════
@@ -362,6 +384,8 @@ CREATE TABLE IF NOT EXISTS voicebank.codes_recuperation (
     date_creation       TIMESTAMP    NOT NULL DEFAULT LOCALTIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_codes_recuperation ON voicebank.codes_recuperation (utilisateur, date_creation DESC);
+-- « recuperation » : code à 6 chiffres ; « invitation » : lien d'activation d'un compte créé par un administrateur
+ALTER TABLE voicebank.codes_recuperation ADD COLUMN IF NOT EXISTS type_code VARCHAR(20) NOT NULL DEFAULT 'recuperation';
 
 
 -- ══════════════════════════════════════════════════════════
@@ -453,6 +477,27 @@ SELECT
     (SELECT COUNT(*) FROM voicebank.credits)                              AS total_credits,
     (SELECT SUM(montant_fcfa) FROM voicebank.credits WHERE statut_credit = 'En cours') AS encours_credit_fcfa,
     (SELECT COUNT(*) FROM voicebank.credits WHERE statut_credit = 'Défaut') AS credits_defaut;
+
+
+-- Sources partagées dans l'organisation
+ALTER TABLE voicebank.sources_donnees ADD COLUMN IF NOT EXISTS id_org INTEGER REFERENCES voicebank.organisations(id_org);
+
+-- Migration : chaque abonné existant devient l'administrateur de sa propre organisation
+DO $$
+DECLARE u RECORD; o INTEGER;
+BEGIN
+    FOR u IN SELECT nom, nom_complet, formule, abonnement_fin FROM voicebank.utilisateurs
+             WHERE role = 'client' AND id_org IS NULL LOOP
+        INSERT INTO voicebank.organisations (nom, type_org, formule, abonnement_fin, cree_par)
+        SELECT COALESCE(f.informations->>'raison_sociale', f.informations->>'nom_complet', u.nom_complet, u.nom),
+               COALESCE(f.type_client, 'particulier'), u.formule, u.abonnement_fin, u.nom
+        FROM (SELECT 1) x LEFT JOIN voicebank.profils_facturation f ON f.utilisateur = u.nom
+        RETURNING id_org INTO o;
+        UPDATE voicebank.utilisateurs SET id_org = o, role_org = 'admin' WHERE nom = u.nom;
+        UPDATE voicebank.sources_donnees SET id_org = o WHERE proprietaire = u.nom;
+        UPDATE voicebank.paiements SET id_org = o WHERE utilisateur = u.nom;
+    END LOOP;
+END $$;
 
 
 -- ══════════════════════════════════════════════════════════

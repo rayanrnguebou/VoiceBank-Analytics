@@ -13,7 +13,6 @@ import hashlib
 import hmac
 import logging
 import secrets
-import threading
 from datetime import timedelta
 
 from . import config, courriel, db
@@ -39,13 +38,12 @@ def _compte(identifiant: str):
     return r.lignes[0] if r.lignes else None
 
 
-def _envoyer_en_arriere_plan(*args, **kwargs):
-    def tache():
-        try:
-            courriel.envoyer(*args, **kwargs)
-        except Exception as e:
-            log.warning("E-mail non envoyé : %s", e)
-    threading.Thread(target=tache, daemon=True).start()
+def _envoyer(destinataire: str, m: "courriel.Message"):
+    courriel.envoyer_en_arriere_plan(destinataire, m)
+
+
+def _salutation(nom_complet: str | None) -> str:
+    return f"Bonjour {nom_complet.strip()}," if nom_complet and nom_complet.strip() else "Bonjour,"
 
 
 def disponible() -> bool:
@@ -60,27 +58,29 @@ def demander(identifiant: str, ip: str | None = None) -> str | None:
     l = _compte(identifiant)
     if l is None:
         return None
-    n = db.ecrire("SELECT COUNT(*) FROM voicebank.codes_recuperation WHERE utilisateur = :n "
+    n = db.ecrire("SELECT COUNT(*) FROM voicebank.codes_recuperation WHERE utilisateur = :n AND type_code = 'recuperation' "
                   "AND date_creation > LOCALTIMESTAMP - INTERVAL '1 hour'", {"n": l.nom}).scalar()
     if n >= MAX_DEMANDES_HEURE:
         log.info("Récupération : trop de demandes pour '%s'", l.nom)
         return None
     code = f"{secrets.randbelow(1_000_000):06d}"
-    db.ecrire("UPDATE voicebank.codes_recuperation SET utilise = TRUE WHERE utilisateur = :n AND NOT utilise",
-              {"n": l.nom})
+    db.ecrire("UPDATE voicebank.codes_recuperation SET utilise = TRUE WHERE utilisateur = :n AND NOT utilise "
+              "AND type_code = 'recuperation'", {"n": l.nom})
     db.ecrire("INSERT INTO voicebank.codes_recuperation (utilisateur, empreinte, expire, adresse_ip) "
               "VALUES (:n, :e, LOCALTIMESTAMP + :d, :ip)",
               {"n": l.nom, "e": _empreinte(l.nom, code), "d": timedelta(minutes=config.CODE_RECUPERATION_MIN),
                "ip": (ip or "")[:64]})
-    prenom = (l.nom_complet or "").split(" ")[0]
-    _envoyer_en_arriere_plan(
-        l.email, f"{code} : ton code VoiceBank", "Réinitialisation de ton mot de passe",
-        [f"Bonjour{' ' + prenom if prenom else ''},",
-         f"Voici ton code pour choisir un nouveau mot de passe. Il est valable {config.CODE_RECUPERATION_MIN} minutes "
-         "et ne peut servir qu'une fois.",
-         "Ne le communique à personne : l'équipe VoiceBank ne te le demandera jamais.",
-         "Si tu n'as rien demandé, ignore ce message : ton mot de passe actuel reste valable."],
-        code=code)
+    _envoyer(l.email, courriel.Message(
+        sujet=f"{code} : votre code de vérification VoiceBank",
+        titre="Réinitialisation de votre mot de passe",
+        salutation=_salutation(l.nom_complet),
+        paragraphes=["Vous avez demandé à choisir un nouveau mot de passe pour votre compte VoiceBank Analytics. "
+                     "Saisissez le code ci-dessous sur l'écran de connexion :"],
+        code=code,
+        apres=[f"Ce code est valable {config.CODE_RECUPERATION_MIN} minutes et ne peut servir qu'une seule fois."],
+        apercu=f"Votre code : {code} (valable {config.CODE_RECUPERATION_MIN} minutes)",
+        note="Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : votre mot de passe actuel reste "
+             "valable. Ne communiquez jamais ce code : l'équipe VoiceBank ne vous le demandera jamais."))
     return l.nom
 
 
@@ -96,7 +96,8 @@ def confirmer(identifiant: str, code: str, nouveau: str) -> str:
         bcrypt.checkpw(b"x", _HASH_FACTICE)
         raise CompteRefuse(REFUS)
     r = db.ecrire("SELECT id_code, empreinte FROM voicebank.codes_recuperation WHERE utilisateur = :n AND NOT utilise "
-                  "AND expire > LOCALTIMESTAMP AND tentatives < :m ORDER BY date_creation DESC LIMIT 1",
+                  "AND type_code = 'recuperation' AND expire > LOCALTIMESTAMP AND tentatives < :m "
+                  "ORDER BY date_creation DESC LIMIT 1",
                   {"n": l.nom, "m": MAX_ESSAIS})
     c = r.lignes[0] if r.lignes else None
     if c is None:
@@ -112,12 +113,20 @@ def confirmer(identifiant: str, code: str, nouveau: str) -> str:
     db.ecrire("UPDATE voicebank.utilisateurs SET hash_mdp = :h, doit_changer_mdp = FALSE, mdp_provisoire_expire = NULL, "
               "echecs_connexion = 0, verrouille_jusqua = NULL, date_modif_mdp = LOCALTIMESTAMP, "
               "version_jeton = version_jeton + 1 WHERE nom = :n", {"n": l.nom, "h": hacher(nouveau)})
-    _envoyer_en_arriere_plan(
-        l.email, "Ton mot de passe VoiceBank a été modifié", "Mot de passe modifié",
-        ["Le mot de passe de ton compte VoiceBank vient d'être changé avec un code envoyé à cette adresse. "
-         "Toutes les sessions ouvertes ont été déconnectées.",
-         "Si ce n'est pas toi, préviens immédiatement ton administrateur."])
+    _envoyer(l.email, mot_de_passe_modifie(l.nom_complet))
     return l.nom
+
+
+def mot_de_passe_modifie(nom_complet: str | None) -> "courriel.Message":
+    return courriel.Message(
+        sujet="Votre mot de passe VoiceBank a été modifié",
+        titre="Mot de passe modifié",
+        salutation=_salutation(nom_complet),
+        paragraphes=["Le mot de passe de votre compte VoiceBank Analytics vient d'être modifié. Par sécurité, "
+                     "toutes les sessions ouvertes ont été déconnectées."],
+        bouton=("Se connecter", config.URL_INTERFACE),
+        note="Si vous n'êtes pas à l'origine de ce changement, prévenez immédiatement l'administrateur de votre "
+             "organisation ou répondez à l'adresse de contact ci-dessus.")
 
 
 def definir_email(nom: str, mot_de_passe: str, email: str | None) -> str | None:

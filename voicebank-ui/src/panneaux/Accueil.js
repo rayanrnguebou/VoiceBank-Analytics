@@ -4,7 +4,7 @@ import {
   Lock, Sparkles, Building2, UserRound, AudioLines, ShieldAlert, Landmark, RefreshCw, Circle, CircleCheck, ArrowRight,
   Mail, KeyRound, ArrowLeft,
 } from "lucide-react";
-import { http, API, connexion, inscriptionEssai, messageErreur, lireMotifDeconnexion } from "../api";
+import { http, API, connexion, inscriptionEssai, messageErreur, lireMotifDeconnexion, appliquerJeton } from "../api";
 import { Logo } from "./BarreLaterale";
 import { reglesMotDePasse } from "./Comptes";
 import { Prix } from "./Abonnement";
@@ -101,6 +101,57 @@ function MotDePasseOublie({ identifiantInitial, onRetour }) {
         <ArrowLeft size={12} /> Retour à la connexion
       </button>
     </div>
+  );
+}
+
+// Lien d'invitation reçu par e-mail : la personne choisit son mot de passe puis est connectée
+function ActivationInvitation({ jeton, compte, onConnecte, onAnnuler }) {
+  const [nouveau, setNouveau] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [erreur, setErreur] = useState(null);
+  const [envoi, setEnvoi] = useState(false);
+  const regles = reglesMotDePasse(nouveau, compte.split("@")[0]);
+  const valider = async e => {
+    e.preventDefault();
+    if (nouveau !== confirmation) { setErreur("Les deux saisies ne correspondent pas"); return; }
+    setErreur(null); setEnvoi(true);
+    try {
+      const r = await http.post("/auth/invitation", { identifiant: compte, jeton, nouveau });
+      window.history.replaceState(null, "", window.location.pathname);
+      onConnecte(appliquerJeton(r.data));
+    } catch (err) { setErreur(messageErreur(err)); }
+    finally { setEnvoi(false); }
+  };
+  return (
+    <form onSubmit={valider} className="space-y-3">
+      <p className="text-sm font-semibold flex items-center gap-2"><KeyRound size={15} className="text-laiton-300" /> Activer ton compte</p>
+      <p className="text-xs text-gray-400">Bienvenue ! Choisis ton mot de passe pour <strong className="text-gray-200">{compte}</strong>. Toi seul le connaîtras.</p>
+      <input type="text" autoComplete="username" value={compte} readOnly hidden />
+      <label className="block">
+        <span className={LIB}>Mot de passe</span>
+        <input type="password" value={nouveau} onChange={e => setNouveau(e.target.value)} autoComplete="new-password" required maxLength={72} className={CHAMP} />
+      </label>
+      {nouveau && (
+        <ul className="space-y-0.5">
+          {regles.map(r => (
+            <li key={r.texte} className={`flex items-center gap-1.5 text-xs ${r.ok ? "text-emerald-400" : "text-gray-500"}`}>
+              {r.ok ? <CircleCheck size={12} /> : <Circle size={12} />} {r.texte}
+            </li>
+          ))}
+        </ul>
+      )}
+      <label className="block">
+        <span className={LIB}>Confirme le mot de passe</span>
+        <input type="password" value={confirmation} onChange={e => setConfirmation(e.target.value)} autoComplete="new-password" required maxLength={72} className={CHAMP} />
+      </label>
+      {erreur && <p role="alert" className="text-sm text-red-400">{erreur}</p>}
+      <button type="submit" disabled={envoi || !regles.every(r => r.ok) || nouveau !== confirmation} className={BOUTON}>
+        <KeyRound size={15} /> {envoi ? "Activation…" : "Activer mon compte"}
+      </button>
+      <button type="button" onClick={onAnnuler} className="flex items-center gap-1 text-xs text-gray-400 hover:text-white">
+        <ArrowLeft size={12} /> J'ai déjà un compte
+      </button>
+    </form>
   );
 }
 
@@ -228,6 +279,10 @@ export default function EcranAccueil({ onConnecte }) {
   const [serveur, setServeur] = useState("verification");
   const [formules, setFormules] = useState(null);
   const [oubliDisponible, setOubliDisponible] = useState(false);
+  const [invitation, setInvitation] = useState(() => {
+    const q = new URLSearchParams(window.location.search);
+    return q.get("invitation") && q.get("compte") ? { jeton: q.get("invitation"), compte: q.get("compte") } : null;
+  });
 
   // Sur l'offre gratuite de Render, l'API s'endort : on la réveille dès l'arrivée sur la page.
   useEffect(() => {
@@ -287,11 +342,15 @@ export default function EcranAccueil({ onConnecte }) {
         </section>
 
         <section className="bg-gray-900 border border-foret-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
-          <h2 className="font-semibold mb-3">Tu es…</h2>
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            {choix("visiteur", UserRound, "Visiteur", "Je découvre l'outil : essai gratuit, sans engagement")}
-            {choix("organisation", Building2, "Organisation", "J'ai un compte, ou mon entreprise est cliente")}
-          </div>
+          {!invitation && (
+            <>
+              <h2 className="font-semibold mb-3">Tu es…</h2>
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                {choix("visiteur", UserRound, "Visiteur", "Je découvre l'outil : essai gratuit, sans engagement")}
+                {choix("organisation", Building2, "Organisation", "J'ai un compte, ou mon entreprise est cliente")}
+              </div>
+            </>
+          )}
           {motif && <p className="text-sm text-amber-400 mb-4">{motif}</p>}
           {serveur === "reveil" && (
             <p className="flex items-center gap-2 text-xs text-laiton-300 mb-4" role="status">
@@ -301,14 +360,18 @@ export default function EcranAccueil({ onConnecte }) {
           {serveur === "injoignable" && (
             <p className="text-xs text-red-400 mb-4" role="status">Serveur injoignable ({API}). Réessaie dans un instant.</p>
           )}
-          {profil === "visiteur" && <Essai onConnecte={onConnecte} formules={formules} />}
-          {profil === "organisation" && <Connexion onConnecte={onConnecte} oubliDisponible={oubliDisponible} />}
-          {!profil && (
+          {invitation && (
+            <ActivationInvitation jeton={invitation.jeton} compte={invitation.compte} onConnecte={onConnecte}
+              onAnnuler={() => { setInvitation(null); setProfil("organisation"); window.history.replaceState(null, "", window.location.pathname); }} />
+          )}
+          {!invitation && profil === "visiteur" && <Essai onConnecte={onConnecte} formules={formules} />}
+          {!invitation && profil === "organisation" && <Connexion onConnecte={onConnecte} oubliDisponible={oubliDisponible} />}
+          {!invitation && !profil && (
             <p className="text-sm text-gray-400 flex items-center gap-2">
               <ArrowRight size={14} /> Choisis ton profil pour continuer.
             </p>
           )}
-          {profil === "visiteur" && (
+          {!invitation && profil === "visiteur" && (
             <button type="button" onClick={() => setProfil("organisation")} className="mt-4 text-xs text-foret-300 hover:underline">
               Déjà un compte ? Se connecter
             </button>

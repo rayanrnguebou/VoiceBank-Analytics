@@ -1,6 +1,6 @@
 // Abonnements : formules, informations de facturation, paiement (page NotchPay), suivi.
 import { useState, useEffect, useCallback } from "react";
-import { Sparkles, Building2, UserRound, CreditCard, ShieldCheck, CircleCheck, Clock, Smartphone, Lock } from "lucide-react";
+import { Sparkles, Building2, UserRound, CreditCard, ShieldCheck, CircleCheck, Clock, Smartphone, Lock, Mail, Send } from "lucide-react";
 import { useAPI } from "../useAPI";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate } from "../ui";
 import { useDevise, SelecteurDevise } from "../devise";
@@ -40,13 +40,18 @@ export function BandeauAcces({ acces, dark, onChoisir }) {
       <span className="flex items-center gap-2 font-semibold">
         {essai ? <Sparkles size={15} className="text-laiton-400" /> : <ShieldCheck size={15} className="text-emerald-500" />}
         {essai ? "Essai gratuit" : `Abonnement ${acces.formule || ""}`}
+        {acces.organisation && !essai && <span className="font-normal">· {acces.organisation}</span>}
       </span>
       <span className={texteDiscret(dark)}><Clock size={12} className="inline -mt-0.5" /> {acces.expire ? "terminé" : `${dureeRestante(acces.secondes_restantes)} restants`}</span>
       <span className={texteDiscret(dark)}>{acces.questions_jour}/{acces.quota_questions} questions aujourd'hui</span>
       <span className={`${texteDiscret(dark)} flex items-center gap-1`}><Lock size={12} /> Lecture seule (données de démonstration)</span>
-      <button onClick={onChoisir} className="ml-auto px-3 py-1.5 rounded-lg bg-foret-600 hover:bg-foret-700 text-white text-xs font-semibold">
-        {essai ? "Choisir une formule" : "Prolonger"}
-      </button>
+      {acces.gere_abonnement !== false ? (
+        <button onClick={onChoisir} className="ml-auto px-3 py-1.5 rounded-lg bg-foret-600 hover:bg-foret-700 text-white text-xs font-semibold">
+          {essai ? "Choisir une formule" : "Prolonger"}
+        </button>
+      ) : (
+        <span className={`ml-auto ${texteDiscret(dark)}`}>Géré par l'administrateur de l'organisation</span>
+      )}
     </div>
   );
 }
@@ -165,6 +170,20 @@ export function PanelAbonnement({ dark, acces, utilisateur }) {
   const compte = { email: utilisateur?.includes("@") ? utilisateur : "", nom_complet: acces?.nom_complet || "" };
   const indisponible = offre?.paiement === "indisponible";
 
+  if (acces && acces.gere_abonnement === false) {
+    return (
+      <div className={carte(dark)}>
+        <h2 className={`${titre(dark)} flex items-center gap-2 mb-2`}><Building2 size={19} /> Abonnement de {acces.organisation}</h2>
+        <p className={`text-sm ${dark ? "text-gray-300" : "text-gray-700"}`}>
+          {acces.expire
+            ? "L'abonnement de ton organisation est arrivé à échéance. Préviens son administrateur : dès qu'il le renouvelle, tous les membres retrouvent l'accès."
+            : `Ton accès est inclus dans l'abonnement ${acces.formule || ""} de ton organisation, valable jusqu'au ${formaterDate(acces.fin)}.`}
+        </p>
+        <p className={`${texteDiscret(dark)} mt-2`}>Seul l'administrateur de l'organisation gère l'abonnement et les paiements.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {acces?.expire && (
@@ -195,7 +214,8 @@ export function PanelAbonnement({ dark, acces, utilisateur }) {
                 <p className="text-2xl font-bold mt-1"><Prix fcfa={f.prix} dark={dark} grand /></p>
                 <p className={texteDiscret(dark)}>{f.duree_jours} jour{f.duree_jours > 1 ? "s" : ""}{f.economie_pct > 0 ? ` · −${f.economie_pct} %` : ""}</p>
                 <ul className={`mt-3 mb-4 space-y-1 text-xs ${dark ? "text-gray-300" : "text-gray-600"}`}>
-                  <li className="flex gap-1.5"><CircleCheck size={13} className="text-emerald-500 flex-shrink-0" /> Jusqu'à {offre.quota_client} questions par jour</li>
+                  <li className="flex gap-1.5"><CircleCheck size={13} className="text-emerald-500 flex-shrink-0" /> Organisation : jusqu'à {f.comptes_organisation} comptes</li>
+                  <li className="flex gap-1.5"><CircleCheck size={13} className="text-emerald-500 flex-shrink-0" /> Jusqu'à {offre.quota_client} questions par jour et par compte</li>
                   <li className="flex gap-1.5"><CircleCheck size={13} className="text-emerald-500 flex-shrink-0" /> Fraude, crédit, rapports PDF / CSV</li>
                   <li className="flex gap-1.5"><CircleCheck size={13} className="text-emerald-500 flex-shrink-0" /> Mode conversation</li>
                 </ul>
@@ -228,11 +248,41 @@ export function PanelAbonnement({ dark, acces, utilisateur }) {
   );
 }
 
-// ── Suivi des abonnements (administrateur de l'organisation) ─────────
+// Diagnostic de l'envoi d'e-mails (Brevo / SMTP) : affiche la raison exacte d'un échec
+function TestEmail({ dark }) {
+  const { appeler, chargement, erreur, setErreur } = useAPI();
+  const [dest, setDest] = useState("");
+  const [ok, setOk] = useState(null);
+  const envoyer = async e => {
+    e.preventDefault(); setOk(null); setErreur(null);
+    const r = await appeler("post", "/admin/email-test", { destinataire: dest.trim() || null });
+    if (r) setOk(r.message);
+  };
+  return (
+    <div className={carte(dark)}>
+      <h2 className={`${titre(dark)} flex items-center gap-2 mb-1`}><Mail size={18} /> Envoi d'e-mails</h2>
+      <p className={`${texteDiscret(dark)} mb-3`}>Codes de vérification, invitations des membres et reçus de paiement. Envoie un e-mail de
+        test : en cas d'échec, la raison exacte s'affiche (clé Brevo, adresse IP non autorisée, expéditeur non validé…).</p>
+      <form onSubmit={envoyer} className="flex flex-wrap gap-2">
+        <input type="email" value={dest} onChange={e => setDest(e.target.value)} placeholder="Adresse (vide : ton e-mail de récupération)"
+          className={`${champ(dark)} flex-1 min-w-[220px]`} />
+        <button disabled={chargement} className={`${boutonPrincipal} flex items-center gap-1.5`}><Send size={14} /> {chargement ? "Envoi…" : "Envoyer un test"}</button>
+      </form>
+      {ok && <p className="text-sm text-emerald-500 mt-2" role="status">{ok}</p>}
+      {erreur && <p className="text-sm text-red-500 mt-2" role="alert">{erreur}</p>}
+    </div>
+  );
+}
+
+// ── Suivi des abonnements et des organisations clientes (administrateur de la plateforme) ──
 export function PanelAbonnements({ dark }) {
   const { appeler, erreur } = useAPI();
   const [d, setD] = useState(null);
-  const charger = useCallback(() => { appeler("get", "/admin/abonnements").then(r => r && setD(r)); }, [appeler]);
+  const [orgs, setOrgs] = useState(null);
+  const charger = useCallback(() => {
+    appeler("get", "/admin/abonnements").then(r => r && setD(r));
+    appeler("get", "/admin/organisations").then(r => r && setOrgs(r.data));
+  }, [appeler]);
   useEffect(() => { charger(); }, [charger]);
   const s = d?.synthese || {};
   const tuiles = [["Visiteurs inscrits", s.visiteurs], ["Essais en cours", s.essais_en_cours],
@@ -245,6 +295,31 @@ export function PanelAbonnements({ dark }) {
           <div key={t} className={carte(dark)}><p className={texteDiscret(dark)}>{t}</p><p className="text-xl font-bold mt-1">{v ?? "–"}</p></div>
         ))}
       </div>
+      <div className={carte(dark)}>
+        <h2 className={`${titre(dark)} mb-3`}>Organisations clientes ({orgs?.length ?? "…"})</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead><tr className={texteDiscret(dark)}>
+              <th className="text-left p-2">Organisation</th><th className="text-left p-2">Type</th><th className="text-left p-2">Formule</th>
+              <th className="text-left p-2">Comptes</th><th className="text-left p-2">Administrateur(s)</th>
+              <th className="text-left p-2">Jusqu'au</th><th className="text-left p-2">Total payé</th></tr></thead>
+            <tbody>
+              {(orgs || []).map(o => (
+                <tr key={o.id_org} className={`border-t ${dark ? "border-gray-700" : "border-gray-100"}`}>
+                  <td className="p-2 font-medium">{o.nom}</td>
+                  <td className="p-2">{o.type_org === "particulier" ? "Particulier" : "Organisation"}</td>
+                  <td className="p-2">{o.formule || "—"}</td>
+                  <td className="p-2 tabular-nums">{o.membres}/{o.limite_comptes}</td>
+                  <td className="p-2">{o.administrateurs || "—"}</td>
+                  <td className={`p-2 whitespace-nowrap ${o.active ? "" : "text-red-500"}`}>{o.abonnement_fin ? formaterDate(o.abonnement_fin) : "—"}</td>
+                  <td className="p-2 whitespace-nowrap">{fcfa(o.total_paye)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <TestEmail dark={dark} />
       <div className={carte(dark)}>
         <h2 className={`${titre(dark)} mb-1`}>Paiements</h2>
         <p className={`${texteDiscret(dark)} mb-3`}>Mode de paiement : {{ reel: "NotchPay (réel)", test: "NotchPay (test)",

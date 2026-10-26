@@ -51,10 +51,16 @@ class Utilisateur:
     role: str
     doit_changer: bool = False
     acces_expire: bool = False       # essai terminé ou abonnement échu
+    id_org: int | None = None        # organisation cliente (abonnement partagé)
+    role_org: str | None = None      # « admin » (gère l'organisation) ou « analyste »
 
     @property
     def externe(self) -> bool:
         return self.role in ROLES_EXTERNES
+
+    @property
+    def admin_org(self) -> bool:
+        return self.role == "client" and self.id_org is not None and self.role_org == "admin"
 
 
 class CompteRefuse(Exception):
@@ -158,13 +164,16 @@ def mdp_provisoire() -> str:
 # Connexion
 # ════════════════════════════════════════
 
+# Abonné : c'est l'abonnement de son ORGANISATION qui compte (partagé par tous ses membres)
+_SQL_FIN_ABONNEMENT = ("CASE WHEN id_org IS NOT NULL THEN (SELECT o.abonnement_fin FROM voicebank.organisations o "
+                       "WHERE o.id_org = utilisateurs.id_org AND o.actif) ELSE abonnement_fin END")
 _SQL_ACCES_EXPIRE = ("CASE WHEN role = 'visiteur' THEN COALESCE(essai_fin < LOCALTIMESTAMP, TRUE) "
-                     "WHEN role = 'client' THEN COALESCE(abonnement_fin < LOCALTIMESTAMP, TRUE) ELSE FALSE END")
+                     f"WHEN role = 'client' THEN COALESCE(({_SQL_FIN_ABONNEMENT}) < LOCALTIMESTAMP, TRUE) ELSE FALSE END")
 
 
 def _ligne(nom: str):
     # Les dates sont comparées dans la base (LOCALTIMESTAMP) : pas de souci de fuseau horaire.
-    r = db.ecrire("SELECT nom, role, hash_mdp, actif, doit_changer_mdp, echecs_connexion, version_jeton, "
+    r = db.ecrire("SELECT nom, role, hash_mdp, actif, doit_changer_mdp, echecs_connexion, version_jeton, id_org, role_org, "
                   "COALESCE(verrouille_jusqua > LOCALTIMESTAMP, FALSE) AS verrouille, "
                   "COALESCE(doit_changer_mdp AND mdp_provisoire_expire < LOCALTIMESTAMP, FALSE) AS expire, "
                   f"{_SQL_ACCES_EXPIRE} AS acces_expire "
@@ -205,7 +214,7 @@ def authentifier(nom: str, mot_de_passe: str) -> tuple[Utilisateur, int] | None:
         return None     # mot de passe provisoire expiré : l'administrateur doit le réinitialiser
     db.ecrire("UPDATE voicebank.utilisateurs SET echecs_connexion = 0, verrouille_jusqua = NULL, "
               "derniere_connexion = LOCALTIMESTAMP WHERE nom = :n", {"n": nom})
-    return Utilisateur(l.nom, l.role, l.doit_changer_mdp, l.acces_expire), l.version_jeton
+    return Utilisateur(l.nom, l.role, l.doit_changer_mdp, l.acces_expire, l.id_org, l.role_org), l.version_jeton
 
 
 def creer_jeton(u: Utilisateur, version: int = 0) -> str:
@@ -234,7 +243,7 @@ def _depuis_jeton(cred: HTTPAuthorizationCredentials | None) -> Utilisateur:
         if COMPTES.get(data["sub"], (None,))[0] != data["role"]:
             raise erreur
         return Utilisateur(data["sub"], data["role"])
-    r = db.ecrire("SELECT role, actif, doit_changer_mdp, version_jeton, "
+    r = db.ecrire("SELECT role, actif, doit_changer_mdp, version_jeton, id_org, role_org, "
                   f"{_SQL_ACCES_EXPIRE} AS acces_expire FROM voicebank.utilisateurs "
                   "WHERE nom = :n", {"n": data["sub"]})
     l = r.lignes[0] if r.lignes else None
@@ -243,7 +252,7 @@ def _depuis_jeton(cred: HTTPAuthorizationCredentials | None) -> Utilisateur:
     meme_role = l is not None and (l.role == data["role"] or {l.role, data["role"]} <= ROLES_EXTERNES)
     if l is None or not l.actif or not meme_role or l.version_jeton != data.get("ver"):
         raise erreur
-    return Utilisateur(data["sub"], l.role, l.doit_changer_mdp, l.acces_expire)
+    return Utilisateur(data["sub"], l.role, l.doit_changer_mdp, l.acces_expire, l.id_org, l.role_org)
 
 
 def version_jeton(nom: str) -> int:
@@ -293,10 +302,18 @@ def admin_requis(u: Utilisateur = Depends(utilisateur_courant)) -> Utilisateur:
 
 
 def admin_ou_decouverte(u: Utilisateur = Depends(utilisateur_courant)) -> Utilisateur:
-    """Pages d'administration en lecture : l'administrateur, ou un visiteur / abonné qui découvre
-    l'outil (les endpoints concernés anonymisent alors ce qui concerne les autres comptes)."""
-    if u.role != "admin" and not u.externe:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Réservé aux administrateurs")
+    """Pages d'administration de la plateforme en lecture : l'administrateur, ou un visiteur en essai qui
+    découvre l'outil (les endpoints concernés anonymisent ce qui concerne les autres comptes). Les membres
+    d'une organisation cliente ne voient que leur organisation."""
+    if u.role != "admin" and u.role != "visiteur":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Réservé aux administrateurs de la plateforme")
+    return u
+
+
+def admin_organisation(u: Utilisateur = Depends(utilisateur_courant)) -> Utilisateur:
+    """Gestion de l'organisation cliente (membres, abonnement, bases connectées)."""
+    if not u.admin_org:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Réservé à l'administrateur de ton organisation")
     return u
 
 
@@ -351,11 +368,14 @@ def changer_mot_de_passe(nom: str, actuel: str, nouveau: str) -> int:
 
 def lister_comptes() -> list[dict]:
     _exiger_base()
-    r = db.ecrire("SELECT nom, role, actif, doit_changer_mdp, mdp_provisoire_expire, cree_par, date_creation, "
-                  "date_modif_mdp, derniere_connexion, email, nom_complet, profil, essai_fin, abonnement_fin, "
-                  "formule, COALESCE(verrouille_jusqua > LOCALTIMESTAMP, FALSE) AS verrouille, "
-                  "COALESCE(doit_changer_mdp AND mdp_provisoire_expire < LOCALTIMESTAMP, FALSE) AS provisoire_expire "
-                  "FROM voicebank.utilisateurs ORDER BY actif DESC, nom")
+    r = db.ecrire("SELECT u.nom, u.role, u.actif, u.doit_changer_mdp, u.mdp_provisoire_expire, u.cree_par, "
+                  "u.date_creation, u.date_modif_mdp, u.derniere_connexion, u.email, u.nom_complet, u.profil, "
+                  "u.essai_fin, COALESCE(o.abonnement_fin, u.abonnement_fin) AS abonnement_fin, "
+                  "COALESCE(o.formule, u.formule) AS formule, u.id_org, u.role_org, o.nom AS organisation, "
+                  "COALESCE(u.verrouille_jusqua > LOCALTIMESTAMP, FALSE) AS verrouille, "
+                  "COALESCE(u.doit_changer_mdp AND u.mdp_provisoire_expire < LOCALTIMESTAMP, FALSE) AS provisoire_expire "
+                  "FROM voicebank.utilisateurs u LEFT JOIN voicebank.organisations o ON o.id_org = u.id_org "
+                  "ORDER BY u.actif DESC, o.nom NULLS FIRST, u.nom")
     return [{k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in l._mapping.items()}
             for l in r.lignes]
 

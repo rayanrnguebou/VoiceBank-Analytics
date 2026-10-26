@@ -23,12 +23,18 @@ class SourceRefusee(Exception):
     """Message affichable."""
 
 
+# Une source est visible par son créateur et par tous les membres de son organisation cliente.
+_PORTEE = ("(proprietaire = :p OR (id_org IS NOT NULL AND "
+           "id_org = (SELECT u.id_org FROM voicebank.utilisateurs u WHERE u.nom = :p)))")
+_ORG = "(SELECT u.id_org FROM voicebank.utilisateurs u WHERE u.nom = :p)"
+
+
 # ── Lecture / écriture des sources ─────────────────────────────────────
 
 def _ligne(id_source: int, proprietaire: str):
     r = db.ecrire("SELECT id_source, proprietaire, nom, type_source, config_chiffree, resume_connexion, statut, "
                   "erreur, profil, masquer_pii, devise, date_creation, date_analyse FROM voicebank.sources_donnees "
-                  "WHERE id_source = :i AND proprietaire = :p", {"i": id_source, "p": proprietaire})
+                  f"WHERE id_source = :i AND {_PORTEE}", {"i": id_source, "p": proprietaire})
     if not r.lignes:
         raise SourceRefusee("Source introuvable")
     return r.lignes[0]
@@ -62,7 +68,7 @@ def source_demo_publique() -> dict:
 def lister(proprietaire: str) -> list[dict]:
     r = db.ecrire("SELECT id_source, proprietaire, nom, type_source, config_chiffree, resume_connexion, statut, erreur, "
                   "profil, masquer_pii, devise, date_creation, date_analyse FROM voicebank.sources_donnees "
-                  "WHERE proprietaire = :p ORDER BY date_creation DESC", {"p": proprietaire})
+                  f"WHERE {_PORTEE} ORDER BY date_creation DESC", {"p": proprietaire})
     return [source_demo_publique()] + [_resume_public(l) for l in r.lignes]
 
 
@@ -138,7 +144,7 @@ def tester(type_source: str, cfg: dict) -> dict:
 # ── Création, analyse, suppression ─────────────────────────────────────
 
 def _verifier_quota(proprietaire: str, role: str):
-    n = db.ecrire("SELECT COUNT(*) FROM voicebank.sources_donnees WHERE proprietaire = :p", {"p": proprietaire}).scalar()
+    n = db.ecrire(f"SELECT COUNT(*) FROM voicebank.sources_donnees WHERE {_PORTEE}", {"p": proprietaire}).scalar()
     maximum = config.CONNECTEUR_MAX_SOURCES * (4 if role == "admin" else 1)
     if n >= maximum:
         raise SourceRefusee(f"Nombre maximal de sources atteint ({maximum}). Supprime une source pour en ajouter une.")
@@ -148,8 +154,8 @@ def creer(proprietaire: str, role: str, nom: str, type_source: str, cfg: dict) -
     _verifier_quota(proprietaire, role)
     tester(type_source, cfg)                       # on n'enregistre que ce qui fonctionne
     garde_cfg = {k: cfg.get(k) for k in ("hote", "port", "base", "utilisateur", "mot_de_passe", "ssl", "schema")}
-    r = db.ecrire("INSERT INTO voicebank.sources_donnees (proprietaire, nom, type_source, config_chiffree, resume_connexion) "
-                  "VALUES (:p, :n, :t, :c, :r) RETURNING id_source",
+    r = db.ecrire("INSERT INTO voicebank.sources_donnees (proprietaire, nom, type_source, config_chiffree, resume_connexion, "
+                  f"id_org) VALUES (:p, :n, :t, :c, :r, {_ORG}) RETURNING id_source",
                   {"p": proprietaire, "n": nom, "t": type_source, "c": chiffrer(garde_cfg),
                    "r": _resume_connexion(type_source, cfg)})
     return r.scalar()
@@ -166,8 +172,8 @@ def creer_depuis_fichiers(proprietaire: str, role: str, nom: str, contenus: list
     except Exception as e:
         log.info("Fichier illisible : %s", e)
         raise SourceRefusee("Fichier illisible : vérifie qu'il s'agit bien d'un CSV ou d'un Excel .xlsx")
-    r = db.ecrire("INSERT INTO voicebank.sources_donnees (proprietaire, nom, type_source, resume_connexion) "
-                  "VALUES (:p, :n, 'fichier', :r) RETURNING id_source",
+    r = db.ecrire("INSERT INTO voicebank.sources_donnees (proprietaire, nom, type_source, resume_connexion, id_org) "
+                  f"VALUES (:p, :n, 'fichier', :r, {_ORG}) RETURNING id_source",
                   {"p": proprietaire, "n": nom, "r": _resume_connexion("fichier", {"fichiers": [n for n, _ in contenus]})})
     id_source = r.scalar()
     for n, c in contenus:
@@ -178,7 +184,7 @@ def creer_depuis_fichiers(proprietaire: str, role: str, nom: str, contenus: list
 
 
 def analyser(id_source: int, proprietaire: str):
-    db.ecrire("UPDATE voicebank.sources_donnees SET statut = 'analyse', erreur = NULL WHERE id_source = :i AND proprietaire = :p",
+    db.ecrire("UPDATE voicebank.sources_donnees SET statut = 'analyse', erreur = NULL WHERE id_source = :i AND " + _PORTEE,
               {"i": id_source, "p": proprietaire})
     try:
         l = _ligne(id_source, proprietaire)
@@ -202,7 +208,7 @@ def analyser_en_arriere_plan(id_source: int, proprietaire: str, synchrone: bool 
 
 
 def supprimer(id_source: int, proprietaire: str):
-    r = db.ecrire("DELETE FROM voicebank.sources_donnees WHERE id_source = :i AND proprietaire = :p",
+    r = db.ecrire("DELETE FROM voicebank.sources_donnees WHERE id_source = :i AND " + _PORTEE,
                   {"i": id_source, "p": proprietaire})
     if not r.rowcount:
         raise SourceRefusee("Source introuvable")
@@ -215,14 +221,14 @@ def devise_source(l) -> str:
 
 
 def modifier_devise(id_source: int, proprietaire: str, devise: str | None):
-    r = db.ecrire("UPDATE voicebank.sources_donnees SET devise = :d WHERE id_source = :i AND proprietaire = :p",
+    r = db.ecrire("UPDATE voicebank.sources_donnees SET devise = :d WHERE id_source = :i AND " + _PORTEE,
                   {"i": id_source, "p": proprietaire, "d": devise})
     if not r.rowcount:
         raise SourceRefusee("Source introuvable")
 
 
 def modifier_masquage(id_source: int, proprietaire: str, masquer: bool):
-    r = db.ecrire("UPDATE voicebank.sources_donnees SET masquer_pii = :m WHERE id_source = :i AND proprietaire = :p",
+    r = db.ecrire("UPDATE voicebank.sources_donnees SET masquer_pii = :m WHERE id_source = :i AND " + _PORTEE,
                   {"i": id_source, "p": proprietaire, "m": masquer})
     if not r.rowcount:
         raise SourceRefusee("Source introuvable")

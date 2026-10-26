@@ -111,6 +111,13 @@ FORMULES = {
     "annee":   ("Année", 365, int(_env("PRIX_ANNEE", "60000"))),
 }
 DEVISE = "XAF"
+# Comptes inclus dans l'abonnement d'une ORGANISATION (administrateur compris) ; un particulier : 1 compte.
+COMPTES_PAR_FORMULE = {
+    "jour": int(_env("COMPTES_JOUR", "3")),
+    "semaine": int(_env("COMPTES_SEMAINE", "3")),
+    "mois": int(_env("COMPTES_MOIS", "10")),
+    "annee": int(_env("COMPTES_ANNEE", "25")),
+}
 
 # ── Paiement (NotchPay : MTN MoMo, Orange Money, cartes) ─────
 NOTCHPAY_URL = _env("NOTCHPAY_URL", "https://api.notchpay.co").rstrip("/")
@@ -133,6 +140,11 @@ SMTP_MOT_DE_PASSE = _env("SMTP_MOT_DE_PASSE")
 EMAIL_EXPEDITEUR = _env("EMAIL_EXPEDITEUR") or SMTP_UTILISATEUR
 EMAIL_NOM_EXPEDITEUR = _env("EMAIL_NOM_EXPEDITEUR", "VoiceBank Analytics")
 CODE_RECUPERATION_MIN = int(_env("CODE_RECUPERATION_MIN", "15"))
+INVITATION_HEURES = int(_env("INVITATION_HEURES", "72"))
+# Signature des e-mails
+EMAIL_SIGNATURE_NOM = _env("EMAIL_SIGNATURE_NOM", "Rayan Nguebou Temgoua")
+EMAIL_SIGNATURE_FONCTION = _env("EMAIL_SIGNATURE_FONCTION", "Fondateur, VoiceBank Analytics")
+EMAIL_CONTACT = _env("EMAIL_CONTACT") or EMAIL_EXPEDITEUR
 
 # ── Connecteur : bases et fichiers des organisations ─────────
 # Clé de chiffrement des identifiants de connexion (n'importe quelle chaîne longue et secrète).

@@ -15,9 +15,19 @@ def boite(monkeypatch):
     envoyes = []
     monkeypatch.setattr(config, "BREVO_API_KEY", "cle-de-test")
     monkeypatch.setattr(config, "EMAIL_EXPEDITEUR", "no-reply@voicebank.test")
-    monkeypatch.setattr(recuperation, "_envoyer_en_arriere_plan",
-                        lambda dest, sujet, titre, paragraphes, code=None: envoyes.append(
-                            {"a": dest, "sujet": sujet, "code": code, "texte": " ".join(paragraphes)}))
+    return capturer(monkeypatch, envoyes)
+
+
+def capturer(monkeypatch, envoyes):
+    """Les e-mails (synchrones ou en arrière-plan) sont rendus puis gardés en mémoire."""
+    from app import courriel
+
+    def garder(dest, m):
+        courriel.rendre_html(m), courriel.rendre_texte(m)          # le rendu ne doit jamais échouer
+        envoyes.append({"a": dest, "sujet": m.sujet, "code": m.code, "texte": " ".join(m.paragraphes + m.apres),
+                        "bouton": m.bouton, "details": dict(m.details), "message": m})
+    monkeypatch.setattr(courriel, "envoyer_message", garder)
+    monkeypatch.setattr(courriel, "envoyer_en_arriere_plan", garder)
     return envoyes
 
 
@@ -66,6 +76,11 @@ def test_parcours_complet_avec_un_compte_interne(client, admin, boite):
     r = client.post("/auth/oubli/confirmer", json={"identifiant": "awa.recup", "code": code2, "nouveau": "Autre-Mot-2027!x"})
     assert r.status_code == 400
     assert any("modifié" in e["sujet"] for e in boite)
+    # E-mail professionnel : vouvoiement, signature, bouton
+    avec_code = [e for e in boite if e["code"]][-1]
+    html = __import__("app.courriel", fromlist=["x"]).rendre_html(avec_code["message"])
+    assert "Cordialement" in html and config.EMAIL_SIGNATURE_NOM in html and avec_code["code"] in html
+    assert "votre" in html and " ton " not in html
 
 
 def test_aucune_information_sur_l_existence_d_un_compte(client, admin, boite):
@@ -141,6 +156,11 @@ def test_envoi_par_brevo(monkeypatch):
 
     class Rep:
         status_code = 201
+        text = ""
+
+        @staticmethod
+        def json():
+            return {"message": "Unrecognised IP address 1.2.3.4"}
     monkeypatch.setattr(config, "BREVO_API_KEY", "cle-de-test")
     monkeypatch.setattr(config, "EMAIL_EXPEDITEUR", "no-reply@voicebank.test")
     monkeypatch.setattr(courriel.httpx, "post", lambda url, **kw: appels.append((url, kw)) or Rep())
@@ -150,5 +170,5 @@ def test_envoi_par_brevo(monkeypatch):
     assert kw["json"]["to"] == [{"email": "a@b.cm"}] and "012345" in kw["json"]["htmlContent"]
     assert "Titre &lt;b&gt;" in kw["json"]["htmlContent"] and "Ligne &amp; suite" in kw["json"]["htmlContent"]
     Rep.status_code = 401
-    with pytest.raises(courriel.EnvoiImpossible):
+    with pytest.raises(courriel.EnvoiImpossible, match="401.*Unrecognised IP"):
         courriel.envoyer("a@b.cm", "Sujet", "Titre", ["x"])

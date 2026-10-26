@@ -122,6 +122,18 @@ URL_INTERFACE = (_env("URL_INTERFACE") or ALLOWED_ORIGINS[0]).rstrip("/")
 PAIEMENT_SIMULATION = (_env("PAIEMENT_SIMULATION", "false").lower() == "true"
                        and not os.environ.get("RENDER") and not NOTCHPAY_PUBLIC_KEY)
 
+# ── E-mails (codes de récupération du mot de passe) ──────────
+# Brevo (API HTTPS, 300 e-mails/jour gratuits ; fonctionne sur Render, qui bloque le SMTP en offre gratuite)
+# ou, à défaut, un serveur SMTP (ex. Gmail avec un « mot de passe d'application »).
+BREVO_API_KEY = _env("BREVO_API_KEY")
+SMTP_HOTE = _env("SMTP_HOTE")
+SMTP_PORT = int(_env("SMTP_PORT", "587"))
+SMTP_UTILISATEUR = _env("SMTP_UTILISATEUR")
+SMTP_MOT_DE_PASSE = _env("SMTP_MOT_DE_PASSE")
+EMAIL_EXPEDITEUR = _env("EMAIL_EXPEDITEUR") or SMTP_UTILISATEUR
+EMAIL_NOM_EXPEDITEUR = _env("EMAIL_NOM_EXPEDITEUR", "VoiceBank Analytics")
+CODE_RECUPERATION_MIN = int(_env("CODE_RECUPERATION_MIN", "15"))
+
 # ── Connecteur : bases et fichiers des organisations ─────────
 # Clé de chiffrement des identifiants de connexion (n'importe quelle chaîne longue et secrète).
 # À défaut, dérivée de JWT_SECRET (changer JWT_SECRET rendrait alors les identifiants illisibles).

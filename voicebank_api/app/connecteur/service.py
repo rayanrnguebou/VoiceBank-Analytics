@@ -266,7 +266,10 @@ def repondre(id_source: int, proprietaire: str, role: str, question: str, devise
                                 else "La source n'a pas pu être analysée : relance l'analyse.")
         profil, type_source, masquer = l.profil, l.type_source, l.masquer_pii
         devise_base = devise_source(l)
-        eng = _moteur_source(l)
+        try:
+            eng = _moteur_source(l)
+        except Exception as e:
+            raise SourceRefusee(message_erreur(e))
     dialecte = profil["dialecte"]
     autorisees = {t["nom"].lower() for t in profil["tables"] if not t.get("erreur")}
     schemas = {(profil.get("schema") or "").lower()} - {""}
@@ -321,6 +324,36 @@ def repondre(id_source: int, proprietaire: str, role: str, question: str, devise
             "data": lignes, "duree_ms": int((time.time() - debut) * 1000), "resume": r["resume"],
             "commentaire": r["commentaire"], "relance": relance, "suite": False,
             "devise": devise, "devise_base": devise_base, "colonnes_monetaires": [c for c in colonnes if c.lower() in monetaires]}
+
+
+def tableau_de_bord(id_source: int, proprietaire: str, devise: str = "XAF") -> dict:
+    """Indicateurs et graphiques adaptés à la base, montants dans la monnaie choisie."""
+    from . import tableau
+    if id_source == DEMO_ID:
+        profil, type_source, eng, devise_base, nom = profil_demo(), "demo", db.moteur_lecture, "XAF", "Démonstration VoiceBank"
+        date_analyse = profil.get("date_analyse")
+    else:
+        l = _ligne(id_source, proprietaire)
+        if l.statut != "pret" or not l.profil:
+            raise SourceRefusee("Analyse de la source en cours : réessaie dans un instant." if l.statut == "analyse"
+                                else "La source n'a pas pu être analysée : relance l'analyse.")
+        profil, type_source, devise_base, nom = l.profil, l.type_source, devise_source(l), l.nom
+        date_analyse = l.date_analyse.isoformat() if l.date_analyse else None
+        eng = None
+    calcul = lambda: tableau.calculer(eng if eng is not None else _moteur_source(l), type_source, profil)  # noqa: E731
+    try:
+        brut = tableau.tableau((id_source, proprietaire, date_analyse, devise_base), calcul)
+    except Exception as e:
+        log.info("Tableau de bord de la source %s impossible : %s", id_source, e)
+        raise SourceRefusee(message_erreur(e))
+    conv = lambda v: devises.convertir(v, devise_base, devise)  # noqa: E731
+    indicateurs = [{**i, "valeur": conv(i["valeur"])} if i["type"] == "montant" else dict(i) for i in brut["indicateurs"]]
+    graphiques = []
+    for g in brut["graphiques"]:
+        cles = {s["cle"] for s in g["series"] if s.get("montant")}
+        graphiques.append({**g, "donnees": [{k: conv(v) if k in cles else v for k, v in p.items()} for p in g["donnees"]]})
+    return {"source": {"id": id_source, "nom": nom}, "devise": devise, "devise_base": devise_base,
+            "domaine": profil.get("domaine"), "indicateurs": indicateurs, "graphiques": graphiques}
 
 
 def _colonnes_citees(sql: str, dialecte: str) -> set[str]:

@@ -187,6 +187,21 @@ VALEURS_SYNONYMES = {
 }
 
 
+# Anglais → français, pour les titres : « city » → « ville »
+_VERS_FRANCAIS = {}
+for _fr, _ens in TRADUCTIONS.items():
+    for _en in _ens:
+        if _en != _fr and len(_fr) > 3:
+            _VERS_FRANCAIS.setdefault(_en, _fr)
+_VERS_FRANCAIS.update({"state": "statut", "credit": "crédit", "loan": "prêt", "category": "catégorie",
+                       "region": "région", "employee": "employé", "operator": "opérateur", "quantity": "quantité"})
+
+
+def en_francais(nom: str) -> str:
+    """Nom de colonne lisible en français quand il est en anglais (« branch_city » → « agence ville »)."""
+    return " ".join(_VERS_FRANCAIS.get(j, j) for j in jetons(nom)) or str(nom)
+
+
 def mots_etendus(mots) -> set[str]:
     """Mots de la question + leurs formes + leurs traductions anglaises."""
     base = set().union(*(formes(m) for m in mots)) if mots else set()

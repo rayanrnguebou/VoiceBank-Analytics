@@ -360,19 +360,26 @@ def lister_comptes() -> list[dict]:
             for l in r.lignes]
 
 
-def creer_compte(nom: str, role: str, par: str) -> str:
-    """Crée le compte et retourne le mot de passe provisoire (affiché une seule fois)."""
+def creer_compte(nom: str, role: str, par: str, email: str | None = None) -> str:
+    """Crée le compte et retourne le mot de passe provisoire (affiché une seule fois). L'e-mail
+    (facultatif) permet ensuite au titulaire de récupérer son mot de passe seul."""
     _exiger_base()
     if not NOM_VALIDE.fullmatch(nom):
         raise CompteRefuse("Identifiant invalide : 3 à 32 caractères, minuscules, chiffres, . _ - "
                            "(ex. : jean.mballa)")
     if role not in ROLES:
         raise CompteRefuse("Rôle inconnu")
+    if email is not None:
+        email = email.strip().lower()
+        if len(email) > 64 or not EMAIL_VALIDE.fullmatch(email):
+            raise CompteRefuse("Adresse e-mail invalide")
+        if db.ecrire("SELECT 1 FROM voicebank.utilisateurs WHERE LOWER(email) = :e", {"e": email}).lignes:
+            raise CompteRefuse("Cette adresse e-mail est déjà utilisée par un autre compte")
     mdp = mdp_provisoire()
     r = db.ecrire("INSERT INTO voicebank.utilisateurs (nom, role, hash_mdp, doit_changer_mdp, "
-                  "mdp_provisoire_expire, cree_par) VALUES (:n, :r, :h, TRUE, LOCALTIMESTAMP + :e, :p) "
+                  "mdp_provisoire_expire, cree_par, email) VALUES (:n, :r, :h, TRUE, LOCALTIMESTAMP + :e, :p, :m) "
                   "ON CONFLICT (nom) DO NOTHING",
-                  {"n": nom, "r": role, "h": hacher(mdp), "e": DUREE_MDP_PROVISOIRE, "p": par})
+                  {"n": nom, "r": role, "h": hacher(mdp), "e": DUREE_MDP_PROVISOIRE, "p": par, "m": email})
     if not r.rowcount:
         raise CompteRefuse("Cet identifiant existe déjà (un compte désactivé garde son identifiant)")
     return mdp

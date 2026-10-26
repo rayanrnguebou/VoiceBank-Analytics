@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import {
   Lock, Sparkles, Building2, UserRound, AudioLines, ShieldAlert, Landmark, RefreshCw, Circle, CircleCheck, ArrowRight,
+  Mail, KeyRound, ArrowLeft,
 } from "lucide-react";
 import { http, API, connexion, inscriptionEssai, messageErreur, lireMotifDeconnexion } from "../api";
 import { Logo } from "./BarreLaterale";
@@ -13,7 +14,99 @@ const CHAMP = "w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 te
 const LIB = "block text-xs text-gray-400 mb-1";
 const BOUTON = "w-full flex items-center justify-center gap-2 py-3 bg-foret-600 hover:bg-foret-700 text-white font-semibold rounded-xl disabled:opacity-50";
 
-function Connexion({ onConnecte }) {
+// Mot de passe oublié : 1) identifiant ou e-mail → code à 6 chiffres par e-mail ; 2) code + nouveau mot de passe
+function MotDePasseOublie({ identifiantInitial, onRetour }) {
+  const [etape, setEtape] = useState("demande");
+  const [identifiant, setIdentifiant] = useState(identifiantInitial || "");
+  const [code, setCode] = useState("");
+  const [nouveau, setNouveau] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [info, setInfo] = useState(null);
+  const [erreur, setErreur] = useState(null);
+  const [envoi, setEnvoi] = useState(false);
+  const regles = reglesMotDePasse(nouveau, identifiant.split("@")[0]);
+
+  const demander = async (e) => {
+    e?.preventDefault();
+    setErreur(null); setEnvoi(true);
+    try {
+      const r = await http.post("/auth/oubli", { identifiant: identifiant.trim() });
+      setInfo(r.data.message); setEtape("code");
+    } catch (err) { setErreur(messageErreur(err)); }
+    finally { setEnvoi(false); }
+  };
+  const confirmer = async (e) => {
+    e.preventDefault();
+    if (nouveau !== confirmation) { setErreur("Les deux saisies ne correspondent pas"); return; }
+    setErreur(null); setEnvoi(true);
+    try {
+      const r = await http.post("/auth/oubli/confirmer", { identifiant: identifiant.trim(), code: code.trim(), nouveau });
+      onRetour(r.data.message, identifiant.trim());
+    } catch (err) { setErreur(messageErreur(err)); setCode(""); }
+    finally { setEnvoi(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm font-semibold flex items-center gap-2"><KeyRound size={15} className="text-laiton-300" /> Mot de passe oublié</p>
+      {etape === "demande" ? (
+        <form onSubmit={demander} className="space-y-4">
+          <p className="text-xs text-gray-400">Indique ton identifiant ou ton e-mail : tu recevras un code à 6 chiffres, valable 15 minutes.</p>
+          <label className="block">
+            <span className={LIB}>Identifiant ou e-mail</span>
+            <input value={identifiant} onChange={e => setIdentifiant(e.target.value)} autoComplete="username" required
+              minLength={3} maxLength={64} className={CHAMP} />
+          </label>
+          {erreur && <p role="alert" className="text-sm text-red-400">{erreur}</p>}
+          <button type="submit" disabled={envoi} className={BOUTON}><Mail size={15} /> {envoi ? "Envoi…" : "Recevoir un code"}</button>
+        </form>
+      ) : (
+        <form onSubmit={confirmer} className="space-y-3">
+          <p role="status" className="text-xs text-emerald-400">{info}</p>
+          <input type="text" autoComplete="username" value={identifiant} readOnly hidden />
+          <label className="block">
+            <span className={LIB}>Code reçu par e-mail</span>
+            <input value={code} onChange={e => setCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))} inputMode="numeric"
+              autoComplete="one-time-code" required minLength={6} maxLength={6} placeholder="123456"
+              className={`${CHAMP} tracking-[0.4em] font-mono text-center text-lg`} />
+          </label>
+          <label className="block">
+            <span className={LIB}>Nouveau mot de passe</span>
+            <input type="password" value={nouveau} onChange={e => setNouveau(e.target.value)} autoComplete="new-password"
+              required maxLength={72} className={CHAMP} />
+          </label>
+          {nouveau && (
+            <ul className="space-y-0.5">
+              {regles.map(r => (
+                <li key={r.texte} className={`flex items-center gap-1.5 text-xs ${r.ok ? "text-emerald-400" : "text-gray-500"}`}>
+                  {r.ok ? <CircleCheck size={12} /> : <Circle size={12} />} {r.texte}
+                </li>
+              ))}
+            </ul>
+          )}
+          <label className="block">
+            <span className={LIB}>Confirme le nouveau mot de passe</span>
+            <input type="password" value={confirmation} onChange={e => setConfirmation(e.target.value)} autoComplete="new-password"
+              required maxLength={72} className={CHAMP} />
+          </label>
+          {erreur && <p role="alert" className="text-sm text-red-400">{erreur}</p>}
+          <button type="submit" disabled={envoi || code.length !== 6 || !regles.every(r => r.ok) || nouveau !== confirmation}
+            className={BOUTON}><KeyRound size={15} /> {envoi ? "Enregistrement…" : "Changer le mot de passe"}</button>
+          <button type="button" onClick={() => demander()} disabled={envoi} className="text-xs text-foret-300 hover:underline">
+            Pas reçu ? Renvoyer un code
+          </button>
+        </form>
+      )}
+      <button type="button" onClick={() => onRetour(null)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-white">
+        <ArrowLeft size={12} /> Retour à la connexion
+      </button>
+    </div>
+  );
+}
+
+function Connexion({ onConnecte, oubliDisponible }) {
+  const [oubli, setOubli] = useState(false);
+  const [succes, setSucces] = useState(null);
   const [nom, setNom] = useState("");
   const [mdp, setMdp] = useState("");
   const [erreur, setErreur] = useState(null);
@@ -27,8 +120,14 @@ function Connexion({ onConnecte }) {
     finally { setEnvoi(false); }
   };
 
+  if (oubli) {
+    return <MotDePasseOublie identifiantInitial={nom} onRetour={(message, identifiant) => {
+      setOubli(false); setSucces(message); if (identifiant) setNom(identifiant); setMdp(""); setErreur(null);
+    }} />;
+  }
   return (
     <form onSubmit={valider} className="space-y-4">
+      {succes && <p role="status" className="text-sm text-emerald-400">{succes}</p>}
       <label className="block">
         <span className={LIB}>Identifiant ou e-mail</span>
         <input value={nom} onChange={e => setNom(e.target.value)} autoComplete="username" required maxLength={64} className={CHAMP} />
@@ -42,6 +141,13 @@ function Connexion({ onConnecte }) {
       <button type="submit" disabled={envoi} className={BOUTON}>
         <Lock size={15} /> {envoi ? "Connexion…" : "Se connecter"}
       </button>
+      {oubliDisponible ? (
+        <button type="button" onClick={() => { setOubli(true); setSucces(null); }} className="text-xs text-foret-300 hover:underline">
+          Mot de passe oublié ?
+        </button>
+      ) : (
+        <p className="text-xs text-gray-500">Mot de passe oublié ? Demande à l'administrateur de ton organisation de le réinitialiser.</p>
+      )}
       <p className="text-xs text-gray-500">
         Les comptes d'une organisation sont créés par son administrateur. Pas encore cliente ? Commence par l'essai gratuit,
         puis abonne ton organisation.
@@ -121,13 +227,18 @@ export default function EcranAccueil({ onConnecte }) {
   const [profil, setProfil] = useState(() => (motif || new URLSearchParams(window.location.search).get("paiement")) ? "organisation" : null);
   const [serveur, setServeur] = useState("verification");
   const [formules, setFormules] = useState(null);
+  const [oubliDisponible, setOubliDisponible] = useState(false);
 
   // Sur l'offre gratuite de Render, l'API s'endort : on la réveille dès l'arrivée sur la page.
   useEffect(() => {
     let fini = false;
     const lent = setTimeout(() => !fini && setServeur("reveil"), 2500);
     http.get("/health", { timeout: 90000 })
-      .then(() => { setServeur("pret"); return http.get("/abonnement/formules"); })
+      .then(() => {
+        setServeur("pret");
+        http.get("/auth/options").then(r => setOubliDisponible(!!r.data.oubli_par_email)).catch(() => {});
+        return http.get("/abonnement/formules");
+      })
       .then(r => r && setFormules(r.data))
       .catch(() => setServeur(s => (s === "pret" ? s : "injoignable")))
       .finally(() => { fini = true; clearTimeout(lent); });
@@ -191,7 +302,7 @@ export default function EcranAccueil({ onConnecte }) {
             <p className="text-xs text-red-400 mb-4" role="status">Serveur injoignable ({API}). Réessaie dans un instant.</p>
           )}
           {profil === "visiteur" && <Essai onConnecte={onConnecte} formules={formules} />}
-          {profil === "organisation" && <Connexion onConnecte={onConnecte} />}
+          {profil === "organisation" && <Connexion onConnecte={onConnecte} oubliDisponible={oubliDisponible} />}
           {!profil && (
             <p className="text-sm text-gray-400 flex items-center gap-2">
               <ArrowRight size={14} /> Choisis ton profil pour continuer.

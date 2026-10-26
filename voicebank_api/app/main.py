@@ -8,6 +8,7 @@ from typing import Literal
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Path, Query, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
+import jwt
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -16,7 +17,7 @@ from slowapi.errors import RateLimitExceeded
 from . import audit, config, credit, db, devises, evaluation, fraude, nl2sql, paiement, resume, transcription
 from .garde_sql import SQLRefuse, valider_sql
 from .masquage import masquer_ligne, masquer_lignes
-from . import courriel, organisations, recuperation, securite
+from . import courriel, maintenance, organisations, recuperation, securite
 from .connecteur import service as sources
 from .paiement import PaiementRefuse
 from .securite import (CompteRefuse, Utilisateur, admin_organisation, admin_ou_decouverte, admin_requis, authentifier,
@@ -53,6 +54,32 @@ async def erreurs_internes(request: Request, call_next):
     except Exception:
         log.exception("Erreur non gérée sur %s %s", request.method, request.url.path)
         return JSONResponse({"detail": "Erreur interne du serveur"}, status_code=500)
+
+
+def _role_du_jeton(request: Request) -> str | None:
+    """Rôle signé dans le jeton (simple filtre : chaque route revérifie le compte en base)."""
+    auth = request.headers.get("authorization") or ""
+    if not auth.lower().startswith("bearer "):
+        return None
+    try:
+        return jwt.decode(auth[7:], config.JWT_SECRET, algorithms=[securite.ALGO]).get("role")
+    except jwt.PyJWTError:
+        return None
+
+
+def reponse_maintenance(etat: dict) -> JSONResponse:
+    return JSONResponse({"detail": etat["message"], "maintenance": True, "fin_prevue": etat["fin_prevue"]},
+                        status_code=503, headers={"Retry-After": "120"})
+
+
+@app.middleware("http")
+async def mode_maintenance(request: Request, call_next):
+    # Avant CORS (donc à l'intérieur) : la réponse 503 garde les en-têtes CORS et l'interface l'affiche.
+    if request.method != "OPTIONS" and not request.url.path.startswith(maintenance.OUVERTES):
+        etat = await run_in_threadpool(maintenance.etat)
+        if etat["active"] and _role_du_jeton(request) != "admin":
+            return reponse_maintenance(etat)
+    return await call_next(request)
 
 
 app.add_middleware(
@@ -119,6 +146,18 @@ class ActivationInvitation(BaseModel):
     identifiant: str = Field(min_length=3, max_length=64)
     jeton: str = Field(min_length=20, max_length=100)
     nouveau: str = Field(min_length=1, max_length=128)
+
+
+DATE_HEURE = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$"
+
+
+class ReglageMaintenance(BaseModel):
+    active: bool = False
+    message: str | None = Field(None, max_length=500)
+    fin_prevue: str | None = Field(None, pattern=DATE_HEURE)        # heure de retour annoncée
+    annonce_message: str | None = Field(None, max_length=300)       # bandeau « maintenance prévue »
+    annonce_debut: str | None = Field(None, pattern=DATE_HEURE)
+    annonce_fin: str | None = Field(None, pattern=DATE_HEURE)
 
 
 class EmailTest(BaseModel):
@@ -404,7 +443,29 @@ def health():
             "gemini": "disponible" if config.GEMINI_API_KEY else "non configure",
             "whisper": transcription.etat(),
             "modeles_ia": sorted(k for k in fraude.modeles if k != "meta") + (["credit"] if credit.disponible() else []),
+            "maintenance": maintenance.etat()["active"],
             "timestamp": datetime.now().isoformat()}
+
+
+@app.get("/maintenance")
+def etat_maintenance():
+    """Public : maintenance en cours et annonce de maintenance prévue (bandeau)."""
+    return maintenance.public()
+
+
+@app.get("/admin/maintenance")
+def lire_maintenance(u: Utilisateur = Depends(admin_requis)):
+    return maintenance.etat(force=True)
+
+
+@app.post("/admin/maintenance")
+def regler_maintenance(request: Request, body: ReglageMaintenance, u: Utilisateur = Depends(admin_requis)):
+    annonce = None
+    if body.annonce_message and body.annonce_message.strip():
+        annonce = {"message": body.annonce_message.strip()[:300], "debut": body.annonce_debut, "fin": body.annonce_fin}
+    e = maintenance.modifier(u.nom, body.active, body.message, body.fin_prevue, annonce)
+    audit.journaliser(u.nom, "maintenance", {"active": body.active, "annonce": bool(annonce)}, ip_client(request))
+    return e
 
 
 @app.post("/auth/login")
@@ -417,6 +478,9 @@ def login(request: Request, body: Identifiants):
         audit.journaliser(body.nom[:64], "connexion_refusee", None, ip)
         raise HTTPException(401, "Identifiants incorrects. Après 5 échecs, le compte est bloqué 15 minutes.")
     u, version = resultat
+    etat = maintenance.etat()
+    if etat["active"] and u.role != "admin":
+        return reponse_maintenance(etat)
     audit.journaliser(u.nom, "connexion", {"role": u.role}, ip)
     return _reponse_jeton(u, version)
 

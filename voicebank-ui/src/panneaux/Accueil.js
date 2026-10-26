@@ -4,11 +4,12 @@ import {
   Lock, Sparkles, Building2, UserRound, AudioLines, ShieldAlert, Landmark, RefreshCw, Circle, CircleCheck, ArrowRight,
   Mail, KeyRound, ArrowLeft,
 } from "lucide-react";
-import { http, API, connexion, inscriptionEssai, messageErreur, lireMotifDeconnexion, appliquerJeton } from "../api";
+import { http, connexion, inscriptionEssai, messageErreur, lireMotifDeconnexion, appliquerJeton } from "../api";
 import { Logo } from "./BarreLaterale";
 import { reglesMotDePasse } from "./Comptes";
 import { Prix } from "./Abonnement";
 import { SelecteurDevise } from "../devise";
+import { BandeauAnnonce } from "../maintenance";
 
 const CHAMP = "w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white text-sm outline-none focus:border-foret-500";
 const LIB = "block text-xs text-gray-400 mb-1";
@@ -273,7 +274,7 @@ function Essai({ onConnecte, formules }) {
   );
 }
 
-export default function EcranAccueil({ onConnecte }) {
+export default function EcranAccueil({ onConnecte, annonce }) {
   const [motif] = useState(() => lireMotifDeconnexion());
   const [profil, setProfil] = useState(() => (motif || new URLSearchParams(window.location.search).get("paiement")) ? "organisation" : null);
   const [serveur, setServeur] = useState("verification");
@@ -342,6 +343,7 @@ export default function EcranAccueil({ onConnecte }) {
         </section>
 
         <section className="bg-gray-900 border border-foret-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
+          <BandeauAnnonce annonce={annonce} />
           {!invitation && (
             <>
               <h2 className="font-semibold mb-3">Tu es…</h2>
@@ -358,7 +360,9 @@ export default function EcranAccueil({ onConnecte }) {
             </p>
           )}
           {serveur === "injoignable" && (
-            <p className="text-xs text-red-400 mb-4" role="status">Serveur injoignable ({API}). Réessaie dans un instant.</p>
+            <p className="text-xs text-amber-400 mb-4" role="status">
+              Le serveur ne répond pas pour le moment : une mise à jour est sans doute en cours. Réessaie dans une minute.
+            </p>
           )}
           {invitation && (
             <ActivationInvitation jeton={invitation.jeton} compte={invitation.compte} onConnecte={onConnecte}

@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import {
   AudioLines, LayoutDashboard, ShieldAlert, ScanSearch, Landmark, History,
   GraduationCap, Target, DatabaseZap, ScrollText, ChartColumn, ExternalLink, LogOut, X, UsersRound, KeyRound, CreditCard, Wallet,
-  Building2,
+  Building2, Wrench,
 } from "lucide-react";
 
 const POWER_BI_URL = process.env.REACT_APP_POWER_BI_URL || "";
@@ -114,6 +114,7 @@ export default function BarreLaterale({ page, allerA, estAdmin, voitAdmin, exter
               <Lien id="audit" libelle="Audit" Icone={ScrollText} {...props} />
               <Lien id="comptes" libelle="Comptes" Icone={UsersRound} {...props} />
               {estAdmin && <Lien id="abonnements" libelle="Abonnements" Icone={Wallet} {...props} />}
+              {estAdmin && <Lien id="maintenance" libelle="Maintenance" Icone={Wrench} {...props} />}
             </>
           )}
         </nav>

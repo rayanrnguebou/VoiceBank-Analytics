@@ -33,6 +33,17 @@ http.interceptors.response.use(
   r => r,
   e => {
     if (e.response?.status === 402) window.dispatchEvent(new Event("voicebank:acces-expire"));
+    // Maintenance décidée par l'administrateur : page dédiée avec son message
+    if (e.response?.status === 503 && e.response?.data?.maintenance) {
+      window.dispatchEvent(new CustomEvent("voicebank:maintenance", { detail: e.response.data }));
+    }
+    // Serveur injoignable ou en cours de redémarrage (mise à jour sur Render) : bandeau de reconnexion
+    if (!e.response && e.code !== "ECONNABORTED" && e.code !== "ERR_CANCELED") {
+      window.dispatchEvent(new Event("voicebank:injoignable"));
+    }
+    if ([502, 504].includes(e.response?.status)) {
+      window.dispatchEvent(new Event("voicebank:injoignable"));
+    }
     if (e.response?.status === 401 && !e.config?.url?.includes("/auth/login") && !e.config?.url?.includes("/auth/essai")) {
       if (lireSession()) noterMotifDeconnexion("Ta session a expiré ou a été fermée. Reconnecte-toi.");
       ecrireSession(null);

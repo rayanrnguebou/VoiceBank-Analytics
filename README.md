@@ -287,6 +287,20 @@ réglable : `EMAIL_SIGNATURE_NOM`, `EMAIL_SIGNATURE_FONCTION`, `EMAIL_CONTACT` (
 Avec Brevo, si le test répond « Unrecognised IP address » : dans Brevo, **Sécurité → IP autorisées**,
 désactive le blocage des adresses IP inconnues (l'adresse de Render change).
 
+### Maintenance et mises à jour
+
+Menu **Administration → Maintenance** (administrateur de la plateforme) :
+- **Annoncer une maintenance** : message, début, fin. Un bandeau prévient tous les utilisateurs (page
+  d'accueil et application) ; il disparaît après l'heure de fin.
+- **Activer la maintenance** : tous les utilisateurs voient une page « Maintenance en cours » avec ton
+  message et l'heure de retour prévue ; leurs requêtes et connexions sont refusées (réponse 503). Toi, tu
+  restes connecté et tu peux tout tester (« Accès administrateur » sur la page de maintenance). Les
+  paiements NotchPay continuent d'arriver. **Terminer la maintenance** : la page des utilisateurs revient
+  toute seule à l'application.
+- **Secours** : si la base est hors service, mets `MAINTENANCE=true` dans les variables Render de l'API.
+- Pendant un **redéploiement** (serveur momentanément injoignable), l'application affiche « Le serveur ne
+  répond pas : mise à jour ou redémarrage en cours, reconnexion automatique » et reprend seule.
+
 ### Paiement (NotchPay : MTN MoMo, Orange Money, cartes)
 
 Intégration gratuite, sans abonnement : NotchPay prend seulement une commission par paiement.

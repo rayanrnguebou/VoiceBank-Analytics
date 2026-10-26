@@ -9,6 +9,7 @@ import { BandeauAcces, PanelAbonnement, PanelAbonnements } from "./panneaux/Abon
 import { LectureSeule, useLectureSeule, TITRE_LECTURE_SEULE } from "./lectureSeule";
 import PanelSources from "./panneaux/Connecteur";
 import PanelOrganisation from "./panneaux/Organisation";
+import { useMaintenance, EcranMaintenance, BandeauAnnonce, BandeauReconnexion, PanelMaintenance } from "./maintenance";
 import { FournisseurDevise, useDevise, SelecteurDevise, libelleColonne } from "./devise";
 import { useSessionActive } from "./session";
 import { useAPI } from "./useAPI";
@@ -1232,17 +1233,25 @@ export default function App() {
     setSession(null);
   }, [session]);
 
+  // Maintenance : page dédiée pour tous, sauf l'administrateur de la plateforme (qui peut se connecter)
+  const maintenance = useMaintenance();
+  const [accesAdmin, setAccesAdmin] = useState(false);
+  const bloque = maintenance.active && session?.role !== "admin" && !(accesAdmin && !session);
+
   return (
     <FournisseurDevise>
-      {!session ? <EcranAccueil onConnecte={setSession} />
+      <BandeauReconnexion />
+      {bloque ? <EcranMaintenance etat={maintenance} onAccesAdmin={session ? undefined : () => setAccesAdmin(true)} />
+        : !session ? <EcranAccueil onConnecte={setSession} annonce={maintenance.annonce} />
         : session.doitChangerMdp
           ? <EcranMotDePasseProvisoire session={session} onTermine={setSession} onDeconnexion={seDeconnecter} />
-          : <Tableau key={session.utilisateur} session={session} onDeconnexion={seDeconnecter} onSession={setSession} />}
+          : <Tableau key={session.utilisateur} session={session} onDeconnexion={seDeconnecter} onSession={setSession}
+              maintenance={maintenance} />}
     </FournisseurDevise>
   );
 }
 
-function Tableau({ session, onDeconnexion, onSession }) {
+function Tableau({ session, onDeconnexion, onSession, maintenance }) {
   const devise = useDevise();
   const { resteMs, rester } = useSessionActive({ session, onSession, onDeconnexion });
   const [fenetreMdp, setFenetreMdp] = useState(false);
@@ -1502,6 +1511,7 @@ function Tableau({ session, onDeconnexion, onSession }) {
     audit:         { titre: "Audit",                   sousTitre: "Qui a fait quoi, et quand" },
     comptes:       { titre: "Comptes",                 sousTitre: "Qui peut se connecter, avec quels droits" },
     abonnement:    { titre: "Abonnement",              sousTitre: "Formules, paiement et factures" },
+    maintenance:   { titre: "Maintenance",             sousTitre: "Mettre le service en maintenance et prévenir les utilisateurs" },
     organisation:  { titre: acces?.type_organisation === "particulier" ? "Mon compte" : "Mon organisation",
                      sousTitre: acces?.organisation ? `${acces.organisation} : membres et abonnement partagé` : "Membres et abonnement partagé" },
     abonnements:   { titre: "Abonnements",             sousTitre: "Visiteurs, abonnés et paiements reçus" },
@@ -1596,6 +1606,13 @@ function Tableau({ session, onDeconnexion, onSession }) {
 
         <LectureSeule.Provider value={externe}>
         <main className="w-full max-w-5xl mx-auto px-4 sm:px-8 py-6 flex-1">
+          {maintenance?.active && estAdmin && (
+            <div role="status" className="mb-4 px-4 py-3 rounded-xl border border-amber-500/50 bg-amber-500/10 text-amber-500 text-sm flex flex-wrap items-center gap-2">
+              <strong>Maintenance en cours :</strong> les utilisateurs voient la page de maintenance, toi seul as accès.
+              <button onClick={() => allerA("maintenance")} className="underline">Gérer</button>
+            </div>
+          )}
+          <BandeauAnnonce annonce={maintenance?.annonce} sombre={dark} />
           {page !== "abonnement" && <BandeauAcces acces={acces} dark={dark} onChoisir={() => allerA("abonnement")} />}
           {info && (
             <div role="status" className="mb-4 flex items-start gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 text-sm">
@@ -1740,6 +1757,7 @@ function Tableau({ session, onDeconnexion, onSession }) {
           {externe && page === "abonnement"      && <PanelAbonnement dark={dark} acces={acces} utilisateur={session.utilisateur} />}
           {externe && page === "organisation"    && <PanelOrganisation dark={dark} onAbonnement={() => allerA("abonnement")} />}
           {estAdmin && page === "abonnements"    && <PanelAbonnements dark={dark} />}
+          {estAdmin && page === "maintenance"    && <PanelMaintenance dark={dark} />}
         </main>
         </LectureSeule.Provider>
 

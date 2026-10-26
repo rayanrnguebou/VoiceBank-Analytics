@@ -479,6 +479,14 @@ SELECT
     (SELECT COUNT(*) FROM voicebank.credits WHERE statut_credit = 'Défaut') AS credits_defaut;
 
 
+-- Paramètres de la plateforme modifiables sans redéploiement (ex. mode maintenance)
+CREATE TABLE IF NOT EXISTS voicebank.parametres (
+    cle                 VARCHAR(50)  PRIMARY KEY,
+    valeur              JSONB        NOT NULL,
+    modifie_par         VARCHAR(64),
+    date_modif          TIMESTAMP    NOT NULL DEFAULT LOCALTIMESTAMP
+);
+
 -- Sources partagées dans l'organisation
 ALTER TABLE voicebank.sources_donnees ADD COLUMN IF NOT EXISTS id_org INTEGER REFERENCES voicebank.organisations(id_org);
 

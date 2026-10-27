@@ -12,6 +12,7 @@ Règles de sécurité :
 import hashlib
 import hmac
 import json
+import re
 import logging
 import secrets
 
@@ -57,19 +58,61 @@ def _client() -> httpx.Client:
                         headers={"Authorization": config.NOTCHPAY_PUBLIC_KEY, "Accept": "application/json"})
 
 
-def _initialiser_notchpay(reference: str, montant: int, client: dict, description: str) -> tuple[str, str | None]:
-    corps = {"amount": montant, "currency": config.DEVISE, "reference": reference, "description": description,
-             "callback": f"{config.URL_INTERFACE}/?paiement={reference}",
-             "customer": {"name": client["nom"], "email": client["email"], "phone": client.get("telephone") or None}}
+def telephone_international(numero: str | None) -> str | None:
+    """« 690 00 00 00 », « 00237… », « +237 6… » → « +2376900000000 ». Un numéro camerounais sans indicatif
+    (9 chiffres commençant par 6 ou 2) reçoit +237. Retourne None si le numéro est inutilisable."""
+    if not numero:
+        return None
+    n = re.sub(r"[^\d+]", "", str(numero))
+    if n.startswith("00"):
+        n = "+" + n[2:]
+    if not n.startswith("+"):
+        n = ("+237" + n) if (len(n) == 9 and n[0] in "62") else ("+" + n if len(n) > 9 else n)
+    return n if re.fullmatch(r"\+\d{8,15}", n) else None
+
+
+def _message_notchpay(r: httpx.Response) -> str:
     try:
-        with _client() as c:
-            r = c.post("/payments", json=corps)
-    except httpx.HTTPError as e:
-        log.warning("NotchPay injoignable : %s", e)
-        raise PaiementRefuse("Le service de paiement est injoignable, réessaie dans un instant.")
-    if r.status_code not in (200, 201):
-        log.warning("NotchPay a refusé l'initialisation (%s) : %s", r.status_code, r.text[:300])
-        raise PaiementRefuse("Le service de paiement a refusé la demande. Vérifie ton e-mail et ton numéro.")
+        d = r.json()
+    except ValueError:
+        return r.text[:200]
+    parties = [str(d.get("message") or "")]
+    erreurs = d.get("errors")
+    if isinstance(erreurs, dict):
+        parties += [f"{k} : {' '.join(map(str, v)) if isinstance(v, list) else v}" for k, v in erreurs.items()]
+    return " — ".join(p for p in parties if p)[:300]
+
+
+def _initialiser_notchpay(reference: str, montant: int, client: dict, description: str) -> tuple[str, str | None]:
+    client_np = {"name": client["nom"], "email": client["email"]}
+    tel = telephone_international(client.get("telephone"))
+    corps = {"amount": montant, "currency": config.DEVISE, "reference": reference, "description": description,
+             "callback": f"{config.URL_INTERFACE}/?paiement={reference}", "customer": client_np}
+    # Le numéro ne sert qu'à préremplir la page NotchPay : s'il est refusé (format, pays non couvert…),
+    # on recommence sans lui, le client le saisira sur la page de paiement.
+    essais = [{**corps, "customer": {**client_np, "phone": tel}}] if tel else []
+    essais.append(corps)
+    r = None
+    for i, c_essai in enumerate(essais):
+        try:
+            with _client() as c:
+                r = c.post("/payments", json=c_essai)
+        except httpx.HTTPError as e:
+            log.warning("NotchPay injoignable : %s", e)
+            raise PaiementRefuse("Le service de paiement est injoignable, réessaie dans un instant.")
+        if r.status_code in (200, 201):
+            break
+        log.warning("NotchPay a refusé l'initialisation (%s, essai %d/%d) : %s", r.status_code, i + 1, len(essais),
+                    r.text[:500])
+        if r.status_code >= 500 or r.status_code in (401, 403):
+            break
+    if r is None or r.status_code not in (200, 201):
+        if r is not None and r.status_code in (401, 403):
+            raise PaiementRefuse("Le service de paiement refuse la clé configurée (NOTCHPAY_PUBLIC_KEY) : "
+                                 "vérifie-la dans Render.")
+        detail = _message_notchpay(r) if r is not None else ""
+        raise PaiementRefuse("Le service de paiement a refusé la demande" + (f" : {detail}" if detail else ".")
+                             + " Vérifie ton e-mail et ton numéro, puis réessaie.")
     data = r.json()
     url = data.get("authorization_url")
     if not url or not str(url).startswith("https://"):

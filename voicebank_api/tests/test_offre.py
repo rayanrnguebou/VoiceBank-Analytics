@@ -310,3 +310,55 @@ def test_limite_inscriptions_non_contournable(client):
         limiter.enabled = False
         limiter.reset()
     assert codes[:3] == [200] * 3 and codes[3:] == [429, 429], codes
+
+
+# ── Initialisation NotchPay : numéro normalisé, nouvel essai sans numéro, raison affichée ──
+
+@pytest.mark.parametrize("brut,attendu", [
+    ("+237 690 00 00 00", "+237690000000"), ("690000000", "+237690000000"), ("00237 670000000", "+237670000000"),
+    ("+33 6 12 34 56 78", "+33612345678"), ("abc", None), ("", None), (None, None)])
+def test_telephone_international(brut, attendu):
+    assert paiement.telephone_international(brut) == attendu
+
+
+class _Rep:
+    def __init__(self, code, corps):
+        self.status_code, self._corps, self.text = code, corps, json.dumps(corps)
+
+    def json(self):
+        return self._corps
+
+
+def _faux_client(monkeypatch, reponses, appels):
+    class C:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, url, json):
+            appels.append(json)
+            return reponses.pop(0)
+    monkeypatch.setattr(paiement, "_client", lambda: C())
+
+
+def test_numero_refuse_puis_paiement_sans_numero(monkeypatch):
+    appels = []
+    _faux_client(monkeypatch, [_Rep(422, {"message": "Invalid phone", "errors": {"customer.phone": ["invalid"]}}),
+                               _Rep(201, {"authorization_url": "https://pay.notchpay.co/x", "transaction": {"reference": "trx.1"}})],
+                 appels)
+    url, ref = paiement._initialiser_notchpay("vb-1", 500, {"nom": "Paul", "email": "p@x.cm", "telephone": "+33 6 12 34 56 78"}, "d")
+    assert url == "https://pay.notchpay.co/x" and ref == "trx.1"
+    assert appels[0]["customer"]["phone"] == "+33612345678" and "phone" not in appels[1]["customer"]
+
+
+def test_refus_affiche_la_raison_de_notchpay(monkeypatch):
+    appels = []
+    refus = _Rep(422, {"message": "The given data was invalid", "errors": {"customer.email": ["The email is invalid"]}})
+    _faux_client(monkeypatch, [refus, refus], appels)
+    with pytest.raises(paiement.PaiementRefuse, match="customer.email : The email is invalid"):
+        paiement._initialiser_notchpay("vb-2", 500, {"nom": "Paul", "email": "p@x", "telephone": "690000000"}, "d")
+    _faux_client(monkeypatch, [_Rep(401, {"message": "Unauthenticated"})], appels)
+    with pytest.raises(paiement.PaiementRefuse, match="NOTCHPAY_PUBLIC_KEY"):
+        paiement._initialiser_notchpay("vb-3", 500, {"nom": "Paul", "email": "p@x.cm"}, "d")

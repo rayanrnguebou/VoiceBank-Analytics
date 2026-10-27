@@ -106,3 +106,32 @@ def scorer(c: dict, strict: bool = True) -> dict:
         resultat["avertissement"] = ("Catégorie inconnue du modèle pour : " + ", ".join(inconnues)
                                      + " ; valeur par défaut utilisée.")
     return resultat
+
+
+def scorer_lot(credits: list[dict]) -> list[dict]:
+    """Probabilité de défaut de nombreux crédits en UNE prédiction (sans explication SHAP, calculée à la
+    demande pour un crédit précis) : quelques millisecondes pour des milliers de crédits."""
+    if not credits:
+        return []
+    enc = modele["encoders"]
+    codes = {col: {v: i for i, v in enumerate(enc[col].classes_)} for col in CATEGORIELLES}
+    df = pd.DataFrame(credits)
+    for col in ("montant_fcfa", "mensualite_fcfa", "revenu_annuel_fcfa", "score_credit", "taux_interet_pct", "duree_mois"):
+        df[col] = pd.to_numeric(df.get(col), errors="coerce")
+    revenu = df["revenu_annuel_fcfa"].fillna(1_000_000).replace(0, 1_000_000)
+    mensualite = df["mensualite_fcfa"].fillna(0)
+    X = pd.DataFrame({
+        "montant_log": np.log1p(df["montant_fcfa"].fillna(0).clip(lower=0)),
+        "mensualite_log": np.log1p(mensualite.clip(lower=0)),
+        "revenu_log": np.log1p(revenu.clip(lower=0)),
+        "ratio_mensualite": (mensualite / (revenu / 12 + 1)).clip(0, 5),
+        "score_credit": df["score_credit"].fillna(600),
+        "taux_interet_pct": df["taux_interet_pct"].fillna(12.0).astype(float),
+        "duree_mois": df["duree_mois"].fillna(24),
+        "est_diaspora_num": (df.get("est_diaspora") == "Oui").astype(int),
+        **{f"{col}_enc": df.get(col).map(codes[col]).fillna(0).astype(int) for col in CATEGORIELLES},
+    }, columns=FEATURES)
+    probas = modele["xgb"].predict_proba(X)[:, 1]
+    return [{"probabilite_defaut": round(float(p), 4), "score_ia": int(min(max((1 - p) * 850, 300), 850)),
+             "niveau_risque": niveau(float(p))} for p in probas]
+

@@ -224,6 +224,21 @@ def test_score_credit_existant_et_liste(client, analyste):
     assert all(c["statut_credit"] == "En cours" for c in liste["data"])
 
 
+def test_score_en_lot_identique_au_score_unitaire(client, analyste):
+    """Le calcul en lot (liste des crédits à risque) donne exactement le même résultat, bien plus vite."""
+    import time
+    from app import credit, main
+    _, rows = main._lire(main._SQL_CREDIT + " LIMIT 300")
+    debut = time.time()
+    lot = credit.scorer_lot(rows)
+    duree_lot = time.time() - debut
+    for r, s in zip(rows[:40], lot[:40]):
+        u = credit.scorer(r, strict=False)
+        assert abs(u["probabilite_defaut"] - s["probabilite_defaut"]) < 1e-4 and u["niveau_risque"] == s["niveau_risque"]
+    assert duree_lot < 1.0
+    assert credit.scorer_lot([]) == []
+
+
 def test_infos_modele_fraude(client, analyste):
     j = client.get("/ia/modeles", headers=analyste).json()
     assert j["credit_disponible"] and j["fraude"]["heure_prise_en_compte"] is False

@@ -958,10 +958,20 @@ def credits_a_risque(limit: int = Query(15, ge=1, le=100), banque: str | None = 
     where, params = "WHERE cr.statut_credit = 'En cours'", {}
     if banque:
         where += " AND cr.banque = :banque"; params["banque"] = banque
+    cle = (banque or "", limit)
+    trouve = _cache_risques.get(cle)
+    if trouve and time.time() - trouve[0] < 600:          # les crédits en cours bougent peu : 10 minutes
+        return trouve[1]
     _, rows = _lire(_SQL_CREDIT + where + " ORDER BY cr.date_debut DESC NULLS LAST LIMIT 5000", params)
-    scores = [{**r, **{k: v for k, v in credit.scorer(r, strict=False).items() if k != "facteurs"}} for r in rows]
+    # Une seule prédiction pour tous les crédits ; l'explication détaillée est calculée au clic
+    scores = [{**r, **s} for r, s in zip(rows, credit.scorer_lot(rows))]
     scores.sort(key=lambda r: r["probabilite_defaut"], reverse=True)
-    return {"status": "ok", "analyses": len(rows), "data": scores[:limit]}
+    res = {"status": "ok", "analyses": len(rows), "data": scores[:limit]}
+    _cache_risques[cle] = (time.time(), res)
+    return res
+
+
+_cache_risques: dict = {}
 
 
 # ── Signalements (réponse jugée fausse) ───────────────

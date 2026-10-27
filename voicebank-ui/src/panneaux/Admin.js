@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { CircleCheck, CircleX } from "lucide-react";
 import { useAPI } from "../useAPI";
+import ChampListe from "../ChampListe";
 import { useLectureSeule, TITRE_LECTURE_SEULE } from "../lectureSeule";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate } from "../ui";
 
@@ -283,10 +284,8 @@ export function PanelAudit({ dark }) {
       <div className={carte(dark)}>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <h2 className={titre(dark)}>Journal d'audit</h2>
-          <select value={action} onChange={e => setAction(e.target.value)} className={`${champ(dark)} w-auto`}>
-            <option value="">Toutes les actions</option>
-            {Object.entries(LIBELLES_ACTIONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
+          <ChampListe dark={dark} className="w-64 max-w-full" aria-label="Filtrer les actions" valeur={action} onChange={setAction}
+            options={[{ valeur: "", libelle: "Toutes les actions" }, ...Object.entries(LIBELLES_ACTIONS).map(([k, v]) => ({ valeur: k, libelle: v }))]} />
         </div>
         <div className="overflow-x-auto max-h-96">
           <table className="w-full text-xs">

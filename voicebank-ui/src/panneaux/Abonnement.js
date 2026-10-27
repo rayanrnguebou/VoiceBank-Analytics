@@ -4,6 +4,8 @@ import { Sparkles, Building2, UserRound, CreditCard, ShieldCheck, CircleCheck, C
 import { useAPI } from "../useAPI";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate } from "../ui";
 import { useDevise, SelecteurDevise } from "../devise";
+import ChampListe from "../ChampListe";
+import { NOMS_PAYS, VILLES, indicatif } from "../listes";
 
 // Les abonnements sont facturés en FCFA (mobile money) ; dans une autre monnaie, on montre l'équivalent.
 const fcfa = n => `${Number(n || 0).toLocaleString("fr-FR")} FCFA`;
@@ -72,16 +74,40 @@ function Champ({ dark, libelle, valeur, onChange, requis = true, ...props }) {
   );
 }
 
+// Pays (liste), ville (suggestions selon le pays, saisie libre acceptée) ; l'indicatif suit le pays
+function ChampsLieu({ dark, valeurs, maj }) {
+  const changerPays = pays => {
+    const ancien = indicatif(valeurs.pays), nouveau = indicatif(pays);
+    const tel = (valeurs.telephone || "").trim();
+    const suite = { ...valeurs, pays, ville: (VILLES[pays] || []).includes(valeurs.ville) ? valeurs.ville : "" };
+    if (nouveau) {
+      if (!tel || tel === `+${ancien}`) suite.telephone = `+${nouveau} `;                       // vide ou indicatif seul
+      else if (ancien && tel.startsWith(`+${ancien} `)) suite.telephone = `+${nouveau} ${tel.slice(ancien.length + 2)}`;
+    }
+    maj(suite);
+  };
+  return (
+    <>
+      <label className="block"><span className={etiquette(dark)}>Pays</span>
+        <ChampListe dark={dark} valeur={valeurs.pays} onChange={changerPays} options={NOMS_PAYS} required placeholder="Tape les premières lettres…" /></label>
+      <label className="block"><span className={etiquette(dark)}>Ville</span>
+        <ChampListe dark={dark} valeur={valeurs.ville} onChange={v => maj({ ...valeurs, ville: v })} options={VILLES[valeurs.pays] || []}
+          libre required maxLength={60} placeholder={VILLES[valeurs.pays] ? "Tape les premières lettres…" : "Ta ville"} /></label>
+    </>
+  );
+}
+
 function FormulaireCommande({ dark, formule, compte, onAnnuler }) {
   const { appeler, chargement, erreur } = useAPI();
   const [type, setType] = useState("organisation");
-  const [orga, setOrga] = useState({ secteur: "microfinance", taille: "11-50", pays: "Cameroun", email: compte?.email || "",
+  const [orga, setOrga] = useState({ secteur: "microfinance", taille: "11-50", pays: "Cameroun", telephone: "+237 ", email: compte?.email || "",
     responsable: compte?.nom_complet || "" });
-  const [perso, setPerso] = useState({ pays: "Cameroun", email: compte?.email || "", nom_complet: compte?.nom_complet || "" });
+  const [perso, setPerso] = useState({ pays: "Cameroun", telephone: "+237 ", email: compte?.email || "", nom_complet: compte?.nom_complet || "" });
   const [accepte, setAccepte] = useState(false);
   const o = k => v => setOrga({ ...orga, [k]: v });
   const p = k => v => setPerso({ ...perso, [k]: v });
-  const tel = { type: "tel", pattern: "\\+?[0-9 ]{8,20}", placeholder: "+237 6XX XX XX XX", maxLength: 20 };
+  const tel = pays => ({ type: "tel", pattern: "\\+?[0-9 ]{8,20}", maxLength: 20,
+    placeholder: indicatif(pays) === "237" ? "+237 6XX XX XX XX" : indicatif(pays) ? `+${indicatif(pays)} …` : "+237 6XX XX XX XX" });
 
   const payer = async (e) => {
     e.preventDefault();
@@ -122,12 +148,11 @@ function FormulaireCommande({ dark, formule, compte, onAnnuler }) {
             <select value={orga.taille} onChange={e => o("taille")(e.target.value)} className={champ(dark)}>
               {["1-10", "11-50", "51-250", "250+"].map(v => <option key={v}>{v}</option>)}
             </select></label>
-          <Champ dark={dark} libelle="Pays" valeur={orga.pays} onChange={o("pays")} maxLength={60} />
-          <Champ dark={dark} libelle="Ville" valeur={orga.ville} onChange={o("ville")} maxLength={60} />
+          <ChampsLieu dark={dark} valeurs={orga} maj={setOrga} />
           <Champ dark={dark} libelle="Nom du responsable" valeur={orga.responsable} onChange={o("responsable")} maxLength={120} />
           <Champ dark={dark} libelle="Fonction" valeur={orga.fonction} onChange={o("fonction")} maxLength={80} placeholder="ex. Directeur des risques" />
           <Champ dark={dark} libelle="E-mail professionnel" valeur={orga.email} onChange={o("email")} type="email" maxLength={254} />
-          <Champ dark={dark} libelle="Téléphone" valeur={orga.telephone} onChange={o("telephone")} {...tel} />
+          <Champ dark={dark} libelle="Téléphone" valeur={orga.telephone} onChange={o("telephone")} {...tel(orga.pays)} />
           <Champ dark={dark} libelle="NIU (n° contribuable)" valeur={orga.niu} onChange={o("niu")} requis={false} maxLength={30} />
           <Champ dark={dark} libelle="RCCM" valeur={orga.rccm} onChange={o("rccm")} requis={false} maxLength={40} />
         </div>
@@ -135,10 +160,9 @@ function FormulaireCommande({ dark, formule, compte, onAnnuler }) {
         <div className="grid sm:grid-cols-2 gap-3">
           <Champ dark={dark} libelle="Nom complet" valeur={perso.nom_complet} onChange={p("nom_complet")} maxLength={120} />
           <Champ dark={dark} libelle="Profession" valeur={perso.profession} onChange={p("profession")} maxLength={80} />
-          <Champ dark={dark} libelle="Pays" valeur={perso.pays} onChange={p("pays")} maxLength={60} />
-          <Champ dark={dark} libelle="Ville" valeur={perso.ville} onChange={p("ville")} maxLength={60} />
+          <ChampsLieu dark={dark} valeurs={perso} maj={setPerso} />
           <Champ dark={dark} libelle="E-mail" valeur={perso.email} onChange={p("email")} type="email" maxLength={254} />
-          <Champ dark={dark} libelle="Téléphone" valeur={perso.telephone} onChange={p("telephone")} {...tel} />
+          <Champ dark={dark} libelle="Téléphone" valeur={perso.telephone} onChange={p("telephone")} {...tel(perso.pays)} />
         </div>
       )}
 

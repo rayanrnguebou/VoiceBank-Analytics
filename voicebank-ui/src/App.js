@@ -9,6 +9,7 @@ import { BandeauAcces, PanelAbonnement, PanelAbonnements } from "./panneaux/Abon
 import { LectureSeule, useLectureSeule, TITRE_LECTURE_SEULE } from "./lectureSeule";
 import PanelSources from "./panneaux/Connecteur";
 import PanelOrganisation from "./panneaux/Organisation";
+import { Choix } from "./ChampListe";
 import ResultatRisque from "./panneaux/Explication";
 import { PanelOperationsSource, PanelAnalyseSource, PanelCreditSource } from "./panneaux/RisquesSource";
 import Demarrage from "./panneaux/Demarrage";
@@ -1167,9 +1168,7 @@ function PanelAnalyse({ dark }) {
           {listes.map(([cle, nom]) => (
             <label key={cle}>
               <span className={etiquette}>{nom}</span>
-              <select value={form[cle] || ""} onChange={e => setForm({ ...form, [cle]: e.target.value })} className={champ}>
-                {(ref[cle] || []).map(v => <option key={v} value={v}>{v}</option>)}
-              </select>
+              <Choix dark={dark} required valeur={form[cle] || ""} onChange={v => setForm(f => ({ ...f, [cle]: v }))} options={ref[cle] || []} />
             </label>
           ))}
           <label>

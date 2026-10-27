@@ -30,25 +30,29 @@ export function dureeRestante(secondes) {
   return `${m} min`;
 }
 
-// Bandeau en haut de l'application pour les visiteurs et abonnés
+// Bandeau en haut de l'application pour les visiteurs et abonnés : discret, sauf à l'approche de l'échéance
 export function BandeauAcces({ acces, dark, onChoisir }) {
   if (!acces || acces.type === "interne") return null;
   const essai = acces.type === "essai";
+  const bientot = acces.expire || (acces.secondes_restantes || 0) < 7 * 86400;
+  const gere = acces.gere_abonnement !== false;
   return (
-    <div className={`mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 rounded-xl border text-sm ${
-      essai ? "bg-laiton-400/10 border-laiton-400/40" : dark ? "bg-foret-900/40 border-foret-700" : "bg-foret-50 border-foret-200"}`}>
-      <span className="flex items-center gap-2 font-semibold">
-        {essai ? <Sparkles size={15} className="text-laiton-400" /> : <ShieldCheck size={15} className="text-emerald-500" />}
+    <div className={`mb-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-2 rounded-xl border text-xs ${
+      essai || bientot ? "bg-laiton-400/10 border-laiton-400/40" : dark ? "bg-gray-800/50 border-gray-700" : "bg-white border-gray-200"}`}>
+      <span className="flex items-center gap-1.5 font-semibold text-sm">
+        {essai ? <Sparkles size={14} className="text-laiton-400" /> : <ShieldCheck size={14} className="text-emerald-500" />}
         {essai ? "Essai gratuit" : `Abonnement ${acces.formule || ""}`}
         {acces.organisation && !essai && <span className="font-normal">· {acces.organisation}</span>}
       </span>
-      <span className={texteDiscret(dark)}><Clock size={12} className="inline -mt-0.5" /> {acces.expire ? "terminé" : `${dureeRestante(acces.secondes_restantes)} restants`}</span>
+      <span className={`${texteDiscret(dark)} flex items-center gap-1`}><Clock size={12} /> {acces.expire ? "terminé" : `${dureeRestante(acces.secondes_restantes)} restants`}</span>
       <span className={texteDiscret(dark)}>{acces.questions_jour}/{acces.quota_questions} questions aujourd'hui</span>
-      <span className={`${texteDiscret(dark)} flex items-center gap-1`}><Lock size={12} /> Lecture seule (données de démonstration)</span>
-      {acces.gere_abonnement !== false ? (
-        <button onClick={onChoisir} className="ml-auto px-3 py-1.5 rounded-lg bg-foret-600 hover:bg-foret-700 text-white text-xs font-semibold">
+      {essai && <span className={`${texteDiscret(dark)} flex items-center gap-1`}><Lock size={12} /> Démonstration en lecture seule</span>}
+      {gere && (essai || bientot) ? (
+        <button onClick={onChoisir} className="ml-auto px-3 py-1 rounded-lg bg-foret-600 hover:bg-foret-700 text-white text-xs font-semibold">
           {essai ? "Choisir une formule" : "Prolonger"}
         </button>
+      ) : gere ? (
+        <button onClick={onChoisir} className={`ml-auto ${texteDiscret(dark)} hover:underline`}>Gérer l'abonnement</button>
       ) : (
         <span className={`ml-auto ${texteDiscret(dark)}`}>Géré par l'administrateur de l'organisation</span>
       )}
@@ -228,7 +232,8 @@ export function PanelAbonnement({ dark, acces, utilisateur }) {
       {moi?.paiements?.length > 0 && (
         <div className={carte(dark)}>
           <h2 className={`${titre(dark)} mb-3`}>Mes paiements</h2>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[520px]">
             <thead><tr className={`text-xs ${texteDiscret(dark)}`}><th className="text-left p-2">Date</th><th className="text-left p-2">Formule</th>
               <th className="text-left p-2">Montant</th><th className="text-left p-2">Statut</th><th className="text-left p-2">Valable jusqu'au</th></tr></thead>
             <tbody>
@@ -242,6 +247,7 @@ export function PanelAbonnement({ dark, acces, utilisateur }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

@@ -362,6 +362,71 @@ def tableau_de_bord(id_source: int, proprietaire: str, devise: str = "XAF") -> d
             "domaine": profil.get("domaine"), "indicateurs": indicateurs, "graphiques": graphiques}
 
 
+# ── Risques adaptés à la base (fraude, crédit) ───────────────────────
+
+def _contexte(id_source: int, proprietaire: str):
+    """(profil, type_source, moteur, monnaie de la base, clé de cache)."""
+    if id_source == DEMO_ID:
+        p = profil_demo()
+        return p, "demo", db.moteur_lecture, "XAF", (0, p.get("date_analyse"))
+    l = _ligne(id_source, proprietaire)
+    if l.statut != "pret" or not l.profil:
+        raise SourceRefusee("Analyse de la source en cours : réessaie dans un instant." if l.statut == "analyse"
+                            else "La source n'a pas pu être analysée : relance l'analyse.")
+    try:
+        eng = _moteur_source(l)
+    except Exception as e:
+        raise SourceRefusee(message_erreur(e))
+    return l.profil, l.type_source, eng, devise_source(l), (id_source, l.date_analyse.isoformat() if l.date_analyse else None)
+
+
+def _risque(action):
+    from . import risques
+    try:
+        return action(risques)
+    except risques.RisqueIndisponible as e:
+        raise SourceRefusee(str(e))
+    except SourceRefusee:
+        raise
+    except Exception as e:
+        log.warning("Analyse de risque impossible : %s", e)
+        raise SourceRefusee("Analyse impossible sur cette base pour le moment.")
+
+
+def operations_atypiques(id_source: int, proprietaire: str, devise: str = "XAF") -> dict:
+    profil, ts, eng, base, cle = _contexte(id_source, proprietaire)
+    res = _risque(lambda r: r.operations_atypiques(eng, ts, profil, base, cle))
+    conv = lambda v: devises.convertir(v, base, devise)  # noqa: E731
+    ops = [{**o, "montant": conv(o["montant"]), "raisons": [
+        {**f, "valeur": f["valeur"] if f["variable"] != "Montant" else None} for f in o["raisons"]]} for o in res["operations"]]
+    return {**res, "operations": ops, "devise": devise}
+
+
+def formulaire_operation(id_source: int, proprietaire: str, devise: str = "XAF") -> dict:
+    profil, ts, eng, base, cle = _contexte(id_source, proprietaire)
+    f = _risque(lambda r: r.formulaire_operation(eng, ts, profil, base, cle))
+    return {**f, "devise": devise, "montant_habituel": devises.convertir(f["montant_habituel"], base, devise)}
+
+
+def analyser_operation(id_source: int, proprietaire: str, montant: float, heure: int | None, categories: dict,
+                       devise: str = "XAF") -> dict:
+    profil, ts, eng, base, cle = _contexte(id_source, proprietaire)
+    montant_base = devises.convertir(montant, devise, base)
+    res = _risque(lambda r: r.analyser_operation(eng, ts, profil, base, cle, montant_base, heure, categories))
+    for f in res["facteurs"]:
+        if f["variable"] == "Montant":
+            f["valeur"] = None
+    return res
+
+
+def portefeuille_credits(id_source: int, proprietaire: str, devise: str = "XAF") -> dict:
+    profil, ts, eng, base, cle = _contexte(id_source, proprietaire)
+    res = _risque(lambda r: r.portefeuille(eng, ts, profil, base, cle))
+    a_risque = [{**c, "montant": None if c.get("montant") is None else devises.convertir(c["montant"], base, devise)}
+                for c in res.get("a_risque", [])]
+    return {**res, "a_risque": a_risque, "devise": devise, "devise_base": base}
+
+
 def _colonnes_citees(sql: str, dialecte: str) -> set[str]:
     import sqlglot
     from sqlglot import exp

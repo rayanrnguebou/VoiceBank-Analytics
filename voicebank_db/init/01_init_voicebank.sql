@@ -489,6 +489,9 @@ CREATE TABLE IF NOT EXISTS voicebank.parametres (
 
 -- Sources partagées dans l'organisation
 ALTER TABLE voicebank.sources_donnees ADD COLUMN IF NOT EXISTS id_org INTEGER REFERENCES voicebank.organisations(id_org);
+-- Base proposée par défaut aux membres de l'organisation (à la connexion)
+ALTER TABLE voicebank.organisations ADD COLUMN IF NOT EXISTS source_defaut INTEGER
+    REFERENCES voicebank.sources_donnees(id_source) ON DELETE SET NULL;
 
 -- Migration : chaque abonné existant devient l'administrateur de sa propre organisation
 DO $$

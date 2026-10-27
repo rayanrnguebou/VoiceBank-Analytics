@@ -3,37 +3,11 @@ import { useState, useEffect } from "react";
 import { useAPI } from "../useAPI";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, COULEURS_NIVEAU } from "../ui";
 import { useDevise } from "../devise";
+import ResultatRisque from "./Explication";
 
+// Compatibilité : l'ancien nom reste disponible
 export function Explication({ resultat, dark }) {
-  if (!resultat) return null;
-  const max = Math.max(...resultat.facteurs.map(f => Math.abs(f.impact)), 0.01);
-  return (
-    <div className={`mt-4 p-4 rounded-xl ${dark ? "bg-gray-700" : "bg-gray-50"}`}>
-      <div className="flex flex-wrap items-center gap-3 mb-3">
-        <span className={`text-xs font-semibold text-white px-2.5 py-1 rounded-full ${COULEURS_NIVEAU[resultat.niveau_risque] || "bg-gray-500"}`}>
-          Risque {resultat.niveau_risque}
-        </span>
-        <span className={`text-sm font-bold ${dark ? "text-white" : "text-gray-900"}`}>
-          Probabilité de défaut : {(resultat.probabilite_defaut * 100).toFixed(1)} %
-        </span>
-        <span className={texteDiscret(dark)}>Score IA {resultat.score_ia}/850</span>
-      </div>
-      <p className={`${texteDiscret(dark)} mb-2`}>Ce qui explique ce score :</p>
-      <div className="space-y-1.5">
-        {resultat.facteurs.map(f => (
-          <div key={f.variable} className="flex items-center gap-2">
-            <span className={`text-xs w-48 flex-shrink-0 truncate ${dark ? "text-gray-300" : "text-gray-700"}`}>{f.variable}</span>
-            <div className={`flex-1 h-2 rounded-full overflow-hidden ${dark ? "bg-gray-600" : "bg-gray-200"}`}>
-              <div className={`h-full ${f.impact > 0 ? "bg-red-500" : "bg-emerald-500"}`}
-                style={{ width: `${(Math.abs(f.impact) / max) * 100}%` }} />
-            </div>
-            <span className={`text-xs w-32 text-right ${f.impact > 0 ? "text-red-500" : "text-emerald-500"}`}>{f.effet}</span>
-          </div>
-        ))}
-      </div>
-      {resultat.avertissement && <p className="text-xs text-amber-500 mt-2">{resultat.avertissement}</p>}
-    </div>
-  );
+  return <ResultatRisque resultat={resultat} dark={dark} type="credit" />;
 }
 
 const DEMANDE_INITIALE = {
@@ -90,7 +64,7 @@ export default function PanelCredit({ dark }) {
     <div className="space-y-4">
       <div className={carte(dark)}>
         <h2 className={titre(dark)}>Évaluer une demande de crédit</h2>
-        <p className={`${texteDiscret(dark)} mb-4`}>Probabilité de défaut estimée par XGBoost, avec les facteurs qui l'expliquent (contributions SHAP).</p>
+        <p className={`${texteDiscret(dark)} mb-4`}>Probabilité de défaut estimée par un modèle d'IA (XGBoost), les facteurs qui l'expliquent et la décision conseillée.</p>
         {!ref ? <p className={texteDiscret(dark)}>{api.erreur || "Chargement du modèle…"}</p> : (
           <form onSubmit={evaluer} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {nombres.map(([cle, nom]) => (

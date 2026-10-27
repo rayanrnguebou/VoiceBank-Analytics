@@ -389,3 +389,54 @@ def test_tableau_de_bord_adapte_a_la_base(client, admin, source_pg):
     # Démonstration et isolation
     assert client.get("/sources/0/tableau", headers=admin).json()["data"]["indicateurs"]
     assert client.get("/sources/999999/tableau", headers=admin).status_code == 404
+
+
+# ── Risques appris sur la base connectée ─────────────────────────────
+
+def test_operations_atypiques_sur_la_base(client, admin, source_pg):
+    r = client.get(f"/sources/{source_pg}/risques/operations", headers=admin)
+    assert r.status_code == 200, r.text
+    d = r.json()["data"]
+    assert d["resume"]["table"] == "payments" and d["resume"]["analysees"] > 100
+    assert d["resume"]["colonne_montant"] == "amount" and "channel" in d["resume"]["categories"]
+    ops = d["operations"]
+    assert ops and ops[0]["score"] >= ops[-1]["score"] and ops[0]["niveau_risque"] in ("Critique", "Élevé", "Moyen", "Faible")
+    assert all(o["raisons"] and o["recommandation"] for o in ops)
+    assert "fraudes_connues" in d["resume"] and 0 <= d["resume"]["fraudes_reperees_pct"] <= 100
+    # Aucune donnée personnelle utilisée
+    assert not set(d["resume"]["categories"]) & {"email", "phone", "first_name", "last_name", "user_password"}
+    # Monnaie choisie
+    e = client.get(f"/sources/{source_pg}/risques/operations?devise=EUR", headers=admin).json()["data"]
+    assert abs(e["operations"][0]["montant"] * 655.957 - ops[0]["montant"]) < 655.957
+
+
+def test_analyser_une_operation_sur_la_base(client, admin, source_pg):
+    f = client.get(f"/sources/{source_pg}/risques/formulaire", headers=admin).json()["data"]
+    assert f["montant"] == "amount" and f["categories"] and f["categories"][0]["valeurs"]
+    cats = {c["colonne"]: c["valeurs"][0] for c in f["categories"]}
+    normal = client.post(f"/sources/{source_pg}/risques/operation", headers=admin,
+                         json={"montant": f["montant_habituel"], "categories": cats}).json()["data"]
+    enorme = client.post(f"/sources/{source_pg}/risques/operation", headers=admin,
+                         json={"montant": f["montant_habituel"] * 500, "categories": {**cats, f["categories"][0]["colonne"]: "Inconnue"}}).json()["data"]
+    assert enorme["score_anomalie"] > normal["score_anomalie"]
+    assert enorme["niveau_risque"] in ("Critique", "Élevé") and enorme["recommandations"] and enorme["facteurs"]
+    assert any("fois le montant habituel" in (x.get("detail") or "") for x in enorme["facteurs"])
+
+
+def test_portefeuille_de_credits_sur_la_base(client, admin, source_pg):
+    r = client.get(f"/sources/{source_pg}/risques/credits", headers=admin)
+    assert r.status_code == 200, r.text
+    d = r.json()["data"]
+    assert d["table"] == "loans" and d["colonne_statut"] == "status" and d["credits"] > 0
+    assert 0 < d["taux_defaut"] < 1 and d["segments"]
+    g = d["segments"][0]["groupes"]
+    assert g and all(0 <= x["taux_defaut"] <= 1 for x in g)
+    if d["modele"]:
+        assert d["a_risque"] and d["a_risque"][0]["facteurs"]
+
+
+def test_risques_sur_la_demonstration(client, analyste):
+    ops = client.get("/sources/0/risques/operations", headers=analyste).json()["data"]
+    assert ops["resume"]["table"] == "transactions" and ops["resume"]["heure_prise_en_compte"]
+    cr = client.get("/sources/0/risques/credits", headers=analyste).json()["data"]
+    assert cr["table"] == "credits" and cr["modele"] and cr["a_risque"]

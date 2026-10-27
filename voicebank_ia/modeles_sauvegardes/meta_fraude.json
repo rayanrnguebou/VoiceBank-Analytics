@@ -1,0 +1,20 @@
+{
+  "date_entrainement": "2026-10-27T08:31:39",
+  "nb_transactions": 60000,
+  "nb_fraudes": 1431,
+  "auc_xgboost": 0.719,
+  "heure_valide": true,
+  "if_min": -0.15585030439052242,
+  "if_max": 0.04239047425717024,
+  "features": [
+    "montant_log",
+    "heure_num",
+    "est_nuit",
+    "est_weekend",
+    "type_transaction_enc",
+    "canal_enc",
+    "banque_enc",
+    "ville_enc",
+    "est_internationale_enc"
+  ]
+}

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Database, FileSpreadsheet, Server, Plus, RefreshCw, Trash2, Search, ShieldCheck, ShieldAlert, Lock,
   CircleAlert, TriangleAlert, Info, ChevronDown, ChevronUp, Upload, Link2, Sparkles, ArrowLeft, Copy, Check,
+  Star,
 } from "lucide-react";
 import { useAPI } from "../useAPI";
 import { http } from "../api";
@@ -372,6 +373,10 @@ export default function PanelSources({ dark, onInterroger, onAbonnement }) {
     charger();
   };
   const reanalyser = async (s) => { await http.post(`/sources/${s.id}/analyser`).catch(() => {}); charger(); };
+  const parDefaut = async (s) => {
+    await http.post("/organisation/source-defaut", { id_source: liste.source_defaut === s.id ? null : s.id }).catch(() => {});
+    charger();
+  };
 
   if (vue === "nouvelle") {
     return <NouvelleSource dark={dark} types={liste?.types || []} onAnnuler={() => setVue("liste")}
@@ -399,11 +404,13 @@ export default function PanelSources({ dark, onInterroger, onAbonnement }) {
         {(liste?.data || []).map(s => {
           const Icone = ICONES[s.type] || Database;
           return (
-            <div key={s.id} role="group" aria-label={`Source ${s.nom}`} className={`${carte(dark)} !p-4 flex flex-col gap-3`}>
+            <div key={s.id} role="group" aria-label={`Source ${s.nom}`} className={`${carte(dark)} !p-4 flex flex-col gap-3 min-w-0`}>
               <div className="flex items-start gap-3">
                 <Icone size={20} className="text-laiton-400 flex-shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate">{s.nom}</p>
+                  <p className="text-sm font-semibold truncate flex items-center gap-2">{s.nom}
+                    {liste.source_defaut === s.id && <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-laiton-400/20 text-laiton-500 flex-shrink-0">Par défaut</span>}
+                  </p>
                   <p className={`${texteDiscret(dark)} truncate`}>{s.libelle_type} · {s.connexion}</p>
                 </div>
                 {s.statut === "pret" && <Jauge score={s.score_qualite} dark={dark} />}
@@ -416,8 +423,13 @@ export default function PanelSources({ dark, onInterroger, onAbonnement }) {
               <div className="flex flex-wrap gap-2 mt-auto">
                 <button onClick={() => setVue(s.id)} disabled={s.statut !== "pret" && !s.demo} className={`${boutonSecondaire(dark)} disabled:opacity-50`}>Diagnostic et carte</button>
                 <button onClick={() => onInterroger(s)} disabled={s.statut !== "pret"} className={`${boutonSecondaire(dark)} disabled:opacity-50 flex items-center gap-1`}><Search size={12} /> Interroger</button>
-                {!s.demo && <button onClick={() => reanalyser(s)} className={`${boutonSecondaire(dark)} flex items-center gap-1`}><RefreshCw size={12} /> Réanalyser</button>}
-                {!s.demo && <button onClick={() => supprimer(s)} className={`${boutonSecondaire(dark)} text-red-500 flex items-center gap-1`}><Trash2 size={12} /> Déconnecter</button>}
+                {!s.demo && liste.peut_definir_defaut && s.statut === "pret" && (
+                  <button onClick={() => parDefaut(s)} title="Les membres de l'organisation arrivent directement sur cette base"
+                    className={`${boutonSecondaire(dark)} flex items-center gap-1`}><Star size={12} className={liste.source_defaut === s.id ? "fill-laiton-400 text-laiton-400" : ""} />
+                    {liste.source_defaut === s.id ? "Base par défaut" : "Définir par défaut"}</button>
+                )}
+                {!s.demo && liste.peut_ajouter && <button onClick={() => reanalyser(s)} className={`${boutonSecondaire(dark)} flex items-center gap-1`}><RefreshCw size={12} /> Réanalyser</button>}
+                {!s.demo && liste.peut_ajouter && <button onClick={() => supprimer(s)} className={`${boutonSecondaire(dark)} text-red-500 flex items-center gap-1`}><Trash2 size={12} /> Déconnecter</button>}
               </div>
             </div>
           );

@@ -241,7 +241,25 @@ def test_score_en_lot_identique_au_score_unitaire(client, analyste):
 
 def test_infos_modele_fraude(client, analyste):
     j = client.get("/ia/modeles", headers=analyste).json()
-    assert j["credit_disponible"] and j["fraude"]["heure_prise_en_compte"] is False
+    assert j["credit_disponible"] and j["fraude"]["heure_prise_en_compte"] is True
+    assert j["fraude"]["remarque"] is None and j["fraude"]["fiabilite"] in ("modérée", "correcte", "bonne", "excellente")
+
+
+def test_analyse_explique_et_conseille(client, analyste):
+    """La nuit compte désormais ; le résultat explique pourquoi et dit quoi faire."""
+    ref = client.get("/ia/referentiel", headers=analyste).json()["data"]
+    txn = {"montant_fcfa": 9_000_000, "type_transaction": ref["type_transaction"][0], "canal": ref["canal"][0],
+           "banque": ref["banque"][0], "ville": ref["ville"][0], "est_internationale": "Oui"}
+    nuit = client.post("/ia/analyser-transaction", headers=analyste, json={**txn, "heure": "03:00"}).json()
+    jour = client.post("/ia/analyser-transaction", headers=analyste, json={**txn, "heure": "11:00"}).json()
+    assert nuit["score_anomalie"] != jour["score_anomalie"]
+    assert nuit["facteurs"] and {"variable", "valeur", "impact", "effet"} <= set(nuit["facteurs"][0])
+    assert any(f["variable"] == "Heure" and "nuit" in f["valeur"] for f in nuit["facteurs"])
+    assert len(nuit["recommandations"]) >= 1 and all(isinstance(r, str) for r in nuit["recommandations"])
+    from app import fraude
+    assert "Bloquer" in fraude.recommandations("Critique", [], {})[0]
+    assert fraude.recommandations("Faible", [{"variable": "Montant", "impact": 0.5}], {}) == \
+        ["Aucune action particulière : l'opération ressemble aux opérations habituelles."]
 
 
 def test_reentrainement_fraude(tmp_path, monkeypatch):

@@ -246,6 +246,26 @@ identifiants chiffrés (`CLE_SOURCES`), adresses privées refusées en ligne (an
 et interrogeable que par son propriétaire, l'analyse ne lit qu'un échantillon de 500 lignes par table.
 En local avec Docker, une base installée sur le même PC se joint avec l'hôte `host.docker.internal`.
 
+### Fraude et crédit sur la base de l'organisation
+
+Quand une source est choisie, les pages **Risques** n'utilisent plus la banque de démonstration : les modèles
+sont appris sur la base elle-même (résultat gardé 10 minutes, échantillon de 20 000 lignes).
+
+- **Alertes de fraude** : les opérations récentes sont comparées aux habitudes de la base (montant par type
+  d'opération, catégories rares, heure si elle existe, même dans une colonne séparée). Isolation Forest + rangs
+  explicites, calibrés : environ 2 % des opérations ressortent comme très atypiques. Chaque alerte donne ses
+  raisons (« 3 fois le montant habituel pour « virement » »), un niveau et la conduite à tenir ; filtres, export CSV.
+  Si la base contient un indicateur de fraude, la page montre la part des fraudes connues repérées (contre 5 % au hasard).
+- **Analyse de transaction** : le formulaire reprend les catégories réelles de la base ; le résultat explique le score.
+- **Score de crédit** : si une table de crédits a un statut (« En défaut », « En retard »…), la page donne le taux
+  de défaut par segment et classe les crédits en cours (régression logistique ; fiabilité mesurée en validation
+  croisée, probabilités calibrées sur le taux réel du portefeuille). Si la fiabilité est faible, la page le dit.
+
+**Base par défaut de l'organisation** : l'administrateur clique « Définir par défaut » sur une source (Mes données) ;
+chaque membre arrive alors directement dessus (il peut toujours revenir à la démonstration). Un guide
+« Bien démarrer » accompagne l'administrateur d'une nouvelle organisation (brancher les données, base par défaut,
+inviter l'équipe, première question).
+
 ## Offre publique : essai gratuit et abonnements
 
 L'accueil demande **« Tu es… » Visiteur ou Organisation** :
@@ -341,7 +361,9 @@ Une réponse est juste si son résultat correspond à celui de la requête de r�
 
 ## Réentraîner le modèle de fraude
 
-Le script d'origine ne lisait jamais l'heure des transactions. Le nouveau script corrige ça et
+Le modèle livré lit l'heure des transactions (XGBoost à contraintes monotones : un montant plus élevé, la nuit
+ou l'international ne peuvent jamais « réduire » le risque) et a été réentraîné sur 60 000 transactions de
+démonstration (AUC 0,72, affichée comme « fiabilité correcte »). Pour le réentraîner, le script
 enregistre la date, l'AUC et les bornes de normalisation (`meta_fraude.json`) :
 
 ```bash

@@ -9,6 +9,9 @@ import { BandeauAcces, PanelAbonnement, PanelAbonnements } from "./panneaux/Abon
 import { LectureSeule, useLectureSeule, TITRE_LECTURE_SEULE } from "./lectureSeule";
 import PanelSources from "./panneaux/Connecteur";
 import PanelOrganisation from "./panneaux/Organisation";
+import ResultatRisque from "./panneaux/Explication";
+import { PanelOperationsSource, PanelAnalyseSource, PanelCreditSource } from "./panneaux/RisquesSource";
+import Demarrage from "./panneaux/Demarrage";
 import { useMaintenance, EcranMaintenance, BandeauAnnonce, BandeauReconnexion, PanelMaintenance } from "./maintenance";
 import { FournisseurDevise, useDevise, SelecteurDevise, libelleColonne } from "./devise";
 import { useSessionActive } from "./session";
@@ -794,13 +797,13 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Recherche */}
             <input
               value={recherche}
               onChange={e => setRecherche(e.target.value)}
               placeholder="Rechercher..."
-              className={`text-sm px-3 py-2 rounded-xl border outline-none transition-all w-48 ${
+              className={`text-sm px-3 py-2 rounded-xl border outline-none transition-all w-full sm:w-48 ${
                 dark ? "bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-foret-500" : "bg-gray-50 border-gray-200 text-gray-900 focus:border-foret-400"
               }`}
             />
@@ -1136,18 +1139,19 @@ function PanelAnalyse({ dark }) {
   const champ = `w-full px-3 py-2 rounded-xl border text-sm outline-none ${
     dark ? "bg-gray-700 border-gray-600 text-white focus:border-foret-500" : "bg-gray-50 border-gray-200 text-gray-900 focus:border-foret-500"}`;
   const etiquette = `block text-xs mb-1 ${dark ? "text-gray-400" : "text-gray-500"}`;
-  const couleurs = { Critique: "bg-red-500", "Élevé": "bg-orange-500", Moyen: "bg-yellow-500", Faible: "bg-green-500" };
   const listes = [["type_transaction", "Type"], ["canal", "Canal"], ["banque", "Banque"], ["ville", "Ville"]];
 
   return (
     <div className={`rounded-2xl border p-6 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
       <h2 className={`text-lg font-bold mb-1 ${dark ? "text-white" : "text-gray-900"}`}>Analyser une transaction</h2>
-      <p className={`text-xs mb-1 ${dark ? "text-gray-400" : "text-gray-500"}`}>Score de fraude calculé par Isolation Forest + XGBoost.</p>
+      <p className={`text-xs mb-1 ${dark ? "text-gray-400" : "text-gray-500"}`}>
+        Le modèle d'IA compare l'opération aux habitudes observées (montant, heure, canal, lieu…), explique son score et indique la conduite à tenir.
+      </p>
       {infos && (
         <p className={`text-xs mb-4 ${infos.remarque ? "text-amber-500" : dark ? "text-gray-500" : "text-gray-400"}`}>
-          {infos.date_entrainement
-            ? `Modèle entraîné le ${new Date(infos.date_entrainement).toLocaleDateString("fr-FR")} sur ${Number(infos.nb_transactions).toLocaleString("fr-FR")} transactions${infos.auc_xgboost ? ` · AUC ${infos.auc_xgboost}` : ""}.`
-            : infos.remarque}
+          {infos.remarque || (infos.date_entrainement
+            ? `Modèle entraîné le ${new Date(infos.date_entrainement).toLocaleDateString("fr-FR")} sur ${Number(infos.nb_transactions).toLocaleString("fr-FR")} transactions${infos.fiabilite ? ` · fiabilité ${infos.fiabilite} (AUC ${String(infos.auc_xgboost).replace(".", ",")})` : ""}.`
+            : "")}
         </p>
       )}
       {!ref ? (
@@ -1175,7 +1179,7 @@ function PanelAnalyse({ dark }) {
             </select>
           </label>
           <label>
-            <span className={etiquette}>Heure{infos && !infos.heure_prise_en_compte ? " (ignorée par le modèle actuel)" : ""}</span>
+            <span className={etiquette}>Heure de l'opération</span>
             <input type="time" value={form.heure} onChange={e => setForm({ ...form, heure: e.target.value })} className={champ} />
           </label>
           <div className="sm:col-span-2 flex items-center gap-3">
@@ -1187,24 +1191,28 @@ function PanelAnalyse({ dark }) {
           </div>
         </form>
       )}
-      {resultat && (
-        <div className={`mt-5 p-4 rounded-xl ${dark ? "bg-gray-700" : "bg-gray-50"}`}>
-          <div className="flex items-center gap-3 mb-3">
-            <span className={`text-xs font-semibold text-white px-2.5 py-1 rounded-full ${couleurs[resultat.niveau_risque] || "bg-gray-500"}`}>
-              Risque {resultat.niveau_risque}
-            </span>
-            <span className={`text-sm font-bold ${dark ? "text-white" : "text-gray-900"}`}>
-              Score : {(resultat.score_anomalie * 100).toFixed(1)} %
-            </span>
-          </div>
-          <div className={`h-2 rounded-full overflow-hidden ${dark ? "bg-gray-600" : "bg-gray-200"}`}>
-            <div className={`h-full ${couleurs[resultat.niveau_risque] || "bg-gray-500"}`} style={{ width: `${resultat.score_anomalie * 100}%` }} />
-          </div>
-          <p className={`text-xs mt-3 ${dark ? "text-gray-400" : "text-gray-500"}`}>
-            Isolation Forest : {(resultat.score_isolation_forest * 100).toFixed(0)} % · XGBoost : {(resultat.probabilite_xgboost * 100).toFixed(0)} %
-          </p>
-        </div>
-      )}
+      <ResultatRisque resultat={resultat} dark={dark} type="fraude" />
+    </div>
+  );
+}
+
+// Pages de risque : base analysée (celle de l'organisation, ou la démonstration fictive)
+function BarreSourceRisque({ dark, sourceActive, sourcesPretes, externe, onChoisir, onMesDonnees }) {
+  if (sourcesPretes.length > 0 || sourceActive) {
+    return (
+      <div className={`mb-4 flex flex-wrap items-center gap-3 p-3 rounded-xl border ${dark ? "border-gray-700 bg-gray-800/60" : "border-gray-200 bg-white"}`}>
+        <SelecteurSource dark={dark} sourceActive={sourceActive} sourcesPretes={sourcesPretes} onChoisir={onChoisir} />
+        <span className={`text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>
+          {sourceActive ? "Modèles appris sur cette base." : "Démonstration : banque fictive, modèles pré-entraînés."}
+        </span>
+      </div>
+    );
+  }
+  if (!externe) return null;
+  return (
+    <div className={`mb-4 flex flex-wrap items-center gap-3 p-3 rounded-xl border text-sm ${dark ? "border-laiton-400/30 bg-laiton-400/5 text-gray-300" : "border-amber-200 bg-amber-50 text-gray-700"}`}>
+      <span>Démonstration sur une banque fictive. Branche ta base ou tes fichiers pour analyser tes propres opérations et crédits.</span>
+      <button onClick={onMesDonnees} className="ml-auto px-3 py-1.5 rounded-lg bg-foret-600 hover:bg-foret-700 text-white text-xs font-semibold">Mes données</button>
     </div>
   );
 }
@@ -1473,6 +1481,13 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
     http.get("/sources").then(r => setSourcesPretes(r.data.data.filter(x => !x.demo && x.statut === "pret"))).catch(() => {});
   }, [onglet]);
 
+  // Base par défaut de l'organisation : appliquée à l'arrivée, tant que la personne n'a rien choisi elle-même
+  useEffect(() => {
+    let dejaChoisi = false;
+    try { dejaChoisi = sessionStorage.getItem("voicebank_source") !== null; } catch (e) { /* rien */ }
+    if (!dejaChoisi && acces?.source_defaut) choisirSource(acces.source_defaut, null, true);
+  }, [acces?.source_defaut?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const supprimerItem = (id) => setHistorique(prev => prev.filter(item => item.id !== id));
   const toutEffacer = () => {
     if (window.confirm("Supprimer tout l'historique ?")) setHistorique([]);
@@ -1502,9 +1517,9 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
     donnees:       { titre: "Mes données",            sousTitre: "Brancher, diagnostiquer et interroger les données de ton organisation" },
     tableau:       { titre: "Tableau de bord",         sousTitre: sourceActive ? `Vue d'ensemble de « ${sourceActive.nom} », calculée d'après sa structure`
                                                                        : "Vue d'ensemble des clients, des transactions et des crédits" },
-    alertes:       { titre: "Alertes de fraude",       sousTitre: "Alertes à vérifier et décisions prises" },
+    alertes:       { titre: "Alertes de fraude",       sousTitre: sourceActive ? `Opérations atypiques de « ${sourceActive.nom} »` : "Alertes à vérifier et décisions prises" },
     analyse:       { titre: "Analyse de transaction",  sousTitre: "Estimer le risque de fraude d'une opération" },
-    credit:        { titre: "Score de crédit",         sousTitre: "Risque de défaut d'une demande ou d'un crédit en cours" },
+    credit:        { titre: "Score de crédit",         sousTitre: sourceActive ? `Portefeuille de crédits de « ${sourceActive.nom} »` : "Risque de défaut d'une demande ou d'un crédit en cours" },
     historique:    { titre: "Historique",              sousTitre: "Questions de la session et rapport PDF" },
     apprentissage: { titre: "Apprentissage",           sousTitre: "Réponses signalées et corrections enregistrées" },
     fiabilite:     { titre: "Fiabilité",               sousTitre: "Taux de bonnes réponses sur les questions de référence" },
@@ -1630,6 +1645,10 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
 
           {page === "assistant" && (
             <>
+              {acces?.role_org === "admin" && acces?.type_organisation === "organisation" && (
+                <Demarrage dark={dark} utilisateur={session.utilisateur} acces={acces} nbSources={sourcesPretes.length}
+                  nbQuestions={historique.length} allerA={allerA} />
+              )}
               {kpis.length > 0 && (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
                   {kpis.map((k, i) => <KpiCard key={i} {...k} dark={dark} />)}
@@ -1655,7 +1674,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
                     onErreur={msg => { setDictee(false); setMessage(msg); }}
                     dark={dark}
                   />
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="flex gap-2">
                       <input
                         ref={champQuestionRef}
@@ -1744,9 +1763,16 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
             </>
           )}
           {page === "donnees"    && <PanelSources dark={dark} onInterroger={choisirSource} onAbonnement={() => allerA("abonnement")} />}
-          {page === "alertes"    && <PanelAlertes dark={dark} onChange={rafraichirCompteurs} />}
-          {page === "analyse"    && <PanelAnalyse dark={dark} />}
-          {page === "credit"     && <PanelCredit dark={dark} />}
+          {["alertes", "analyse", "credit"].includes(page) && (
+            <BarreSourceRisque dark={dark} sourceActive={sourceActive} sourcesPretes={sourcesPretes} externe={externe}
+              onChoisir={s => choisirSource(s, null, true)} onMesDonnees={() => allerA("donnees")} />
+          )}
+          {page === "alertes"    && (sourceActive ? <PanelOperationsSource key={sourceActive.id} source={sourceActive} dark={dark} />
+                                                  : <PanelAlertes dark={dark} onChange={rafraichirCompteurs} />)}
+          {page === "analyse"    && (sourceActive ? <PanelAnalyseSource key={sourceActive.id} source={sourceActive} dark={dark} />
+                                                  : <PanelAnalyse dark={dark} />)}
+          {page === "credit"     && (sourceActive ? <PanelCreditSource key={sourceActive.id} source={sourceActive} dark={dark} />
+                                                  : <PanelCredit dark={dark} />)}
           {page === "historique" && (
             <PanelHistorique historique={historique} dark={dark} onSupprimerItem={supprimerItem} onToutEffacer={toutEffacer} />
           )}

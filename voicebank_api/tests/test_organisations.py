@@ -214,3 +214,24 @@ def test_rendu_des_emails():
     t = courriel.rendre_texte(m)
     assert "Activer mon compte : https://site/?invitation=abc" in t and config.EMAIL_SIGNATURE_NOM in t
     assert re.search(r"<table[^>]*max-width:580px", h)
+
+
+def test_base_par_defaut_de_l_organisation(client, boite):
+    _, h = _abonne(client)
+    m = f"defaut{_n[0]}@exemple.cm"
+    client.post("/organisation/membres", headers=h, json={"email": m, "nom_complet": "Membre Défaut"})
+    jeton, _ = _lien(boite, m)
+    ha = _h(client.post("/auth/invitation", json={"identifiant": m, "jeton": jeton, "nouveau": NOUVEAU}))
+    csv = ("Date;Ville;Montant\n" + "\n".join(f"0{1 + i % 9}/01/2025;Douala;{i * 100}" for i in range(1, 30))).encode()
+    sid = client.post("/sources/fichiers?synchrone=true", headers=h, data={"nom": "Base principale"},
+                      files=[("fichiers", ("ventes.csv", csv, "text/csv"))]).json()["id"]
+    assert client.get("/auth/moi", headers=ha).json()["acces"]["source_defaut"] is None
+    assert client.post("/organisation/source-defaut", headers=ha, json={"id_source": sid}).status_code == 403
+    assert client.post("/organisation/source-defaut", headers=h, json={"id_source": sid}).status_code == 200
+    assert client.get("/auth/moi", headers=ha).json()["acces"]["source_defaut"] == {"id": sid, "nom": "Base principale"}
+    assert client.get("/sources", headers=ha).json()["source_defaut"] == sid
+    # Une source d'une autre organisation est refusée ; supprimer la source retire le choix
+    _, h2 = _abonne(client, raison="Autre org")
+    assert client.post("/organisation/source-defaut", headers=h2, json={"id_source": sid}).status_code == 404
+    client.post(f"/sources/{sid}/supprimer", headers=h)
+    assert client.get("/auth/moi", headers=ha).json()["acces"]["source_defaut"] is None

@@ -92,20 +92,70 @@ def scorer(c: dict, strict: bool = True) -> dict:
     X, inconnues = _features(c, strict)
     proba = float(modele["xgb"].predict_proba(X)[0, 1])
     contrib = modele["xgb"].get_booster().predict(xgb.DMatrix(X), pred_contribs=True)[0][:-1]
+    valeurs = _valeurs_affichees(c, X.iloc[0])
     facteurs = sorted(
-        ({"variable": LIBELLES[f], "impact": round(float(v), 3),
+        ({"variable": LIBELLES[f], "code": f, "valeur": valeurs.get(f), "impact": round(float(v), 3),
           "effet": "augmente le risque" if v > 0 else "réduit le risque"} for f, v in zip(FEATURES, contrib)),
         key=lambda d: abs(d["impact"]), reverse=True)[:5]
+    niv = niveau(proba)
     resultat = {
         "probabilite_defaut": round(proba, 4),
         "score_ia": int(min(max((1 - proba) * 850, 300), 850)),
-        "niveau_risque": niveau(proba),
+        "niveau_risque": niv,
         "facteurs": facteurs,
+        "ratio_mensualite_pct": round(float(X.iloc[0]["ratio_mensualite"]) * 100, 1),
+        "recommandations": recommandations(niv, facteurs, c, float(X.iloc[0]["ratio_mensualite"])),
     }
     if inconnues:
         resultat["avertissement"] = ("Catégorie inconnue du modèle pour : " + ", ".join(inconnues)
                                      + " ; valeur par défaut utilisée.")
     return resultat
+
+
+def _fcfa(v) -> str:
+    return f"{float(v or 0):,.0f} FCFA".replace(",", " ")
+
+
+def _valeurs_affichees(c: dict, x) -> dict:
+    return {"montant_log": _fcfa(c.get("montant_fcfa")), "mensualite_log": _fcfa(c.get("mensualite_fcfa")),
+            "revenu_log": _fcfa(c.get("revenu_annuel_fcfa")),
+            "ratio_mensualite": f"{float(x['ratio_mensualite']) * 100:.0f} % du revenu mensuel",
+            "score_credit": f"{int(x['score_credit'])} / 850", "taux_interet_pct": f"{float(x['taux_interet_pct']):g} %",
+            "duree_mois": f"{int(x['duree_mois'])} mois", "est_diaspora_num": "Oui" if x["est_diaspora_num"] else "Non",
+            "type_credit_enc": c.get("type_credit"), "garantie_enc": c.get("garantie"), "banque_enc": c.get("banque")}
+
+
+def recommandations(niveau_: str, facteurs: list[dict], c: dict, ratio: float) -> list[str]:
+    """Décision conseillée et leviers concrets, d'après ce qui fait monter le risque."""
+    decision = {
+        "Faible": "Accord envisageable aux conditions demandées.",
+        "Moyen": "Accord possible sous conditions : sécuriser le dossier avant décaissement.",
+        "Élevé": "Accord déconseillé en l'état : revoir le montant, la durée ou les garanties.",
+        "Critique": "Refus recommandé, ou dossier à restructurer entièrement avant un nouvel examen.",
+    }[niveau_]
+    leviers = []
+    hausse = [f["code"] for f in facteurs if f["impact"] > 0]
+    if ratio > 0.33 or "ratio_mensualite" in hausse or "mensualite_log" in hausse:
+        leviers.append(f"La mensualité pèse {ratio * 100:.0f} % du revenu mensuel (repère prudent : 33 %) : allonger la durée "
+                       "ou réduire le montant pour alléger l'échéance.")
+    if "score_credit" in hausse:
+        leviers.append("Historique de crédit fragile : demander un co-emprunteur ou une garantie solide, et vérifier les "
+                       "incidents de paiement récents.")
+    if c.get("garantie") in ("Sans garantie", None) or "garantie_enc" in hausse:
+        leviers.append("Garantie insuffisante : exiger une caution, un nantissement ou une hypothèque selon le montant.")
+    if "taux_interet_pct" in hausse:
+        leviers.append("Le taux alourdit la charge : un taux révisé ou une bonification réduirait le risque.")
+    if "duree_mois" in hausse:
+        leviers.append("Durée longue : plus d'aléas sur la période ; un échéancier plus court est préférable si la capacité "
+                       "de remboursement le permet.")
+    if "montant_log" in hausse:
+        leviers.append("Montant élevé au regard du profil : envisager un décaissement en plusieurs tranches.")
+    if "type_credit_enc" in hausse:
+        leviers.append(f"Les crédits « {c.get('type_credit')} » font plus de défauts dans le portefeuille : prévoir un suivi "
+                       "rapproché des premières échéances.")
+    if niveau_ == "Faible":
+        return [decision] + leviers[:1]
+    return [decision] + leviers[:4] + ["Mettre en place un suivi des premières échéances (alerte au premier retard)."]
 
 
 def scorer_lot(credits: list[dict]) -> list[dict]:

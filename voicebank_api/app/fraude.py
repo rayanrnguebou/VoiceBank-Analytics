@@ -60,9 +60,81 @@ def infos_modele() -> dict:
         "nb_transactions": meta.get("nb_transactions"),
         "auc_xgboost": meta.get("auc_xgboost"),
         "heure_prise_en_compte": bool(meta.get("heure_valide")),
-        "remarque": None if meta else ("Modèle d'origine : l'heure n'a pas été apprise. "
-                                       "Réentraîne-le avec app.outils.entrainer_fraude."),
+        "remarque": None if meta.get("heure_valide") else ("Modèle d'origine : l'heure n'est pas prise en compte. "
+                                                         "Réentraîne-le avec app.outils.entrainer_fraude."),
+        "fiabilite": _fiabilite(meta.get("auc_xgboost")),
     }
+
+
+def _fiabilite(auc) -> str | None:
+    """AUC traduite en mots, pour un public non technique."""
+    if not auc:
+        return None
+    return ("excellente" if auc >= 0.9 else "bonne" if auc >= 0.8 else "correcte" if auc >= 0.7 else "modérée")
+
+
+LIBELLES = {"montant_log": "Montant", "heure_num": "Heure", "est_nuit": "Opération de nuit", "est_weekend": "Jour",
+            "type_transaction_enc": "Type d'opération", "canal_enc": "Canal", "banque_enc": "Banque",
+            "ville_enc": "Ville", "est_internationale_enc": "Opération internationale"}
+
+
+def _facteurs(X: pd.DataFrame, valeurs: dict) -> list[dict]:
+    """Contributions SHAP natives de XGBoost, regroupées et traduites (heure + nuit = « Heure »)."""
+    if "xgb" not in modeles:
+        return []
+    import xgboost as xgb
+    contrib = modeles["xgb"].get_booster().predict(xgb.DMatrix(X), pred_contribs=True)[0][:-1]
+    groupes: dict[str, float] = {}
+    for f, v in zip(FEATURES, contrib):
+        nom = "Heure" if f in ("heure_num", "est_nuit") else LIBELLES[f]
+        groupes[nom] = groupes.get(nom, 0.0) + float(v)
+    res = []
+    for nom, v in sorted(groupes.items(), key=lambda kv: abs(kv[1]), reverse=True)[:5]:
+        if abs(v) < 0.02:
+            continue
+        res.append({"variable": nom, "valeur": valeurs.get(nom), "impact": round(v, 3),
+                    "effet": "augmente le risque" if v > 0 else "réduit le risque"})
+    return res
+
+
+def recommandations(niveau_: str, facteurs: list[dict], contexte: dict) -> list[str]:
+    """Conduite à tenir, selon le niveau de risque et ce qui l'explique."""
+    base = {
+        "Critique": ["Bloquer l'opération et contacter le client par un canal sûr (numéro déjà connu, jamais celui "
+                     "fourni dans la transaction) avant toute validation.",
+                     "Vérifier l'identité du donneur d'ordre et du bénéficiaire ; geler les opérations similaires du compte "
+                     "le temps de la vérification.",
+                     "Si la fraude est confirmée : signaler à la conformité (déclaration de soupçon à l'ANIF) et conserver "
+                     "les traces."],
+        "Élevé": ["Mettre l'opération en attente et demander une confirmation au client (appel ou SMS de validation).",
+                  "Contrôler l'historique récent du compte : opérations similaires, changements de coordonnées, "
+                  "nouveaux bénéficiaires."],
+        "Moyen": ["Laisser passer mais placer le compte sous surveillance renforcée pendant quelques jours.",
+                  "Vérifier que l'opération correspond aux habitudes du client (montants, horaires, bénéficiaires)."],
+        "Faible": ["Aucune action particulière : l'opération ressemble aux opérations habituelles."],
+    }[niveau_]
+    hausse = {f["variable"] for f in facteurs if f["impact"] > 0}
+    precis = []
+    if "Heure" in hausse and contexte.get("nuit"):
+        precis.append("Opération de nuit : vérifier si le client a l'habitude d'opérer à cette heure.")
+    if "Opération internationale" in hausse and contexte.get("internationale"):
+        precis.append("Opération internationale : contrôler le pays et le bénéficiaire (listes de sanctions, "
+                      "pays à risque).")
+    if "Montant" in hausse:
+        precis.append("Montant inhabituel : appliquer une double validation (quatre yeux) au-delà de votre seuil interne.")
+    if "Canal" in hausse:
+        canal = str(contexte.get("canal") or "")
+        bas = canal.lower()
+        if any(m in bas for m in ("agence", "guichet", "branch")):
+            conseil = "vérifier la pièce d'identité et la signature du client au guichet"
+        elif any(m in bas for m in ("dab", "gab", "atm", "carte", "card", "tpe")):
+            conseil = "vérifier que la carte n'a pas été copiée ou volée (lieu et terminal utilisés)"
+        elif any(m in bas for m in ("mobile", "momo", "money")):
+            conseil = "confirmer l'opération auprès du titulaire sur son numéro habituel (risque de SIM swap)"
+        else:
+            conseil = "vérifier l'appareil, l'adresse IP et la session utilisés"
+        precis.append(f"Canal « {canal} » plus exposé : {conseil}.")
+    return base + (precis if niveau_ != "Faible" else [])
 
 
 def analyser(montant_fcfa: float, type_transaction: str, canal: str, banque: str,
@@ -92,10 +164,19 @@ def analyser(montant_fcfa: float, type_transaction: str, canal: str, banque: str
     score_if = min(max((brut_if - if_min) / (if_max - if_min), 0.0), 1.0)
     proba_xgb = float(modeles["xgb"].predict_proba(X)[0, 1]) if "xgb" in modeles else score_if
     score = round(0.4 * score_if + 0.6 * proba_xgb, 4)
+    niv = niveau(score)
+    montant_txt = f"{montant_fcfa:,.0f} FCFA".replace(",", " ")
+    valeurs_aff = {"Montant": montant_txt, "Heure": f"{h:02d} h" + (" (nuit)" if ligne["est_nuit"] else ""),
+                   "Jour": "week-end" if ligne["est_weekend"] else "semaine", "Type d'opération": type_transaction,
+                   "Canal": canal, "Banque": banque, "Ville": ville, "Opération internationale": est_internationale}
+    facteurs = _facteurs(X, valeurs_aff)
     return {
         "score_anomalie": score,
         "score_isolation_forest": round(score_if, 4),
         "probabilite_xgboost": round(proba_xgb, 4),
-        "niveau_risque": niveau(score),
+        "niveau_risque": niv,
         "est_suspecte": score >= 0.50,
+        "facteurs": facteurs,
+        "recommandations": recommandations(niv, facteurs, {"nuit": bool(ligne["est_nuit"]), "canal": canal,
+                                                           "internationale": est_internationale == "Oui"}),
     }

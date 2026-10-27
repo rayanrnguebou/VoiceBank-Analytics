@@ -592,6 +592,7 @@ def _acces(u: Utilisateur) -> dict:
             "secondes_restantes": int(l.secondes_restantes or 0),
             "questions_jour": int(l.questions_jour), "quota_questions": _quota(u),
             "organisation": l.organisation, "type_organisation": l.type_org, "role_org": u.role_org,
+            "source_defaut": _source_defaut(u),
             "gere_abonnement": u.role == "visiteur" or u.id_org is None or u.admin_org}
 
 
@@ -1242,9 +1243,37 @@ def _src(action):
         raise HTTPException(404 if str(e) == "Source introuvable" else 400, str(e))
 
 
+def _source_defaut(u: Utilisateur) -> dict | None:
+    if u.id_org is None:
+        return None
+    r = db.ecrire("SELECT s.id_source, s.nom FROM voicebank.organisations o JOIN voicebank.sources_donnees s "
+                  "ON s.id_source = o.source_defaut AND s.id_org = o.id_org AND s.statut = 'pret' WHERE o.id_org = :o",
+                  {"o": u.id_org}).lignes
+    return {"id": r[0].id_source, "nom": r[0].nom} if r else None
+
+
+class SourceDefaut(BaseModel):
+    id_source: int | None = Field(None, ge=1)
+
+
+@app.post("/organisation/source-defaut")
+def choisir_source_defaut(request: Request, body: SourceDefaut, u: Utilisateur = Depends(admin_organisation)):
+    """Base sur laquelle arrivent tous les membres de l'organisation (None : la démonstration)."""
+    if body.id_source is not None:
+        ok = db.ecrire("SELECT 1 FROM voicebank.sources_donnees WHERE id_source = :i AND id_org = :o",
+                       {"i": body.id_source, "o": u.id_org}).lignes
+        if not ok:
+            raise HTTPException(404, "Source introuvable dans ton organisation")
+    db.ecrire("UPDATE voicebank.organisations SET source_defaut = :i WHERE id_org = :o", {"i": body.id_source, "o": u.id_org})
+    audit.journaliser(u.nom, "source_defaut", {"id_source": body.id_source, "org": u.id_org}, ip_client(request))
+    return {"status": "ok", "source_defaut": _source_defaut(u)}
+
+
 @app.get("/sources")
 def lister_sources(u: Utilisateur = Depends(utilisateur_courant)):
+    defaut = _source_defaut(u)
     return {"status": "ok", "data": _src(lambda: sources.lister(u.nom)),
+            "source_defaut": defaut["id"] if defaut else None, "peut_definir_defaut": u.admin_org,
             "peut_ajouter": _peut_brancher(u), "types": [
                 {"code": k, "libelle": v["libelle"], "port": v["port"]} for k, v in sources.TYPES.items() if k != "demo"]}
 
@@ -1338,6 +1367,50 @@ def tableau_source(request: Request, id_source: int = Path(ge=0), devise: CodeDe
         return {"status": "ok", "data": sources.tableau_de_bord(id_source, u.nom, devise)}
     except sources.SourceRefusee as e:
         raise HTTPException(404 if str(e) == "Source introuvable" else 422, str(e))
+
+
+class OperationSource(BaseModel):
+    montant: float = Field(gt=0, lt=1e13)
+    heure: int | None = Field(None, ge=0, le=23)
+    categories: dict[str, str] = Field(default_factory=dict)
+    devise: CodeDevise = "XAF"
+
+
+def _risque_source(action):
+    try:
+        return {"status": "ok", "data": action()}
+    except sources.SourceRefusee as e:
+        raise HTTPException(404 if str(e) == "Source introuvable" else 422, str(e))
+
+
+@app.get("/sources/{id_source}/risques/operations")
+@limiter.limit("20/minute")
+def operations_atypiques(request: Request, id_source: int = Path(ge=0), devise: CodeDevise = Query("XAF"),
+                         u: Utilisateur = Depends(utilisateur_courant)):
+    """Opérations les plus atypiques de la base (Isolation Forest entraîné sur ses propres données)."""
+    return _risque_source(lambda: sources.operations_atypiques(id_source, u.nom, devise))
+
+
+@app.get("/sources/{id_source}/risques/formulaire")
+def formulaire_operation(id_source: int = Path(ge=0), devise: CodeDevise = Query("XAF"),
+                         u: Utilisateur = Depends(utilisateur_courant)):
+    return _risque_source(lambda: sources.formulaire_operation(id_source, u.nom, devise))
+
+
+@app.post("/sources/{id_source}/risques/operation")
+@limiter.limit("30/minute")
+def analyser_operation_source(request: Request, body: OperationSource, id_source: int = Path(ge=0),
+                              u: Utilisateur = Depends(utilisateur_courant)):
+    cats = {k[:64]: v[:100] for k, v in list(body.categories.items())[:10]}
+    return _risque_source(lambda: sources.analyser_operation(id_source, u.nom, body.montant, body.heure, cats, body.devise))
+
+
+@app.get("/sources/{id_source}/risques/credits")
+@limiter.limit("20/minute")
+def portefeuille_credits(request: Request, id_source: int = Path(ge=0), devise: CodeDevise = Query("XAF"),
+                         u: Utilisateur = Depends(utilisateur_courant)):
+    """Taux de défaut par segment et crédits en cours les plus risqués, appris sur la base elle-même."""
+    return _risque_source(lambda: sources.portefeuille_credits(id_source, u.nom, devise))
 
 
 @app.post("/sources/{id_source}/question")

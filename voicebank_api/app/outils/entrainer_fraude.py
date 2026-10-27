@@ -77,7 +77,16 @@ def main():
     xgb = None
     if y.sum() >= 10:
         X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, stratify=y, random_state=42)
-        xgb = XGBClassifier(n_estimators=300, max_depth=6, learning_rate=0.05,
+        # Modèle volontairement prudent (arbres peu profonds, régularisé) et contraintes métier : un montant
+        # plus élevé, une opération de nuit ou internationale ne peuvent qu'AUGMENTER le risque. Les
+        # explications restent ainsi cohérentes, même sur des données bruitées.
+        monotones = {"montant_log": 1, "est_nuit": 1, "est_internationale_enc": 1}
+        oui_en_dernier = list(encodeurs["est_internationale"].classes_)[-1:] == ["Oui"]
+        contraintes = tuple(monotones.get(f, 0) if (f != "est_internationale_enc" or oui_en_dernier) else 0
+                            for f in FEATURES)
+        xgb = XGBClassifier(n_estimators=250, max_depth=3, learning_rate=0.05, min_child_weight=10,
+                            subsample=0.8, colsample_bytree=0.8, reg_lambda=5.0,
+                            monotone_constraints=contraintes,
                             scale_pos_weight=(y == 0).sum() / max((y == 1).sum(), 1),
                             eval_metric="aucpr", random_state=42, n_jobs=-1)
         xgb.fit(X_tr, y_tr)

@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useAPI } from "../useAPI";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, COULEURS_NIVEAU } from "../ui";
+import { Choix } from "../ChampListe";
 import { useDevise } from "../devise";
 import ResultatRisque from "./Explication";
 
@@ -79,9 +80,7 @@ export default function PanelCredit({ dark }) {
             {[["type_credit", "Type de crédit"], ["garantie", "Garantie"], ["banque", "Banque"]].map(([cle, nom]) => (
               <label key={cle}>
                 <span className={etiquette(dark)}>{nom}</span>
-                <select value={form[cle] || ""} onChange={e => setForm({ ...form, [cle]: e.target.value })} className={champ(dark)}>
-                  {(ref[cle] || []).map(v => <option key={v}>{v}</option>)}
-                </select>
+                <Choix dark={dark} required valeur={form[cle] || ""} onChange={v => setForm(f => ({ ...f, [cle]: v }))} options={ref[cle] || []} />
               </label>
             ))}
             <label>

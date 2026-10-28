@@ -4,6 +4,7 @@ import { ShieldAlert, ScanSearch, Landmark, Info, Download, ChevronDown, Chevron
 import { useAPI } from "../useAPI";
 import { useDevise } from "../devise";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, COULEURS_NIVEAU } from "../ui";
+import { Choix } from "../ChampListe";
 import ResultatRisque from "./Explication";
 import { telechargerCsv, nomFichier } from "../ui";
 
@@ -158,9 +159,8 @@ export function PanelAnalyseSource({ source, dark }) {
         {f.categories.map(c => (
           <label key={c.colonne}>
             <span className={etiquette(dark)}>{c.libelle}</span>
-            <select value={v.categories[c.colonne] || ""} onChange={e => setV({ ...v, categories: { ...v.categories, [c.colonne]: e.target.value } })} className={champ(dark)}>
-              {c.valeurs.map(x => <option key={x} value={x}>{x}</option>)}
-            </select>
+            <Choix dark={dark} valeur={v.categories[c.colonne] || ""} libre
+              onChange={x => setV(w => ({ ...w, categories: { ...w.categories, [c.colonne]: x } }))} options={c.valeurs} />
           </label>
         ))}
         {f.heure && (

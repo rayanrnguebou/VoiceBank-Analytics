@@ -315,15 +315,15 @@ class DemandeCredit(BaseModel):
     est_diaspora: Literal["Oui", "Non"] = "Non"
     type_credit: str = Field(max_length=50)
     garantie: str = Field(max_length=50)
-    banque: str = Field(max_length=60)
+    banque: str = Field(max_length=120)
 
 
 class TransactionAnalyse(BaseModel):
     montant_fcfa: float = Field(gt=0, lt=1e13)
     type_transaction: str = Field(max_length=60)
     canal: str = Field(max_length=40)
-    banque: str = Field(max_length=60)
-    ville: str = Field(max_length=50)
+    banque: str = Field(max_length=120)
+    ville: str = Field(max_length=80)
     est_internationale: Literal["Oui", "Non"] = "Non"
     date_transaction: date | None = None
     heure: heure_t | None = None

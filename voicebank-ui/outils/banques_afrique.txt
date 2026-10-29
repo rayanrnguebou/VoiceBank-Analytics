@@ -1,0 +1,1010 @@
+# Banques en activité, pays par pays (Afrique). Une section « ## ISO » par pays, une banque par ligne,
+# sigle éventuel entre parenthèses. Sources : pages « List of banks in … » de Wikipédia (consultées le
+# 29/10/2026), complétées des banques centrales régionales (BEAC, BCEAO) et des principaux établissements de
+# microfinance du Cameroun. Le générateur place ces noms en tête et n'ajoute du registre SWIFT que les banques
+# centrales et de développement.
+## CM
+Banque des États de l'Afrique Centrale (BEAC)
+Express Union Finance
+Advans Cameroun
+Cameroon Cooperative Credit Union League (CamCCUL)
+Mutuelles Communautaires de Croissance (MC²)
+Crédit du Sahel
+Mutuelle Financière des Femmes Africaines (MUFFA)
+Access Bank Cameroon
+AFG Bank Cameroun
+Africa Golden Bank (AGB)
+Afriland First Bank
+BANGE Bank Cameroun
+Banque Atlantique Cameroun
+Banque Camerounaise des Petites et Moyennes Entreprises (BC-PME)
+BGFIBank Cameroun
+Banque Internationale du Cameroun pour l'Épargne et le Crédit (BICEC)
+Citibank Cameroun
+Commercial Bank Cameroon (CBC)
+Crédit Communautaire d'Afrique Bank (CCA-Bank)
+Ecobank Cameroun
+La Régionale Bank
+National Financial Credit Bank (NFC Bank)
+Société Commerciale de Banque Cameroun (SCB Cameroun)
+Société Générale Cameroun
+Standard Chartered Bank Cameroon
+Union Bank of Cameroon (UBC)
+United Bank for Africa Cameroun (UBA)
+## GA
+Banque des États de l'Afrique Centrale (BEAC)
+AFG Bank Gabon
+BGFIBank Gabon
+Banque Internationale pour le Commerce et l'Industrie du Gabon (BICIG)
+Union Gabonaise de Banque (UGB)
+United Bank for Africa Gabon
+Orabank Gabon
+Ecobank Gabon
+Citibank Gabon
+Alios Finance Gabon
+Financière Transafricaine (Finatra)
+## CG
+Banque des États de l'Afrique Centrale (BEAC)
+Banque de Développement des États de l'Afrique Centrale (BDEAC)
+Banque Postale du Congo (BPC)
+Banque Congolaise de l'Habitat (BCH)
+Banque Commerciale Internationale (BCI)
+BGFIBank Congo
+Crédit du Congo
+Ecobank Congo
+Société Générale Congo
+United Bank for Africa Congo
+La Congolaise de Banque (LCB)
+Banque Sino-Congolaise pour l'Afrique (BSCA)
+Mutuelles Congolaises d'Épargne et de Crédit (MUCODEC)
+Cofina Congo
+## CD
+Equity Banque Commerciale du Congo (Equity BCDC)
+FirstBank DRC
+Citigroup Congo
+Standard Bank Congo
+Rawbank
+Ecobank RDC
+Trust Merchant Bank (TMB)
+Afriland First Bank RDC
+Access Bank RDC
+Solidaire Banque
+SoFi Bank
+CRDB Bank DR Congo
+Bank of Africa RDC
+United Bank for Africa RDC
+BGFIBank RDC
+## TD
+Banque des États de l'Afrique Centrale (BEAC)
+Société Générale Tchad
+Banque Commerciale du Chari (BCC)
+Ecobank Tchad
+Orabank Tchad
+Commercial Bank Tchad (CBT)
+Banque Agricole et Commerciale (BAC)
+Banque Sahélo-Saharienne pour l'Investissement et le Commerce Tchad (BSIC)
+United Bank for Africa Tchad
+Banque de l'Habitat du Tchad
+## CF
+Banque des États de l'Afrique Centrale (BEAC)
+Banque Populaire Maroco-Centrafricaine (BPMC)
+Banque Sahélo-Saharienne pour l'Investissement et le Commerce Centrafrique (BSIC)
+BGFIBank Centrafrique
+Ecobank Centrafrique
+Commercial Bank Centrafrique (CBCA)
+## GQ
+Banque des États de l'Afrique Centrale (BEAC)
+Commercial Bank Guinée Équatoriale (CBGE)
+BGFIBank Guinea Ecuatorial
+Banco Nacional de Guinea Ecuatorial (BANGE)
+CCEI Bank GE
+Ecobank Guinea Ecuatorial
+Société Générale de Banques en Guinée Équatoriale (SGBGE)
+## CI
+Banque Centrale des États de l'Afrique de l'Ouest (BCEAO)
+Banque Africaine de Développement (BAD)
+AFG Bank Côte d'Ivoire
+Afriland First Bank Côte d'Ivoire
+Bank of Africa Côte d'Ivoire (BOA-CI)
+Banque Atlantique Côte d'Ivoire (BACI)
+Banque d'Abidjan
+Banque de l'Habitat de Côte d'Ivoire (BHCI)
+Banque de l'Union Côte d'Ivoire (BDU-CI)
+Banque Internationale pour le Commerce et l'Industrie de la Côte d'Ivoire (BICICI)
+Banque Nationale d'Investissement (BNI)
+Banque Populaire de Côte d'Ivoire
+BSIC Côte d'Ivoire
+BGFIBank Côte d'Ivoire
+Bridge Bank Group Côte d'Ivoire
+Citibank Côte d'Ivoire
+Coris Bank International Côte d'Ivoire
+Ecobank Côte d'Ivoire
+Guaranty Trust Bank Côte d'Ivoire
+Mansa Bank
+NSIA Banque Côte d'Ivoire
+Orabank Côte d'Ivoire
+Orange Bank Africa
+Société Générale Côte d'Ivoire (SGCI)
+Société Ivoirienne de Banque (SIB)
+Stanbic Bank Côte d'Ivoire
+Standard Chartered Bank Côte d'Ivoire
+United Bank for Africa Côte d'Ivoire
+Versus Bank
+Banque Malienne de Solidarité Côte d'Ivoire
+Banque Régionale de Marchés Côte d'Ivoire
+## SN
+Banque Centrale des États de l'Afrique de l'Ouest (BCEAO)
+Banque Algérienne du Sénégal
+Bank of Africa Sénégal
+Banque Atlantique Sénégal
+Banque de Dakar (BDK)
+Banque de l'Habitat du Sénégal (BHS)
+Banque des Institutions Mutualistes d'Afrique de l'Ouest (BIMAO)
+Banque Islamique du Sénégal (BIS)
+Banque Nationale pour le Développement Économique (BNDE)
+Banque Régionale de Marchés (BRM)
+BSIC Sénégal
+BGFIBank Sénégal
+CBAO Groupe Attijariwafa Bank
+Citibank Sénégal
+Coris Bank International Sénégal
+Crédit du Sénégal
+Crédit International
+Ecobank Sénégal
+FBNBank Sénégal
+La Banque Agricole (LBA)
+La Banque Outarde (LBO)
+Société Générale Sénégal
+SUNU Bank Sénégal
+United Bank for Africa Sénégal
+Orabank Sénégal
+NSIA Banque Sénégal
+## NG
+Access Bank
+Alpha Morgan Bank
+Citibank Nigeria
+Ecobank Nigeria
+Fidelity Bank
+First Bank of Nigeria
+First City Monument Bank (FCMB)
+Globus Bank
+Guaranty Trust Bank (GTBank)
+Keystone Bank
+Nova Commercial Bank
+Optimus Bank
+Parallex Bank
+Polaris Bank
+PremiumTrust Bank
+Providus Bank
+Signature Bank
+Stanbic IBTC Bank
+Standard Chartered Bank Nigeria
+Sterling Bank
+Summit Bank
+SunTrust Bank Nigeria
+Tatum Bank
+Titan Trust Bank
+Union Bank of Nigeria
+United Bank for Africa (UBA)
+Unity Bank
+Wema Bank
+Zenith Bank
+Jaiz Bank
+Lotus Bank
+TAJBank
+The Alternative Bank
+Central Bank of Nigeria
+## BJ
+Banque Centrale des États de l'Afrique de l'Ouest (BCEAO)
+Bank of Africa Bénin
+Banque Atlantique Bénin
+Banque Internationale pour l'Industrie et le Commerce (BIIC)
+BSIC Bénin
+BGFIBank Bénin
+BANGE Bank Bénin
+Coris Bank International Bénin
+Ecobank Bénin
+NSIA Banque Bénin
+Orabank Bénin
+Société Générale Bénin
+United Bank for Africa Bénin
+CBAO Bénin
+## BF
+Banque Centrale des États de l'Afrique de l'Ouest (BCEAO)
+Bank of Africa Burkina Faso
+Banque Agricole du Faso (BADF)
+Banque Atlantique Burkina Faso
+Banque Commerciale du Burkina (BCB)
+Banque de l'Union Burkina Faso (BDU-BF)
+Banque Postale du Burkina Faso
+BSIC Burkina Faso
+Coris Bank International
+Ecobank Burkina
+International Business Bank Burkina (IB Bank)
+Société Générale Burkina Faso
+United Bank for Africa Burkina
+Vista Bank Burkina
+Wendkuni Bank International
+CBAO Burkina Faso
+Orabank Burkina Faso
+## ML
+Banque Centrale des États de l'Afrique de l'Ouest (BCEAO)
+AFG Bank Mali
+Bank of Africa Mali
+Banque Atlantique Mali
+Banque Commerciale du Sahel (BCS)
+Banque de Développement du Mali (BDM)
+Banque Internationale pour le Mali (BIM)
+Banque Malienne de Solidarité (BMS)
+Banque Nationale de Développement Agricole (BNDA)
+Banque pour le Commerce et l'Industrie du Mali (BCI-Mali)
+BSIC Mali
+Coris Bank International Mali
+Ecobank Mali
+United Bank for Africa Mali
+Orabank Mali
+## NE
+Banque Centrale des États de l'Afrique de l'Ouest (BCEAO)
+Bank of Africa Niger
+Banque Agricole du Niger (BAGRI)
+Banque Atlantique Niger
+Banque Commerciale du Niger (BCN)
+Banque de l'Habitat du Niger (BHN)
+Banque Internationale pour l'Afrique au Niger (BIA-Niger)
+Banque Islamique du Niger (BIN)
+BSIC Niger
+Ecobank Niger
+Société Nigérienne de Banque (Sonibank)
+Banque Régionale de Marchés Niger
+CBAO Niger
+Coris Bank International Niger
+Orabank Niger
+## TG
+Banque Centrale des États de l'Afrique de l'Ouest (BCEAO)
+Bank of Africa Togo
+Banque Atlantique Togo
+Banque Internationale pour l'Afrique au Togo (BIA-Togo)
+BSIC Togo
+Coris Bank International Togo
+Ecobank Togo
+International Business Bank Togo (IB Bank)
+Orabank Togo
+Société Interafricaine de Banque (SIAB)
+SUNU Bank Togo
+Union Togolaise de Banque (UTB)
+NSIA Banque Togo
+Société Générale Togo
+Banque Ouest Africaine de Développement (BOAD)
+Ecobank Transnational Incorporated (ETI)
+## GN
+AFG Bank Guinée
+Access Bank Guinée
+Afriland First Bank Guinée
+Banque pour le Commerce et l'Industrie de la Guinée (BCI Guinée)
+Banque Islamique de Guinée (BIG)
+Banque Nationale de Guinée (BNG)
+Banque Populaire Maroco-Guinéenne (BPMG)
+BSIC Guinée
+Coris Bank Guinée
+Diama Bank
+Ecobank Guinée
+FBNBank Guinée
+NSIA Banque Guinée
+Orabank Guinée
+SPCI Bank
+Société Générale Guinée
+United Bank for Africa Guinée
+Vista Bank Guinée
+Banque Centrale de la République de Guinée (BCRG)
+## GW
+Banque Centrale des États de l'Afrique de l'Ouest (BCEAO)
+Banco da África Ocidental (BAO)
+Banco da União (BDU)
+Ecobank Guiné-Bissau
+Coris Bank International Guiné-Bissau
+Orabank Guiné-Bissau
+Banque Atlantique Guiné-Bissau
+## GH
+Absa Bank Ghana
+Access Bank Ghana
+Agricultural Development Bank (ADB)
+Bank of Africa Ghana
+CalBank
+Consolidated Bank Ghana
+Ecobank Ghana
+FBNBank Ghana
+Fidelity Bank Ghana
+First Atlantic Bank
+First National Bank Ghana
+GCB Bank
+Guaranty Trust Bank Ghana
+National Investment Bank
+OmniBSIC Bank Ghana
+Prudential Bank
+Republic Bank Ghana
+Societe Generale Ghana
+Stanbic Bank Ghana
+Standard Chartered Bank Ghana
+United Bank for Africa Ghana
+Universal Merchant Bank
+Zenith Bank Ghana
+Bank of Ghana
+## MA
+Al Barid Bank
+Arab Bank Maroc
+Attijariwafa Bank
+Banco Sabadell Maroc
+Bank Al-Amal
+Banque Centrale Populaire
+Bank of Africa (BMCE)
+Banque Marocaine pour le Commerce et l'Industrie (BMCI)
+Banque Populaire du Centre-Sud
+Banque Populaire de Fès-Meknès
+Banque Populaire de Laâyoune
+Banque Populaire de Marrakech-Béni Mellal
+Banque Populaire de Nador-Al Hoceima
+Banque Populaire d'Oujda
+Banque Populaire de Rabat-Kénitra
+Banque Populaire de Tanger-Tétouan
+CDG Capital
+Crédit Agricole du Maroc
+CFG Bank
+Citibank Maghreb
+CIH Bank
+Crédit du Maroc
+Fonds d'Équipement Communal
+Saham Bank
+Union Marocaine de Banques
+CaixaBank Maroc
+Al Akhdar Bank
+Bank Al Yousr
+Bank Assafa
+Umnia Bank
+Bank Al-Maghrib
+## DZ
+Banque Extérieure d'Algérie (BEA)
+Banque Nationale d'Algérie (BNA)
+Banque de l'Agriculture et du Développement Rural (BADR)
+Banque de Développement Local (BDL)
+Crédit Populaire d'Algérie (CPA)
+Caisse Nationale d'Épargne et de Prévoyance (CNEP Banque)
+Banque Nationale de l'Habitat
+Al Baraka Banque Algérie
+Bank ABC Algérie
+Natixis Algérie
+Société Générale Algérie
+Citibank Algérie
+Arab Bank Algérie
+BNP Paribas El Djazaïr
+Gulf Bank Algeria (AGB)
+Housing Bank for Trade and Finance Algeria
+Fransabank El Djazaïr
+Al Salam Bank Algeria
+HSBC Algeria
+Banque d'Algérie
+## TN
+Tunis International Bank
+Tunisian Foreign Bank
+North Africa International Bank
+Wifak International Bank
+Al Baraka Bank Tunisia
+Banque Zitouna
+Banque de Financement des Petites et Moyennes Entreprises (BFPME)
+Banque Tuniso-Libyenne
+Banque de Tunisie et des Émirats
+Qatar National Bank Tunisia
+Tunisian Saudi Bank
+Banque Tuniso-Koweïtienne
+Bank ABC Tunisie
+Citibank Tunisie
+BH Bank
+Union Internationale de Banques (UIB)
+Union Bancaire pour le Commerce et l'Industrie (UBCI)
+Société Tunisienne de Banque (STB)
+Banque Internationale Arabe de Tunisie (BIAT)
+Amen Bank
+Banque Tunisienne de Solidarité
+Banque de Tunisie
+Attijari Bank Tunisie
+Banque Nationale Agricole (BNA)
+Arab Tunisian Bank (ATB)
+Banque Centrale de Tunisie
+## EG
+African Export-Import Bank (Afreximbank)
+The United Bank of Egypt
+Arab African International Bank
+Arab International Bank
+Arab Investment Bank
+Emirates NBD Egypt
+Abu Dhabi Islamic Bank Egypt
+Abu Dhabi Commercial Bank Egypt
+First Abu Dhabi Bank Misr
+Citibank Egypt
+Mashreq Bank Egypt
+Al Ahli Bank of Kuwait Egypt
+National Bank of Kuwait Egypt
+QNB Egypt
+Saib Bank
+Crédit Agricole Egypt
+Kuwait Finance House Egypt
+American Express Egypt
+Faisal Islamic Bank of Egypt
+Al Baraka Bank Egypt
+Egyptian Gulf Bank
+Bank ABC Egypt
+Arab Bank Egypt
+Attijariwafa Bank Egypt
+onebank
+National Investment Bank
+Nasser Social Bank
+National Bank of Egypt
+Banque Misr
+Commercial International Bank (CIB)
+Housing and Development Bank
+Banque du Caire
+Suez Canal Bank
+Alexbank
+Agricultural Bank of Egypt
+Egyptian Arab Land Bank
+Industrial Development Bank of Egypt
+Export Development Bank of Egypt
+Central Bank of Egypt
+## KE
+Central Bank of Kenya
+KCB Bank Kenya
+Equity Bank Kenya
+Co-operative Bank of Kenya
+NCBA Bank Kenya
+Absa Bank Kenya
+Stanbic Bank Kenya
+I&M Bank Kenya
+Diamond Trust Bank Kenya
+Standard Chartered Bank Kenya
+Prime Bank
+Bank of Baroda Kenya
+Family Bank
+Citibank Kenya
+Bank of India Kenya
+National Bank of Kenya
+SBM Bank Kenya
+Sidian Bank
+Ecobank Kenya
+HFC (Housing Finance Company of Kenya)
+Victoria Commercial Bank
+Gulf African Bank
+Bank of Africa Kenya
+Guaranty Trust Bank Kenya
+African Banking Corporation
+Kingdom Bank
+Habib Bank AG Zurich Kenya
+DIB Bank Kenya
+Premier Bank Kenya
+Commercial International Bank Kenya
+Credit Bank
+Development Bank of Kenya
+Middle East Bank Kenya
+Guardian Bank
+Paramount Bank
+M Oriental Bank
+United Bank for Africa Kenya
+Access Bank Kenya
+Consolidated Bank of Kenya
+## TZ
+Bank of Tanzania
+Absa Bank Tanzania
+Access Bank Tanzania
+Akiba Commercial Bank
+Amana Bank
+Azania Bank
+Bank of Africa Tanzania
+Bank of Baroda Tanzania
+Bank of India Tanzania
+Canara Bank Tanzania
+China Dasheng Bank
+Citibank Tanzania
+CRDB Bank
+DCB Commercial Bank
+Diamond Trust Bank Tanzania
+Ecobank Tanzania
+Equity Bank Tanzania
+Exim Bank Tanzania
+Guaranty Trust Bank Tanzania
+Habib African Bank
+I&M Bank Tanzania
+International Commercial Bank Tanzania
+KCB Bank Tanzania
+Letshego Faidika Bank
+Mkombozi Commercial Bank
+Mwalimu Commercial Bank
+Mwanga Hakika Bank
+National Bank of Commerce (NBC)
+NCBA Bank Tanzania
+NMB Bank
+People's Bank of Zanzibar
+Stanbic Bank Tanzania
+Standard Chartered Bank Tanzania
+Tanzania Commercial Bank
+United Bank for Africa Tanzania
+Cooperative Bank of Tanzania
+Mucoba Bank
+Uchumi Commercial Bank
+## UG
+Bank of Uganda
+Absa Bank Uganda
+Bank of Africa Uganda
+Bank of Baroda Uganda
+Bank of India Uganda
+Cairo Bank Uganda
+Centenary Bank
+Citibank Uganda
+dfcu Bank
+Diamond Trust Bank Uganda
+Ecobank Uganda
+Equity Bank Uganda
+Exim Bank Uganda
+Housing Finance Bank
+KCB Bank Uganda
+NCBA Bank Uganda
+I&M Bank Uganda
+Salaam Bank Uganda
+Stanbic Bank Uganda
+Standard Chartered Bank Uganda
+Tropical Bank
+United Bank for Africa Uganda
+Pearl Bank
+ABC Capital Bank
+BRAC Uganda Bank
+Finance Trust Bank
+Guaranty Trust Bank Uganda
+Opportunity Bank Uganda
+Yako Bank Uganda
+Pride Bank
+## RW
+I&M Bank Rwanda
+Bank of Kigali
+BPR Bank Rwanda
+Guaranty Trust Bank Rwanda
+Ecobank Rwanda
+Access Bank Rwanda
+Equity Bank Rwanda
+Bank of Africa Rwanda
+NCBA Bank Rwanda
+Banque Nationale du Rwanda
+## BI
+Banque Commerciale du Burundi (BANCOBU)
+Banque de Gestion et de Financement (BGF)
+Banque Burundaise pour le Commerce et l'Investissement (BBCI)
+FinBank
+Interbank Burundi
+Ecobank Burundi
+Banque de Crédit de Bujumbura (BCB)
+Diamond Trust Bank Burundi
+KCB Bank Burundi
+CRDB Bank Burundi
+Banque Communautaire et Agricole du Burundi
+Banque d'Investissement pour les Jeunes (BIJE)
+Banque de l'Habitat du Burundi
+Banque d'Investissement et de Développement pour les Femmes (BIDF)
+Banque Nationale de Développement Économique (BNDE)
+Bedrock Financial Bank
+Banque de la République du Burundi
+## ET
+National Bank of Ethiopia
+Nib International Bank
+Abay Bank
+Addis International Bank
+Amhara Bank
+Awash Bank
+Bank of Abyssinia
+Berhan Bank
+Bunna Bank
+Commercial Bank of Ethiopia
+Cooperative Bank of Oromia
+Enat Bank
+Dashen Bank
+Global Bank Ethiopia
+Lion International Bank
+Oromia Bank
+Hibret Bank
+Wegagen Bank
+Zemen Bank
+Development Bank of Ethiopia
+ZamZam Bank
+Hijra Bank
+Siinqee Bank
+Shabelle Bank
+Ahadu Bank
+Goh Betoch Bank
+Tsedey Bank
+Gadaa Bank
+Rammis Bank
+## ZA
+South African Reserve Bank
+Absa Bank
+African Bank
+Bank Zero
+Bidvest Bank
+Capitec Bank
+First National Bank (FNB)
+Investec Bank
+Nedbank
+Old Mutual Bank
+Sasfin Bank
+Standard Bank of South Africa
+TymeBank
+Mercantile Bank
+Grindrod Bank
+Ubank
+Access Bank South Africa
+Albaraka Bank
+Habib Overseas Bank
+HBZ Bank
+Finbond Mutual Bank
+GBS Mutual Bank
+OSK Koöperatiewe Bank
+KSK Koöperatiewe Bank
+GIG Co-operative Bank
+## MG
+Banky Foiben'i Madagasikara (Banque Centrale de Madagascar)
+AccèsBanque Madagascar
+AFG Bank Madagascar
+Baobab Banque Madagascar
+Bank of Africa Madagascar
+BGFIBank Madagascar
+Banque Malgache de l'Océan Indien (BMOI)
+BNI Madagascar
+Caisse d'Épargne de Madagascar
+MCB Madagascar
+Banque SBM Madagascar
+SIPEM Banque
+BRED Madagasikara
+## MR
+Banque Centrale de Mauritanie
+International Bank of Mauritania
+Banque Mauritanienne de l'Investissement
+Banque des Financements Islamiques
+Qatar National Bank Mauritanie
+Banque Islamique de Mauritanie
+Nouvelle Banque de Mauritanie
+Banque Muamelat As Sahiha
+Banque Populaire de Mauritanie
+Attijari Bank Mauritanie
+Chinguitty Bank
+Société Générale Mauritanie
+Orabank Mauritanie
+Banque El Amana
+Banque Al Wava Mauritanienne Islamique (BAMIS)
+Générale de Banque de Mauritanie (GBM)
+Banque Nationale de Mauritanie (BNM)
+Banque Mauritanienne pour le Commerce International (BMCI)
+Banque pour le Commerce et l'Industrie (BCI)
+## LY
+Central Bank of Libya
+Agricultural Bank of Libya
+Alejmaa Alarabi Bank
+Aman Bank for Commerce and Investment
+Jumhouria Bank
+Libyan Foreign Bank
+Mediterranean Bank
+National Commercial Bank
+Sahara Bank
+Wafa Bank
+United Bank for Commerce and Investment
+Waha Bank
+Wahda Bank
+Andalus Bank
+## AO
+Banco Nacional de Angola
+Banco Angolano de Investimentos (BAI)
+Banco Caixa Geral Angola
+Banco de Comércio e Indústria (BCI)
+Bank of China Luanda
+Banco Económico
+Banco de Negócios Internacional (BNI)
+Banco BIC
+Banco Comercial Angolano
+Banco Comercial do Huambo
+Banco de Desenvolvimento de Angola
+Banco de Fomento Angola (BFA)
+Banco de Investimento Rural
+Banco de Poupança e Crédito (BPC)
+Banco Millennium Atlântico
+Banco Keve
+Banco Valor
+Access Bank Angola
+Banco Sol
+Standard Chartered Angola
+Banco VTB África
+Banco de Crédito do Sul
+Banco Yetu
+Standard Bank de Angola
+## BW
+Bank of Botswana
+Absa Bank Botswana
+Access Bank Botswana
+Bank Gaborone
+Bank of Baroda Botswana
+BBS Bank
+First Capital Bank Botswana
+First National Bank of Botswana
+Stanbic Bank Botswana
+Standard Chartered Bank Botswana
+## CV
+Banco de Cabo Verde
+Banco BAI Cabo Verde
+Banco Caboverdiano de Negócios (BCN)
+Banco Comercial do Atlântico (BCA)
+Banco Interatlântico
+BFI Bank
+Caixa Económica de Cabo Verde
+Ecobank Cabo Verde
+International Investment Bank
+## GM
+Central Bank of The Gambia
+Access Bank Gambia
+Agib Bank
+BSIC Gambia
+Bloom Bank Africa Gambia
+Ecobank Gambia
+First Bank Gambia
+Guaranty Trust Bank Gambia
+Mega Bank Gambia
+Standard Chartered Bank Gambia
+Trust Bank Gambia
+Vista Bank Gambia
+Zenith Bank Gambia
+## LR
+Central Bank of Liberia
+Liberian Bank for Development and Investment (LBDI)
+Ecobank Liberia
+International Bank Liberia
+Global Bank Liberia
+Sapelle International Bank
+United Bank for Africa Liberia
+Access Bank Liberia
+Guaranty Trust Bank Liberia
+Afriland First Bank Liberia
+## SL
+Bank of Sierra Leone
+Sierra Leone Commercial Bank
+Rokel Commercial Bank
+Standard Chartered Bank Sierra Leone
+Union Trust Bank
+Guaranty Trust Bank Sierra Leone
+Vista Bank Sierra Leone
+First Bank Sierra Leone
+Ecobank Sierra Leone
+Access Bank Sierra Leone
+United Bank for Africa Sierra Leone
+Zenith Bank Sierra Leone
+Bloom Bank Africa Sierra Leone
+Commerce & Mortgage Bank
+## MU
+Bank of Mauritius
+ABC Banking Corporation
+Absa Bank Mauritius
+AfrAsia Bank
+Bank of Baroda Mauritius
+Bank of China Mauritius
+Bank One
+Banque Patronus
+BCP Bank Mauritius
+HSBC Bank Mauritius
+Investec Bank Mauritius
+MauBank
+SBI Mauritius
+SBM Bank Mauritius
+Silver Bank
+Standard Bank Mauritius
+Standard Chartered Bank Mauritius
+The Mauritius Commercial Bank (MCB)
+Warwyck Private Bank
+## MZ
+Banco de Moçambique
+Standard Bank Moçambique
+Millennium bim
+Banco Comercial e de Investimentos (BCI)
+First Capital Bank Moçambique
+Société Générale Moçambique
+Absa Bank Moçambique
+FNB Moçambique
+Ecobank Moçambique
+Moza Banco
+United Bank for Africa Moçambique
+Nedbank Moçambique
+Banco Nacional de Investimento
+Banco BIG Moçambique
+Banco Letshego
+Access Bank Moçambique
+## ZM
+Bank of Zambia
+AB Bank Zambia
+Absa Bank Zambia
+Access Bank Zambia
+Bank of China Zambia
+Citibank Zambia
+Ecobank Zambia
+First Alliance Bank Zambia
+First Capital Bank Zambia
+First National Bank Zambia
+Indo-Zambia Bank
+Stanbic Bank Zambia
+Standard Chartered Zambia
+United Bank for Africa Zambia
+Zambia Industrial Commercial Bank
+Zambia National Commercial Bank (Zanaco)
+## ZW
+Reserve Bank of Zimbabwe
+AFC Commercial Bank
+BancABC Zimbabwe
+CBZ Bank
+Ecobank Zimbabwe
+FBC Bank
+First Capital Bank Zimbabwe
+Metbank
+Nedbank Zimbabwe
+NMB Bank
+Stanbic Bank Zimbabwe
+Standard Chartered Bank Zimbabwe
+Steward Bank
+ZB Bank
+Central Africa Building Society (CABS)
+FBC Building Society
+National Building Society
+People's Own Savings Bank (POSB)
+EmpowerBank
+Infrastructure Development Bank of Zimbabwe (IDBZ)
+AFC Land & Development Bank
+## MW
+Reserve Bank of Malawi
+CDH Investment Bank
+Ecobank Malawi
+FDH Bank
+First Capital Bank Malawi
+National Bank of Malawi
+NBS Bank
+Standard Bank Malawi
+Centenary Bank Malawi
+## KM
+Banque Centrale des Comores
+Banque pour l'Industrie et le Commerce Comores (BIC)
+Banque de Développement des Comores (BDC)
+Exim Bank Comores
+Banque Fédérale de Commerce (BFC)
+Société Nationale des Postes et des Services Financiers (SNPSF)
+## DJ
+Banque Centrale de Djibouti
+Bank of Africa Mer Rouge (BOA)
+Banque pour le Commerce et l'Industrie – Mer Rouge (BCIMR)
+Banque de Dépôt et de Crédit Djibouti (BDCD)
+Exim Bank Djibouti
+Salaam African Bank
+Saba Islamic Bank
+CAC International Bank
+East Africa Bank
+## SC
+Central Bank of Seychelles
+Seychelles International Mercantile Banking Corporation (Nouvobanq)
+Seychelles Commercial Bank
+Absa Bank Seychelles
+MCB Seychelles
+Bank of Baroda Seychelles
+Al Salam Bank Seychelles
+Bank of Ceylon Seychelles
+Development Bank of Seychelles
+## NA
+Bank of Namibia
+Bank Windhoek
+First National Bank Namibia
+Standard Bank Namibia
+Nedbank Namibia
+Banco BIC Namibia
+Letshego Bank Namibia
+Banco Privado Atlântico Namibia
+## SD
+Central Bank of Sudan
+Al Jazeera Sudanese Jordanian Bank
+Alkhaleej Bank
+Abu Dhabi Islamic Bank Sudan
+Qatar Islamic Bank Sudan
+National Bank of Egypt Khartoum
+Arab Sudanese Bank
+Bank of Khartoum
+Sudanese Islamic Bank
+Savings and Social Development Bank
+Family Bank Sudan
+Alsalam Bank Sudan
+National Bank of Sudan
+Export Development Bank Sudan
+Capital Bank Sudan
+Qatar National Bank Sudan
+Blue Nile Mashreq Bank
+Farmers Commercial Bank
+El Nilein Bank
+Saudi Sudanese Bank
+Sudanese French Bank
+Al Baraka Bank Sudan
+Commercial Real Estate Bank
+Nile Bank
+Ivory Bank Sudan
+Sudanese Egyptian Bank
+Animal Resource Bank
+Agricultural Bank of Sudan
+Financial Investment Bank
+Workers National Bank
+Byblos Bank Africa
+Omdurman National Bank
+Industrial Development Bank of Sudan
+Tadamon Islamic Bank
+Faisal Islamic Bank of Sudan
+## SS
+Bank of South Sudan
+African National Bank
+Afriland First Bank South Sudan
+Agricultural Bank of South Sudan
+Buffalo Commercial Bank
+Charter One Bank
+Commercial Bank of Ethiopia South Sudan
+Cooperative Bank of South Sudan
+Ecobank South Sudan
+Eden Commercial Bank
+Equity Bank South Sudan
+International Commercial Bank South Sudan
+Ivory Bank
+KCB Bank South Sudan
+Kush Bank
+Liberty Commercial Bank
+Mountain Trade and Development Bank
+National Credit Bank
+Nile Commercial Bank
+Opportunity Bank South Sudan
+People's Bank South Sudan
+Phoenix Commercial Bank
+Qatar National Bank South Sudan
+Regent African Bank
+Royal Express Bank
+South Sudan Commercial Bank
+Stanbic Bank South Sudan
+Alpha Commercial Bank
+Ebony National Bank
+National Bank of Egypt Juba
+## SO
+Central Bank of Somalia
+MyBank
+Agro Africa Bank
+Amal Bank
+Amana Bank Somalia
+Bushra Business Bank
+Dahabshil Bank International
+Daryeel Bank
+Galaxy International Bank
+Idman Community Bank
+International Bank of Somalia
+Premier Bank
+Salaam Somali Bank
+SomBank
+## LS
+Central Bank of Lesotho
+Standard Lesotho Bank
+Nedbank Lesotho
+First National Bank Lesotho
+Lesotho Post Bank
+## SZ
+Central Bank of Eswatini
+First National Bank Eswatini
+Standard Bank Eswatini
+Nedbank Eswatini
+Eswatini Bank
+Eswatini Building Society
+## ST
+Banco Central de São Tomé e Príncipe
+Afriland First Bank São Tomé e Príncipe
+Banco Internacional de São Tomé e Príncipe (BISTP)
+BGFIBank São Tomé e Príncipe
+Ecobank São Tomé e Príncipe
+Energy Bank São Tomé e Príncipe
+## ER
+Bank of Eritrea
+Commercial Bank of Eritrea
+Housing and Commerce Bank of Eritrea
+Eritrean Development and Investment Bank

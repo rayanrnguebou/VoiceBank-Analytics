@@ -266,6 +266,25 @@ chaque membre arrive alors directement dessus (il peut toujours revenir à la d�
 « Bien démarrer » accompagne l'administrateur d'une nouvelle organisation (brancher les données, base par défaut,
 inviter l'équipe, première question).
 
+### Villes et banques de tous les pays (Afrique, Europe…)
+
+Les champs Pays, Ville et Banque se remplissent en tapant quelques lettres (sans accents ni majuscules) ; le
+sigle ou le nom d'origine marche aussi (« bicec », « london » → Londres). Une valeur absente reste acceptée.
+
+| Données | Contenu | Source |
+|---|---|---|
+| Villes | ~118 000 localités de 1 000 habitants ou plus, 196 pays (Afrique ~4 800, Europe ~63 000), noms français des grandes villes | [GeoNames](https://www.geonames.org) (CC BY 4.0), paquet `all-the-cities` |
+| Banques d'Afrique | ~980 banques en activité des 54 pays, banques centrales (BEAC, BCEAO…), principales microfinances du Cameroun | pages « List of banks in … » de Wikipédia, vérifiées pays par pays : `voicebank-ui/outils/banques_afrique.txt` |
+| Banques d'Europe et du reste du monde | ~12 000 établissements | registre SWIFT/BIC public (`PeterNotenboom/SwiftCodes`, MIT) |
+
+Fichiers : `voicebank-ui/public/referentiel/{villes,banques}/<ISO>.json`, chargés à la demande (un pays à la fois).
+Pour les régénérer (ex. après avoir ajouté une banque dans `banques_afrique.txt`), voir l'en-tête de
+`voicebank-ui/outils/generer_referentiel.mjs`.
+
+Dans les formulaires de démonstration (Analyse de transaction, Score de crédit), choisir un autre pays propose
+ses banques et ses villes et passe l'opération en « internationale ». Les banques et villes apprises par le modèle
+sont signalées ; pour les autres, le modèle estime leur effet par la moyenne des valeurs qu'il connaît et le dit.
+
 ## Offre publique : essai gratuit et abonnements
 
 L'accueil demande **« Tu es… » Visiteur ou Organisation** :

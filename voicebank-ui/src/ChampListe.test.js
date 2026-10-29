@@ -57,3 +57,14 @@ test("Choix : menu classique pour une liste courte, recherche pour une longue", 
   rerender(<Choix valeur="Douala" onChange={() => {}} options={["Douala", "Yaoundé", "Garoua", "Kribi", "Buea", "Limbé", "Bafoussam"]} />);
   expect(screen.getByRole("combobox").tagName).toBe("INPUT");
 });
+
+test("référentiel : l'autre nom ou le sigle sert à la recherche, pas à l'affichage", () => {
+  const { versOptions } = require("./referentiel");
+  const villes = versOptions(["Paris", "Londres|London", "Bruxelles|Brussels"]);
+  expect(villes[1]).toEqual({ valeur: "Londres", libelle: "Londres", alias: "London" });
+  expect(filtrer(villes, "lond").map(o => o.valeur)).toEqual(["Londres"]);
+  expect(filtrer(villes, "brus").map(o => o.valeur)).toEqual(["Bruxelles"]);
+  const banques = versOptions(["Afriland First Bank", "Banque Internationale du Cameroun pour l'Épargne et le Crédit (BICEC)|BICEC"]);
+  expect(filtrer(banques, "bicec")[0].valeur).toMatch(/^Banque Internationale du Cameroun/);
+  expect(filtrer(banques, "first").map(o => o.valeur)).toEqual(["Afriland First Bank"]);
+});

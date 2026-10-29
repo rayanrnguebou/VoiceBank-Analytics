@@ -262,6 +262,36 @@ def test_analyse_explique_et_conseille(client, analyste):
         ["Aucune action particulière : l'opération ressemble aux opérations habituelles."]
 
 
+def test_banque_et_ville_hors_modele_acceptees(client, analyste):
+    """Toute banque ou ville (d'Afrique, d'Europe…) est acceptée : effet moyen des valeurs apprises, et on le dit."""
+    ref = client.get("/ia/referentiel", headers=analyste).json()["data"]
+    txn = {"montant_fcfa": 250_000, "type_transaction": ref["type_transaction"][0], "canal": ref["canal"][0],
+           "banque": ref["banque"][0], "ville": ref["ville"][0], "est_internationale": "Non", "heure": "14:00"}
+    connue = client.post("/ia/analyser-transaction", headers=analyste, json=txn).json()
+    assert connue["avertissement"] is None
+    r = client.post("/ia/analyser-transaction", headers=analyste,
+                    json={**txn, "banque": "Banque Internationale pour le Commerce et l'Industrie du Gabon (BICIG)",
+                          "ville": "Port-Gentil", "est_internationale": "Oui"})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert 0 <= d["score_anomalie"] <= 1 and d["facteurs"] and d["recommandations"]
+    assert "n'a pas appris" in d["avertissement"] and "Port-Gentil" in d["avertissement"]
+    assert any("inconnue du modèle" in (f.get("detail") or "") for f in d["facteurs"])
+    # Le type d'opération et le canal restent contrôlés : une valeur inconnue y est une erreur de saisie
+    assert client.post("/ia/analyser-transaction", headers=analyste, json={**txn, "canal": "Pigeon voyageur"}).status_code == 422
+    assert client.post("/ia/analyser-transaction", headers=analyste, json={**txn, "banque": "  "}).status_code == 422
+
+    cref = client.get("/ia/credit/referentiel", headers=analyste)
+    assert cref.status_code == 200
+    c = cref.json()["data"]
+    demande = {"montant_fcfa": 5_000_000, "mensualite_fcfa": 250_000, "revenu_annuel_fcfa": 9_000_000, "score_credit": 640,
+               "taux_interet_pct": 12, "duree_mois": 24, "est_diaspora": "Non", "type_credit": c["type_credit"][0],
+               "garantie": c["garantie"][0], "banque": "Ecobank Sénégal"}
+    rc = client.post("/ia/score-credit", headers=analyste, json=demande)
+    assert rc.status_code == 200, rc.text
+    assert "Ecobank Sénégal" in rc.json()["avertissement"]
+
+
 def test_reentrainement_fraude(tmp_path, monkeypatch):
     import json
     import shutil

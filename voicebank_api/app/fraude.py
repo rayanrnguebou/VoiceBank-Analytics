@@ -18,6 +18,8 @@ log = logging.getLogger("voicebank")
 FEATURES = ["montant_log", "heure_num", "est_nuit", "est_weekend", "type_transaction_enc",
             "canal_enc", "banque_enc", "ville_enc", "est_internationale_enc"]
 CATEGORIELLES = ["type_transaction", "canal", "banque", "ville", "est_internationale"]
+# Une banque ou une ville que le modèle n'a pas apprise est acceptée : son effet est la moyenne des valeurs connues
+OUVERTES = ("banque", "ville")
 
 # Bornes de -decision_function de l'Isolation Forest, pour reproduire la
 # normalisation min-max faite à l'entraînement (min/max non sauvegardés).
@@ -83,7 +85,8 @@ def _facteurs(X: pd.DataFrame, valeurs: dict) -> list[dict]:
     if "xgb" not in modeles:
         return []
     import xgboost as xgb
-    contrib = modeles["xgb"].get_booster().predict(xgb.DMatrix(X), pred_contribs=True)[0][:-1]
+    # Plusieurs lignes quand une banque ou une ville est inconnue : on moyenne sur les valeurs connues
+    contrib = modeles["xgb"].get_booster().predict(xgb.DMatrix(X), pred_contribs=True)[:, :-1].mean(axis=0)
     groupes: dict[str, float] = {}
     for f, v in zip(FEATURES, contrib):
         nom = "Heure" if f in ("heure_num", "est_nuit") else LIBELLES[f]
@@ -145,9 +148,12 @@ def analyser(montant_fcfa: float, type_transaction: str, canal: str, banque: str
     enc = modeles["encoders"]
     valeurs = {"type_transaction": type_transaction, "canal": canal, "banque": banque,
                "ville": ville, "est_internationale": est_internationale}
+    inconnues = []
     for col, val in valeurs.items():
         if val not in enc[col].classes_:
-            raise ValueError(f"Valeur inconnue pour {col} : {val}")
+            if col not in OUVERTES or not str(val or "").strip():
+                raise ValueError(f"Valeur inconnue pour {col} : {val}")
+            inconnues.append(col)
     jour = jour or date.today()
     meta = modeles.get("meta") or {}
     # Modèle d'origine : l'heure n'avait pas pu être lue à l'entraînement (toujours 12).
@@ -156,13 +162,16 @@ def analyser(montant_fcfa: float, type_transaction: str, canal: str, banque: str
     ligne = {
         "montant_log": np.log1p(montant_fcfa), "heure_num": h, "est_nuit": int(h >= 22 or h <= 6),
         "est_weekend": int(jour.weekday() >= 5),
-        **{f"{c}_enc": int(enc[c].transform([v])[0]) for c, v in valeurs.items()},
+        **{f"{c}_enc": int(enc[c].transform([v])[0]) for c, v in valeurs.items() if c not in inconnues},
     }
-    X = pd.DataFrame([ligne], columns=FEATURES)
-    brut_if = float(-modeles["iforest"].decision_function(modeles["scaler"].transform(X))[0])
+    lignes = [ligne]
+    for col in inconnues:          # une ligne par valeur connue de la colonne
+        lignes = [{**l, f"{col}_enc": i} for l in lignes for i in range(len(enc[col].classes_))]
+    X = pd.DataFrame(lignes, columns=FEATURES)
+    brut_if = -modeles["iforest"].decision_function(modeles["scaler"].transform(X))
     if_min, if_max = meta.get("if_min", IF_MIN), meta.get("if_max", IF_MAX)
-    score_if = min(max((brut_if - if_min) / (if_max - if_min), 0.0), 1.0)
-    proba_xgb = float(modeles["xgb"].predict_proba(X)[0, 1]) if "xgb" in modeles else score_if
+    score_if = float(np.clip((brut_if - if_min) / (if_max - if_min), 0.0, 1.0).mean())
+    proba_xgb = float(modeles["xgb"].predict_proba(X)[:, 1].mean()) if "xgb" in modeles else score_if
     score = round(0.4 * score_if + 0.6 * proba_xgb, 4)
     niv = niveau(score)
     montant_txt = f"{montant_fcfa:,.0f} FCFA".replace(",", " ")
@@ -170,7 +179,17 @@ def analyser(montant_fcfa: float, type_transaction: str, canal: str, banque: str
                    "Jour": "week-end" if ligne["est_weekend"] else "semaine", "Type d'opération": type_transaction,
                    "Canal": canal, "Banque": banque, "Ville": ville, "Opération internationale": est_internationale}
     facteurs = _facteurs(X, valeurs_aff)
+    noms = {"banque": "banque", "ville": "ville"}
+    avertissement = None
+    if inconnues:
+        quoi = " et ".join(f"la {noms[c]} « {valeurs[c]} »" for c in inconnues)
+        avertissement = (f"Le modèle de démonstration n'a pas appris {quoi} : {'leur' if len(inconnues) > 1 else 'son'} effet est estimé par la moyenne "
+                         "des valeurs qu'il connaît. Branche ta base pour un modèle appris sur tes propres données.")
+        for f in facteurs:
+            if f["variable"].lower() in inconnues:
+                f["detail"] = f"{f['valeur']} (inconnue du modèle, effet moyen)"
     return {
+        "avertissement": avertissement,
         "score_anomalie": score,
         "score_isolation_forest": round(score_if, 4),
         "probabilite_xgboost": round(proba_xgb, 4),

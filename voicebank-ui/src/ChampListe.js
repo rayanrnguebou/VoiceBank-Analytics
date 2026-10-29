@@ -6,16 +6,21 @@ import { champ } from "./ui";
 
 export const normaliser = t => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 
-// Les valeurs qui commencent par la saisie d'abord, puis celles dont un mot commence par elle, puis le reste
+// Clés de recherche d'une option : son libellé, puis ses autres noms (« London » pour Londres, sigle d'une banque)
+const cles = o => o._cles || (o._cles = [o.libelle, ...String(o.alias || "").split(/\s*\|\s*|\s{2,}/)].filter(Boolean).map(normaliser));
+const MOTS = /[\s\-'’(/.]+/;
+
+// Les valeurs qui commencent par la saisie d'abord, puis celles dont un mot (ou un autre nom) commence par elle,
+// puis le reste ; l'ordre d'origine (ex. population des villes) est conservé dans chaque groupe.
 export function filtrer(options, saisie) {
   const s = normaliser(saisie);
   if (!s) return options;
   const debut = [], mot = [], dedans = [];
   for (const o of options) {
-    const n = normaliser(o.libelle);
-    if (n.startsWith(s)) debut.push(o);
-    else if (n.split(/[\s\-'’(]+/).some(m => m.startsWith(s))) mot.push(o);
-    else if (n.includes(s)) dedans.push(o);
+    const k = cles(o);
+    if (k[0].startsWith(s)) debut.push(o);
+    else if (k.some((c, i) => (i > 0 && c.startsWith(s)) || c.split(MOTS).some(m => m.startsWith(s)))) mot.push(o);
+    else if (k.some(c => c.includes(s))) dedans.push(o);
   }
   return debut.length || mot.length ? [...debut, ...mot] : dedans;   // milieu de mot seulement à défaut de mieux
 }
@@ -32,9 +37,10 @@ export default function ChampListe({ valeur, onChange, options, dark, libre = fa
   const auto = useId();
   const idListe = `${id || auto}-liste`;
 
-  useEffect(() => { setTexte(libelleDe(valeur)); }, [valeur, opts]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Valeur changée ailleurs, ou liste arrivée après coup : on affiche le libellé, sauf si l'utilisateur est en train de taper
+  useEffect(() => { if (!tape) setTexte(libelleDe(valeur)); }, [valeur, opts]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const resultats = (tape ? filtrer(opts, texte) : opts).slice(0, max);
+  const resultats = useMemo(() => (tape ? filtrer(opts, texte) : opts).slice(0, max), [opts, texte, tape, max]);
 
   const choisir = o => {
     setTexte(o.libelle); setOuvert(false); setTape(false);
@@ -102,7 +108,10 @@ export default function ChampListe({ valeur, onChange, options, dark, libre = fa
               className={`px-3 py-1.5 cursor-pointer flex items-center justify-between gap-2 ${
                 i === actif ? (dark ? "bg-gray-700" : "bg-foret-50") : ""}`}>
               <span className="truncate"><Surligne texte={o.libelle} saisie={tape ? texte : ""} /></span>
-              {o.valeur === valeur && <Check size={14} className="text-foret-500 flex-shrink-0" />}
+              <span className="flex items-center gap-1.5 flex-shrink-0">
+                {o.note && <span className={`text-[11px] ${dark ? "text-gray-400" : "text-gray-500"}`}>{o.note}</span>}
+                {o.valeur === valeur && <Check size={14} className="text-foret-500" />}
+              </span>
             </li>
           ))}
           {proposerLibre && (

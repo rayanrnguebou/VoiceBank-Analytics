@@ -17,6 +17,8 @@ et `playwright install chromium` (ou E2E_CHROMIUM=/chemin/vers/chrome).
 import argparse
 import os
 import secrets
+import signal
+import socket
 import subprocess
 import sys
 import time
@@ -37,7 +39,7 @@ SCENARIOS = [
     ("test_organisation", {}), ("test_connecteur", {}), ("test_risques_org", {}), ("test_surveillance", {}),
     ("test_roles", {}), ("test_tableau_recuperation", {}), ("test_double_auth", {}),
     ("test_2fa_obligatoire", {"DOUBLE_AUTH_ADMINS": "obligatoire"}),
-    ("test_sso", {}), ("test_anglais", {}),
+    ("test_sso", {}), ("test_anglais", {}), ("test_confort", {}),
     ("attaques", {}),
 ]
 
@@ -66,6 +68,28 @@ def attendre(url: str, secondes: int = 120):
         except Exception:
             time.sleep(1)
     raise SystemExit(f"{url} ne répond pas après {secondes} s")
+
+
+def port_libre(port: int):
+    with socket.socket() as s:
+        if s.connect_ex(("127.0.0.1", port)) == 0:
+            raise SystemExit(f"Le port {port} est déjà utilisé (un ancien serveur de test ?) : arrête-le avant de relancer.")
+
+
+def demarrer(cmd, **kw):
+    """Processus de fond dans son propre groupe : arrêté avec tous ses enfants (npx lance node, etc.)."""
+    return subprocess.Popen(cmd, start_new_session=True, **kw)
+
+
+def arreter(proc):
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+        proc.wait(timeout=20)
+    except (ProcessLookupError, subprocess.TimeoutExpired):
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
 
 
 def preparer_bases(admin: str, mdp_app: str, mdp_lecteur: str):
@@ -102,16 +126,15 @@ class API:
             return
         self.arreter()
         journal = open(SORTIE / "api.log", "a")
-        self.proc = subprocess.Popen([PY, "-m", "uvicorn", "main:app", "--port", "8000"], cwd=RACINE / "voicebank_api",
-                                     env={**self.env, **reglages}, stdout=journal, stderr=subprocess.STDOUT)
+        self.proc = demarrer([PY, "-m", "uvicorn", "main:app", "--port", "8000"], cwd=RACINE / "voicebank_api",
+                             env={**self.env, **reglages}, stdout=journal, stderr=subprocess.STDOUT)
         self.reglages = reglages
         attendre("http://localhost:8000/health")
         print(f"→ API démarrée {reglages or ''}", flush=True)
 
     def arreter(self):
         if self.proc:
-            self.proc.terminate()
-            self.proc.wait(timeout=20)
+            arreter(self.proc)
             self.proc = None
 
 
@@ -150,15 +173,17 @@ def main():
                  "E2E_SOURCE_HOTE": p.hostname or "127.0.0.1", "E2E_SOURCE_PORT": str(p.port or _port_requete(p.query)),
                  "PYTHONPATH": str(ICI), "PYTHONUNBUFFERED": "1"}
 
-    fond = [subprocess.Popen([PY, str(ICI / "serveur_mails.py"), str(mails), "1025"], stdout=subprocess.DEVNULL)]
+    for port in (3000, 8000, 1025):
+        port_libre(port)
+    fond = [demarrer([PY, str(ICI / "serveur_mails.py"), str(mails), "1025"], stdout=subprocess.DEVNULL)]
     ui = RACINE / "voicebank-ui"
     if not o.sans_construire:
         print("→ Construction de l'interface", flush=True)
         subprocess.run(["npm", "run", "build"], cwd=ui, check=True, stdout=subprocess.DEVNULL,
                        env={**os.environ, "REACT_APP_API_URL": "http://localhost:8000", "REACT_APP_TURNSTILE_SITE_KEY": "",
                             "REACT_APP_SENTRY_DSN": ""})
-    fond.append(subprocess.Popen(["npx", "vite", "preview", "--port", "3000", "--strictPort"], cwd=ui,
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+    fond.append(demarrer(["npx", "vite", "preview", "--port", "3000", "--strictPort"], cwd=ui,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
     attendre("http://localhost:3000/")
     api = API(env_api)
     choix = set(o.seulement.split(",")) if o.seulement else None
@@ -185,7 +210,7 @@ def main():
     finally:
         api.arreter()
         for f in fond:
-            f.terminate()
+            arreter(f)
     print("\n══ Bilan")
     for nom, ok, d in bilan:
         print(f"{'OK    ' if ok else 'ÉCHEC '} {nom} ({d:.0f} s)")

@@ -85,6 +85,9 @@ if len(JWT_SECRET) < 32:
     raise RuntimeError("JWT_SECRET doit faire au moins 32 caractères")
 
 JWT_DUREE_MIN = int(_env("JWT_DUREE_MIN", "60"))
+# Durée maximale d'une session, renouvellements compris : au-delà, il faut se reconnecter
+# (un jeton volé ne peut pas être prolongé indéfiniment).
+SESSION_MAX_HEURES = float(_env("SESSION_MAX_HEURES", "12"))
 
 # Comptes : NOM:ROLE:HASH_BCRYPT séparés par des virgules.
 # Générer un hash : python -m app.outils.creer_hash

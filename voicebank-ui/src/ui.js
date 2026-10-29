@@ -80,7 +80,10 @@ export function arreterLecture() {
 export function versCsv(colonnes, lignes) {
   const cellule = v => {
     if (v === null || v === undefined) return "";
-    const t = typeof v === "number" ? String(v).replace(".", ",") : String(v);
+    let t = typeof v === "number" ? String(v).replace(".", ",") : String(v);
+    // Injection de formule : un texte commençant par = + - @ (ou tabulation) serait exécuté par Excel
+    // (ex. « =HYPERLINK(…) » venant d'une base connectée) ; une apostrophe le force en texte.
+    if (typeof v !== "number" && /^[=+\-@\t\r]/.test(t)) t = "'" + t;
     return /[";\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
   return "\uFEFF" + [colonnes.join(";"), ...lignes.map(l => colonnes.map(c => cellule(l[c])).join(";"))].join("\r\n");

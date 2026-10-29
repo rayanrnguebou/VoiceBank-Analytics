@@ -133,6 +133,7 @@ def test_tester_connexion_et_droits(client, admin, base_pg):
 
 
 @pytest.mark.parametrize("hote", ["127.0.0.1", "localhost", "169.254.169.254", "10.0.0.5", "192.168.1.10", "[::1]",
+                                  "100.64.0.1", "0.0.0.0", "::ffff:127.0.0.1", "198.18.0.1",
                                   "user@evil.cm", "hote inexistant.invalid"])
 def test_anti_ssrf(client, admin, base_pg, monkeypatch, hote):
     monkeypatch.setattr(config, "CONNECTEUR_RESEAU_PRIVE", False)
@@ -440,3 +441,20 @@ def test_risques_sur_la_demonstration(client, analyste):
     assert ops["resume"]["table"] == "transactions" and ops["resume"]["heure_prise_en_compte"]
     cr = client.get("/sources/0/risques/credits", headers=analyste).json()["data"]
     assert cr["table"] == "credits" and cr["modele"] and cr["a_risque"]
+
+
+def test_bombe_de_decompression_refusee():
+    """Un .xlsx de quelques Ko qui se décompresserait en centaines de Mo est refusé avant toute lecture."""
+    import io
+    import zipfile
+
+    from app.connecteur import fichiers
+    tampon = io.BytesIO()
+    with zipfile.ZipFile(tampon, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("xl/worksheets/sheet1.xml", b"0" * (300 * 1024 * 1024))
+    piege = tampon.getvalue()
+    assert len(piege) < 1024 * 1024
+    with pytest.raises(fichiers.FichierRefuse, match="anormal"):
+        fichiers.verifier("piege.xlsx", piege)
+    with pytest.raises(fichiers.FichierRefuse, match="abîmé"):
+        fichiers.verifier("faux.xlsx", b"PK\x03\x04" + b"\x00" * 50)

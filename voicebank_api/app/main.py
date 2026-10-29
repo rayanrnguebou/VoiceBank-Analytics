@@ -485,8 +485,8 @@ def login(request: Request, body: Identifiants):
     return _reponse_jeton(u, version)
 
 
-def _reponse_jeton(u: Utilisateur, version: int) -> dict:
-    return {"access_token": creer_jeton(u, version), "token_type": "bearer",
+def _reponse_jeton(u: Utilisateur, version: int, debut: int | None = None) -> dict:
+    return {"access_token": creer_jeton(u, version, debut), "token_type": "bearer",
             "utilisateur": u.nom, "role": u.role, "doit_changer_mot_de_passe": u.doit_changer,
             "expire_dans_min": config.JWT_DUREE_MIN}
 
@@ -495,8 +495,12 @@ def _reponse_jeton(u: Utilisateur, version: int) -> dict:
 @limiter.limit("30/minute")
 def renouveler_jeton(request: Request, u: Utilisateur = Depends(utilisateur_valide)):
     """Nouveau jeton pour une session active (l'interface l'appelle tant que l'utilisateur est actif).
-    Un compte désactivé ou dont le mot de passe a changé est refusé par utilisateur_courant."""
-    return _reponse_jeton(u, securite.version_jeton(u.nom))
+    Un compte désactivé ou dont le mot de passe a changé est refusé par utilisateur_courant.
+    Passé SESSION_MAX_HEURES depuis la connexion, il faut se reconnecter (même pour un utilisateur actif)."""
+    debut = securite.debut_session((request.headers.get("authorization") or "")[7:])
+    if debut is None or time.time() - debut > config.SESSION_MAX_HEURES * 3600:
+        raise HTTPException(401, "Session expirée : reconnecte-toi.", headers={"WWW-Authenticate": "Bearer"})
+    return _reponse_jeton(u, securite.version_jeton(u.nom), debut)
 
 
 @app.post("/auth/mot-de-passe")

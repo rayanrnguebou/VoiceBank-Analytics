@@ -183,7 +183,20 @@ SQL_MALVEILLANTS = [
     "SELECT current_setting('data_directory')",
     "SELECT * FROM generate_series(1, 100000000000)",
     "select * from VOICEBANK.clients; select 1",
+    # Informations sur le serveur et la session (sqlglot les renomme : CURRENT_VERSION, CURRENT_USER…)
+    "SELECT version()",
+    "SELECT current_user",
+    "SELECT current_database()",
+    "SELECT session_user",
+    "SELECT nom, current_user FROM voicebank.clients",
 ]
+
+
+def test_garde_sql_laisse_les_dates_courantes():
+    """Le durcissement ne doit pas bloquer les fonctions de date utiles aux questions."""
+    for sql in ["SELECT current_date", "SELECT COUNT(*) FROM voicebank.transactions WHERE date_transaction < current_timestamp",
+                "SELECT now()"]:
+        assert valider_sql(sql, 100)
 
 
 @pytest.mark.parametrize("sql", SQL_MALVEILLANTS)

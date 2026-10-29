@@ -217,12 +217,23 @@ def authentifier(nom: str, mot_de_passe: str) -> tuple[Utilisateur, int] | None:
     return Utilisateur(l.nom, l.role, l.doit_changer_mdp, l.acces_expire, l.id_org, l.role_org), l.version_jeton
 
 
-def creer_jeton(u: Utilisateur, version: int = 0) -> str:
+def creer_jeton(u: Utilisateur, version: int = 0, debut: int | None = None) -> str:
+    """« auth » : heure de la connexion d'origine, conservée d'un renouvellement à l'autre."""
     maintenant = datetime.now(timezone.utc)
     return jwt.encode({
         "sub": u.nom, "role": u.role, "ver": version, "iat": maintenant,
+        "auth": int(debut or maintenant.timestamp()),
         "exp": maintenant + timedelta(minutes=config.JWT_DUREE_MIN),
     }, config.JWT_SECRET, algorithm=ALGO)
+
+
+def debut_session(jeton: str) -> int | None:
+    """Heure de connexion d'origine d'un jeton déjà validé (None pour un jeton d'une version antérieure)."""
+    try:
+        data = jwt.decode(jeton, config.JWT_SECRET, algorithms=[ALGO])
+    except jwt.PyJWTError:
+        return None
+    return data.get("auth") or data.get("iat")
 
 
 _bearer = HTTPBearer(auto_error=False)

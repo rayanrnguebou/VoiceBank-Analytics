@@ -167,3 +167,21 @@ def test_renouvellement_du_jeton(client, admin):
     client.post("/admin/utilisateurs/lea.tchami/modifier", headers=admin, json={"actif": False})
     assert client.post("/auth/renouveler", headers=nouveau).status_code == 401
     assert client.post("/auth/renouveler").status_code == 401
+
+
+def test_session_a_duree_maximale(client, admin, monkeypatch):
+    """Les renouvellements gardent l'heure de connexion d'origine : passé la durée maximale, il faut se reconnecter."""
+    import time as _t
+
+    import jwt as _jwt
+
+    from app import config
+    h = _activer(client, admin, "paul.essomba")
+    debut = _jwt.decode(h["Authorization"][7:], options={"verify_signature": False})["auth"]
+    r = client.post("/auth/renouveler", headers=h)
+    assert r.status_code == 200
+    assert _jwt.decode(r.json()["access_token"], options={"verify_signature": False})["auth"] == debut
+    vrai = _t.time
+    monkeypatch.setattr(_t, "time", lambda: vrai() + config.SESSION_MAX_HEURES * 3600 + 60)
+    r = client.post("/auth/renouveler", headers=_h(r))
+    assert r.status_code == 401 and "reconnecte" in r.json()["detail"]

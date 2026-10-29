@@ -1,4 +1,4 @@
-// Vérification anti-robot Cloudflare Turnstile (gratuite, le plus souvent invisible pour un humain).
+// Vérification anti-robot Cloudflare Turnstile (gratuite) : encadré visible, coché automatiquement pour un humain.
 // Affichée seulement si REACT_APP_TURNSTILE_SITE_KEY est défini ; le jeton obtenu est envoyé à l'API.
 import { useEffect, useRef } from "react";
 import { LANGUE, tx } from "./i18n";
@@ -29,7 +29,7 @@ export default function AntiRobot({ onJeton, theme = "dark" }) {
     chargerScript().then(t => {
       if (!actif || !zone.current) return;
       id = t.render(zone.current, {
-        sitekey: CLE_SITE, theme, language: LANGUE, appearance: "interaction-only",
+        sitekey: CLE_SITE, theme, language: LANGUE, appearance: "always", size: "flexible",
         callback: jeton => onJeton(jeton),
         "expired-callback": () => onJeton(null),
         "error-callback": () => onJeton(null),
@@ -38,5 +38,5 @@ export default function AntiRobot({ onJeton, theme = "dark" }) {
     return () => { actif = false; if (id !== null && window.turnstile) window.turnstile.remove(id); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   if (!CLE_SITE) return null;
-  return <div ref={zone} className="min-h-0" />;
+  return <div ref={zone} className="min-h-[65px] w-full" />;   // place réservée : pas de saut à l'affichage
 }

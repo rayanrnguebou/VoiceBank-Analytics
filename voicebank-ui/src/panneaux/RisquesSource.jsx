@@ -6,6 +6,7 @@ import { useDevise } from "../devise";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, COULEURS_NIVEAU } from "../ui";
 import { Choix } from "../ChampListe";
 import ResultatRisque from "./Explication";
+import { SuiviAlerte, ChipStatut, BoutonsRapport, OUVERTS } from "./Surveillance";
 import { telechargerCsv, nomFichier } from "../ui";
 
 const pct = v => `${(Number(v) * 100).toFixed(1).replace(".", ",")} %`;
@@ -33,6 +34,8 @@ export function PanelOperationsSource({ source, dark }) {
   const [d, setD] = useState(null);
   const [ouvert, setOuvert] = useState(null);
   const [filtre, setFiltre] = useState("Tous");
+  const [statut, setStatut] = useState("a_traiter");
+  const [gardees, setGardees] = useState(() => new Set());   // alertes traitées à l'instant : restent visibles
   const [nbVisibles, setNbVisibles] = useState(15);
   useEffect(() => {
     setD(null);
@@ -42,12 +45,21 @@ export function PanelOperationsSource({ source, dark }) {
   if (erreur) return <Indisponible dark={dark} message={erreur} />;
   if (!d || chargement) return <p className={texteDiscret(dark)}>Apprentissage des habitudes de « {source.nom} »… (quelques secondes la première fois)</p>;
   const r = d.resume;
-  const toutes = d.operations.filter(o => filtre === "Tous" || o.niveau_risque === filtre);
+  const suiviActif = !!d.suivi_actif;
+  const selonStatut = o => !suiviActif || statut === "toutes" || (o.suivi && gardees.has(o.suivi.id)) || (statut === "a_traiter"
+    ? o.suivi && OUVERTS.includes(o.suivi.statut) : o.suivi?.statut === statut);
+  const toutes = d.operations.filter(o => (filtre === "Tous" || o.niveau_risque === filtre) && selonStatut(o));
   const ops = toutes.slice(0, nbVisibles);
-  const compte = n => d.operations.filter(o => n === "Tous" || o.niveau_risque === n).length;
+  const compte = n => d.operations.filter(o => (n === "Tous" || o.niveau_risque === n) && selonStatut(o)).length;
+  const compteStatut = st => d.operations.filter(o => st === "toutes" || (st === "a_traiter"
+    ? o.suivi && OUVERTS.includes(o.suivi.statut) : o.suivi?.statut === st)).length;
+  const majSuivi = (i, a) => (setGardees(g => new Set(g).add(a.id_suivi)), setD(x => ({ ...x, operations: x.operations.map((o, j) => (j === i ? {
+    ...o, suivi: { ...o.suivi, statut: a.statut, assigne_a: a.assigne_a,
+      commentaires: a.historique.filter(h => h.nature === "commentaire").length } } : o)) })));
   const exporter = () => telechargerCsv(nomFichier(`operations atypiques ${source.nom}`, "csv"),
-    ["id", "date", "montant", "niveau", "score", "raisons", ...r.categories],
+    ["id", "date", "montant", "niveau", "score", "statut", "assignee_a", "raisons", ...r.categories],
     d.operations.map(o => ({ id: o.id, date: o.date, montant: o.montant, niveau: o.niveau_risque, score: o.score,
+      statut: o.suivi ? o.suivi.statut : "", assignee_a: o.suivi?.assigne_a || "",
       raisons: o.raisons.map(x => `${x.variable} : ${x.detail || x.valeur}`).join(" | "), ...o.categories })));
   return (
     <div className="space-y-4">
@@ -61,10 +73,14 @@ export function PanelOperationsSource({ source, dark }) {
               montant, {r.categories.join(", ")}{r.heure_prise_en_compte ? ", heure" : ""}.
             </p>
           </div>
-          <button onClick={exporter} className={`${boutonSecondaire(dark)} flex items-center gap-1.5`}><Download size={13} /> CSV</button>
+          <div className="flex flex-wrap items-center gap-2">
+            {suiviActif && <BoutonsRapport source={source} dark={dark} />}
+            <button onClick={exporter} className={`${boutonSecondaire(dark)} flex items-center gap-1.5`}><Download size={13} /> CSV</button>
+          </div>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
           {[["Opérations analysées", r.analysees.toLocaleString("fr-FR")], ["Très atypiques (2 %)", r.atypiques.toLocaleString("fr-FR")],
+            ...(suiviActif ? [["Alertes à traiter", compteStatut("a_traiter").toLocaleString("fr-FR")]] : []),
             ...(r.fraudes_connues ? [["Fraudes connues dans la base", r.fraudes_connues.toLocaleString("fr-FR")],
               ["Repérées par le modèle", `${String(r.fraudes_reperees_pct).replace(".", ",")} % (hasard : ${r.fraudes_hasard_pct} %)`]] : [])
           ].map(([t, v]) => (
@@ -75,6 +91,17 @@ export function PanelOperationsSource({ source, dark }) {
         </div>
       </div>
       <div className={carte(dark)}>
+        {suiviActif && (
+          <div role="tablist" aria-label="Statut des alertes" className={`flex flex-wrap gap-1 mb-3 pb-3 border-b ${dark ? "border-gray-700" : "border-gray-200"}`}>
+            {[["a_traiter", "À traiter"], ["fraude_confirmee", "Fraudes confirmées"], ["fausse_alerte", "Fausses alertes"],
+              ["resolue", "Résolues"], ["toutes", "Toutes"]].map(([k, l]) => (
+              <button key={k} role="tab" aria-selected={statut === k} onClick={() => { setStatut(k); setNbVisibles(15); setOuvert(null); setGardees(new Set()); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium ${statut === k ? (dark ? "bg-gray-700 text-white" : "bg-foret-50 text-foret-800") : texteDiscret(dark)}`}>
+                {l} ({compteStatut(k)})
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex flex-wrap gap-1.5 mb-3">
           {["Tous", "Critique", "Élevé", "Moyen"].map(n => (
             <button key={n} onClick={() => { setFiltre(n); setNbVisibles(15); setOuvert(null); }}
@@ -91,6 +118,9 @@ export function PanelOperationsSource({ source, dark }) {
                     <span className={texteDiscret(dark)}>Plus atypique que {pct(o.score)} des opérations</span>
                     {o.id && <span className={`${texteDiscret(dark)} font-mono`}>{o.id}</span>}
                     {o.fraude_connue && <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-500">fraude connue</span>}
+                    {o.suivi && <ChipStatut statut={o.suivi.statut} />}
+                    {o.suivi?.assigne_a && <span className={texteDiscret(dark)}>→ {o.suivi.assigne_a}</span>}
+                    {o.suivi?.commentaires > 0 && <span className={texteDiscret(dark)}>· {o.suivi.commentaires} commentaire{o.suivi.commentaires > 1 ? "s" : ""}</span>}
                   </div>
                   <p className={`text-sm mt-1 ${dark ? "text-gray-200" : "text-gray-800"}`}>{o.raisons.map(x => x.detail || x.variable).join(" · ")}</p>
                   <p className={`${texteDiscret(dark)} truncate`}>{[o.date && new Date(o.date).toLocaleDateString("fr-FR"), ...Object.values(o.categories).filter(Boolean)].filter(Boolean).join(" · ")}</p>
@@ -104,11 +134,13 @@ export function PanelOperationsSource({ source, dark }) {
                 <div className="px-3 pb-3">
                   <ResultatRisque dark={dark} type="fraude" resultat={{ score_anomalie: o.score, niveau_risque: o.niveau_risque,
                     facteurs: o.raisons, recommandations: [o.recommandation] }} />
+                  {o.suivi && <SuiviAlerte source={source} idSuivi={o.suivi.id} dark={dark}
+                    onChange={a => majSuivi(d.operations.indexOf(o), a)} />}
                 </div>
               )}
             </div>
           ))}
-          {ops.length === 0 && <p className={texteDiscret(dark)}>Aucune opération à ce niveau.</p>}
+          {ops.length === 0 && <p className={texteDiscret(dark)}>{suiviActif && statut === "a_traiter" ? "Aucune alerte à traiter : tout est à jour." : "Aucune opération à ce niveau."}</p>}
           {toutes.length > ops.length && (
             <button onClick={() => setNbVisibles(nbVisibles + 15)} className={`${boutonSecondaire(dark)} w-full`}>
               Afficher plus ({toutes.length - ops.length} restantes)

@@ -69,5 +69,13 @@ GRANT USAGE ON SEQUENCE voicebank.logs_vocaux_id_log_seq, voicebank.logs_correct
                         voicebank.signalements_id_signalement_seq,
                         voicebank.journal_audit_id_evenement_seq,
                         voicebank.evaluations_id_evaluation_seq TO voicebank_app;
+-- Suivi des alertes, notifications, tâches planifiées : invisibles pour le lecteur et l'IA.
+GRANT SELECT, INSERT, UPDATE ON voicebank.suivi_alertes, voicebank.preferences_notifications,
+                                voicebank.taches_planifiees TO voicebank_app;
+GRANT SELECT, INSERT ON voicebank.commentaires_alerte TO voicebank_app;      -- historique : ajout seul
+GRANT USAGE ON SEQUENCE voicebank.suivi_alertes_id_suivi_seq,
+                        voicebank.commentaires_alerte_id_commentaire_seq TO voicebank_app;
+REVOKE ALL ON voicebank.suivi_alertes, voicebank.commentaires_alerte, voicebank.preferences_notifications,
+              voicebank.taches_planifiees FROM voicebank_reader;
 -- Le journal d'audit est en ajout seul : ni UPDATE ni DELETE pour l'application.
 ALTER ROLE voicebank_app SET statement_timeout = '15s';

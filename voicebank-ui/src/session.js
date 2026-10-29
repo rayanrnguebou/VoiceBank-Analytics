@@ -1,6 +1,7 @@
 // Sécurité de session : déconnexion après inactivité, et jeton renouvelé tant qu'on est actif.
 import { useState, useEffect, useRef, useCallback } from "react";
 import { renouvelerJeton, noterMotifDeconnexion } from "./api";
+import { tx } from "./i18n";
 
 export const INACTIVITE_MS = 15 * 60 * 1000;        // déconnexion après 15 min sans activité
 export const AVERTISSEMENT_MS = 60 * 1000;           // prévenir 1 min avant
@@ -28,7 +29,7 @@ export function useSessionActive({ session, onSession, onDeconnexion }) {
       const maintenant = Date.now();
       const inactif = maintenant - derniere.current;
       if (inactif >= INACTIVITE_MS) {
-        noterMotifDeconnexion("Déconnecté après 15 minutes d'inactivité, pour protéger les données.");
+        noterMotifDeconnexion(tx("Déconnecté après 15 minutes d'inactivité, pour protéger les données."));
         onDeconnexion();
         return;
       }

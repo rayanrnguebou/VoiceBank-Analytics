@@ -1,4 +1,5 @@
 // Petits éléments d'interface partagés (thème clair / sombre)
+import { LANGUE, LOCALE, LOCALE_VOIX, tx } from "./i18n";
 export const carte = dark =>
   `rounded-2xl border p-6 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`;
 export const champ = dark =>
@@ -20,15 +21,15 @@ export const COULEURS_NIVEAU = {
 export function formaterFcfa(v) {
   const x = Number(v);
   if (!isFinite(x)) return "--";
-  if (Math.abs(x) >= 1e9) return (x / 1e9).toFixed(1).replace(".", ",") + " Mds";
+  if (Math.abs(x) >= 1e9) return (x / 1e9).toFixed(1).replace(".", ",") + tx(" Mds");
   if (Math.abs(x) >= 1e6) return (x / 1e6).toFixed(1).replace(".", ",") + " M";
-  return x.toLocaleString("fr-FR");
+  return x.toLocaleString(LOCALE);
 }
 
 export function formaterDate(v) {
   if (!v) return "";
   const d = new Date(v);
-  return isNaN(d) ? String(v) : d.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+  return isNaN(d) ? String(v) : d.toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" });
 }
 
 // Synthèse vocale du navigateur (aucune donnée envoyée à un serveur).
@@ -51,10 +52,10 @@ export function lireAVoixHaute(textes, options = {}) {
     if (!phrases.length || !window.speechSynthesis) return false;
     window.speechSynthesis.cancel();
     window.__voicebankEnonces = [];      // garde une référence : sinon Chrome peut perdre « onend »
-    const voix = window.speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith("fr"));
+    const voix = window.speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith(LANGUE));
     phrases.forEach((phrase, i) => {
       const u = new SpeechSynthesisUtterance(phrase);
-      u.lang = "fr-FR";
+      u.lang = LOCALE_VOIX;
       u.rate = 1.02;
       if (voix) u.voice = voix;
       if (i === phrases.length - 1) {

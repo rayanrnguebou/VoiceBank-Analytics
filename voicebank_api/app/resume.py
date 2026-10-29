@@ -8,7 +8,7 @@ import json
 import logging
 from contextvars import ContextVar
 
-from . import config
+from . import config, i18n
 from .masquage import est_colonne_personnelle
 
 log = logging.getLogger("voicebank")
@@ -69,37 +69,37 @@ def _colonne_categorie(colonnes, lignes):
 def resume_local(question: str, colonnes: list[str], lignes: list[dict]) -> str:
     n = len(lignes)
     if n == 0:
-        return "Aucun résultat ne correspond à cette question."
+        return i18n.traduire("Aucun résultat ne correspond à cette question.")
     num = _colonne_numerique(colonnes, lignes)
     if n == 1:
         parties = [f"{c.replace('_', ' ')} : {formater_nombre(v)}{_unite(c)}"
                    for c, v in lignes[0].items() if not est_colonne_personnelle(c) and v is not None
                    and not c.lower().startswith("id")][:4]
-        return ("Résultat : " + ", ".join(parties) + ".") if parties else "Un seul résultat trouvé."
+        return (i18n.traduire("Résultat : ") + ", ".join(parties) + ".") if parties else i18n.traduire("Un seul résultat trouvé.")
     cat = _colonne_categorie(colonnes, lignes)
     if cat is None and num and len(colonnes) <= 4:
         # Colonnes aux noms inconnus (bases connectées) : la première colonne qui n'est pas la mesure
         cat = next((c for c in colonnes if c != num and not est_colonne_personnelle(c)
                     and c.lower() not in ("annee", "mois")), None)
-    phrase = f"{formater_nombre(n)} résultats."
+    phrase = i18n.traduire(f"{formater_nombre(n)} résultats.")
     liste_detaillee = any(c.lower().startswith("id_") for c in colonnes)   # une ligne = un élément
     if liste_detaillee and num:
         valeurs = [l[num] for l in lignes if isinstance(l.get(num), (int, float))]
         if valeurs and any(m in num.lower() for m in ("montant", "solde", "volume")):
-            phrase += f" Montant total : {formater_nombre(sum(valeurs))} {MONNAIE.get()}"
-            phrase += f", le plus élevé : {formater_nombre(max(valeurs))} {MONNAIE.get()}."
+            phrase += i18n.traduire(f" Montant total : {formater_nombre(sum(valeurs))} {MONNAIE.get()}")
+            phrase += i18n.traduire(f", le plus élevé : {formater_nombre(max(valeurs))} {MONNAIE.get()}.")
         return phrase
     if cat and num and n <= 50:
         tri = sorted((l for l in lignes if l.get(num) is not None), key=lambda l: l[num], reverse=True)
         if tri:
-            phrase += (f" En tête : {tri[0][cat]} avec {formater_nombre(tri[0][num])}{_unite(num)}"
-                       f" ({num.replace('_', ' ')})")
+            phrase += i18n.traduire(f" En tête : {tri[0][cat]} avec {formater_nombre(tri[0][num])}{_unite(num)}"
+                                    f" ({num.replace('_', ' ')})")
             if len(tri) > 1:
-                phrase += f", suivi de {tri[1][cat]} ({formater_nombre(tri[1][num])}{_unite(num)})"
+                phrase += i18n.traduire(f", suivi de {tri[1][cat]} ({formater_nombre(tri[1][num])}{_unite(num)})")
             phrase += "."
     elif num and any(m in num.lower() for m in ("montant", "solde", "volume")):
         total = sum(l[num] for l in lignes if isinstance(l.get(num), (int, float)))
-        phrase += f" Montant total : {formater_nombre(total)} {MONNAIE.get()}."
+        phrase += i18n.traduire(f" Montant total : {formater_nombre(total)} {MONNAIE.get()}.")
     return phrase
 
 
@@ -179,7 +179,7 @@ def commentaire_local(question: str, colonnes: list[str], lignes: list[dict]) ->
         if any(m in q for m in mots):
             phrases.append(conseil)
             break
-    return " ".join(phrases[:4]) or "Ouvre le graphique pour explorer le détail de ce résultat."
+    return " ".join(i18n.traduire(p) for p in phrases[:4]) or i18n.traduire("Ouvre le graphique pour explorer le détail de ce résultat.")
 
 
 # ── Relance : question posée à l'oral à la fin, à laquelle on répond de vive voix ──
@@ -239,7 +239,9 @@ def resume_gemini(question: str, colonnes: list[str], lignes: list[dict]) -> dic
         "à la base de données, compréhensible sans le contexte (ex. « Évolution mensuelle des "
         "transactions frauduleuses à Douala »).\n\n"
         f"Question : <<<{question}>>>\nNombre total de lignes : {len(lignes)}\n"
-        f"Extrait (30 lignes max) : {json.dumps(extrait, ensure_ascii=False, default=str)[:6000]}\n")
+        f"Extrait (30 lignes max) : {json.dumps(extrait, ensure_ascii=False, default=str)[:6000]}\n"
+        + ("\nIMPORTANT : rédige toutes les valeurs du JSON (resume, commentaire, relance, question_suivante) EN ANGLAIS.\n"
+           if i18n.langue() == "en" else ""))
     try:
         rep = client.models.generate_content(model=config.GEMINI_MODEL, contents=prompt,
                                              config={"response_mime_type": "application/json"})

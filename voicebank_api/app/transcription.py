@@ -7,7 +7,7 @@ import logging
 import sys
 import threading
 
-from . import config
+from . import config, i18n
 
 log = logging.getLogger("voicebank")
 
@@ -63,7 +63,7 @@ def etat() -> str:
 def _groq(contenu: bytes, extension: str) -> str:
     from groq import Groq
     rep = Groq(api_key=config.GROQ_API_KEY, timeout=30).audio.transcriptions.create(
-        file=(f"audio.{extension}", contenu), model=config.GROQ_WHISPER_MODEL, language="fr")
+        file=(f"audio.{extension}", contenu), model=config.GROQ_WHISPER_MODEL, language=i18n.langue())
     return (rep.text or "").strip()
 
 

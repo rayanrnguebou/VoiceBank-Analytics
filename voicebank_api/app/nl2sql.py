@@ -97,12 +97,12 @@ _REGLES = [
      "FROM voicebank.transactions t JOIN voicebank.clients c ON t.id_client = c.id_client "
      "WHERE t.statut = 'Suspecte' OR t.est_frauduleuse = 'Oui' "
      "GROUP BY t.id_client, c.nom, c.prenom, c.banque ORDER BY nb_transactions_suspectes DESC LIMIT 100"),
-    (r"credit.*defaut",
+    (r"credit.*defaut|defaut.*credit",
      {"credit", "defaut", "pret", "client", "impaye"},
      "SELECT c.id_client, c.nom, c.prenom, c.banque, cr.type_credit, cr.montant_fcfa, cr.statut_credit "
      "FROM voicebank.credits cr JOIN voicebank.clients c ON cr.id_client = c.id_client "
      "WHERE cr.statut_credit = 'Défaut' ORDER BY cr.montant_fcfa DESC"),
-    (r"credit.*retard",
+    (r"credit.*retard|retard.*credit",
      {"credit", "retard", "pret", "client"},
      "SELECT c.id_client, c.nom, c.prenom, c.banque, cr.type_credit, cr.montant_fcfa, cr.statut_credit "
      "FROM voicebank.credits cr JOIN voicebank.clients c ON cr.id_client = c.id_client "
@@ -115,7 +115,7 @@ _REGLES = [
      {"transaction", "fraude", "frauduleuse"},
      "SELECT id_transaction, id_client, banque, ville, montant_fcfa, date_transaction "
      "FROM voicebank.transactions WHERE est_frauduleuse = 'Oui' ORDER BY montant_fcfa DESC LIMIT 100"),
-    (r"alertes?.*critique",
+    (r"alertes?.*critique|critique.*alerte",
      {"alerte", "critique", "fraude"},
      "SELECT id_alerte, id_transaction, id_client, score_anomalie, niveau_alerte, motif, date_alerte "
      "FROM voicebank.alertes_fraude WHERE niveau_alerte = 'Critique' ORDER BY score_anomalie DESC LIMIT 100"),
@@ -137,6 +137,25 @@ _REGLES = [
 ]
 
 
+# Questions en anglais : les mots-clés sont ramenés au français avant d'appliquer les règles locales
+GLOSSAIRE_ANGLAIS = [
+    (r"\bhow many\b", "combien"), (r"\bcustomers?\b|\bclients?\b", "client"), (r"\bbalances?\b", "solde"),
+    (r"\bloans?\b|\bcredits?\b", "credit"), (r"\bdefault(ed|s)?\b", "defaut"), (r"\b(late|overdue)\b", "retard"),
+    (r"\bfraud(ulent|s)?\b", "fraude"), (r"\bbanks?\b", "banque"), (r"\bcritical\b", "critique"),
+    (r"\balerts?\b", "alerte"), (r"\bcit(y|ies)\b", "ville"), (r"\bsuspicious\b", "suspect"),
+    (r"\bnumber\b", "nombre"), (r"\bamounts?\b", "montant"), (r"\b(by|per)\b", "par"),
+    (r"\b(largest|biggest|highest|richest)\b", "plus gros"), (r"\bfrench\b", "france"),
+]
+MOTS_VIDES |= set("the of with in on show me list what are is which for give display all my our please do".split())
+
+
+def vers_francais(question: str) -> str:
+    q = question.lower()
+    for motif, fr in GLOSSAIRE_ANGLAIS:
+        q = re.sub(motif, fr, q)
+    return q
+
+
 def _mots(texte: str) -> list[str]:
     """Mots significatifs, sans accents, au singulier approximatif."""
     mots = []
@@ -149,6 +168,7 @@ def _mots(texte: str) -> list[str]:
 
 def sql_via_regles(question: str) -> tuple[str | None, list[str]]:
     """Retourne (sql, mots non couverts par la règle). sql=None si aucune règle."""
+    question = vers_francais(question)
     q = _sans_accents(question)
     for motif, vocabulaire, sql in _REGLES:
         m = re.search(motif, q)

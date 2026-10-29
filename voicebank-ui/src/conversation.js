@@ -1,6 +1,7 @@
 // Mode conversation : après la réponse parlée, l'assistant écoute la réponse de l'utilisateur
 // sans qu'il ait à cliquer. L'écoute s'arrête seule après un silence, ou si personne ne parle.
 import { http } from "./api";
+import { LOCALE_VOIX, tx } from "./i18n";
 
 const Reconnaissance = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
 
@@ -18,11 +19,13 @@ function normaliser(texte) {
 
 const NON = new Set(["non", "non merci", "merci", "c est bon", "ca ira", "stop", "arrete", "rien", "plus tard",
   "pas maintenant", "au revoir", "ca suffit", "c est tout", "non c est bon", "non ca ira", "non c est tout",
-  "pas besoin", "non pas besoin", "ca va", "non ca va", "merci c est tout", "merci beaucoup", "ce sera tout"]);
+  "pas besoin", "non pas besoin", "ca va", "non ca va", "merci c est tout", "merci beaucoup", "ce sera tout",
+  "no", "no thanks", "no thank you", "nope", "not now", "later", "that s all", "that s it", "stop", "thanks", "thank you"]);
 const OUI = new Set(["oui", "ouais", "ouai", "vas y", "d accord", "ok", "okay", "volontiers", "bien sur", "allez",
   "allez y", "parfait", "carrement", "absolument", "evidemment", "je veux bien", "avec plaisir", "exactement",
   "oui merci", "oui vas y", "oui allez y", "oui d accord", "oui s il te plait", "oui stp", "oui volontiers",
-  "ok vas y", "d accord vas y", "oui je veux bien", "oui montre moi", "montre moi", "oui bien sur", "go"]);
+  "ok vas y", "d accord vas y", "oui je veux bien", "oui montre moi", "montre moi", "oui bien sur", "go",
+  "yes", "yeah", "yep", "sure", "ok sure", "of course", "please", "yes please", "go ahead", "show me", "absolutely"]);
 
 /** Classe la réponse orale : "vide", "non", "oui", ou "question" (avec le texte à poser). */
 export function interpreterReponse(texte) {
@@ -58,7 +61,7 @@ export async function ecouterReponse({ onParole, onTexteEnDirect, onTranscriptio
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
   } catch (e) {
-    throw new Error("Microphone inaccessible. Autorise le micro pour répondre à voix haute.");
+    throw new Error(tx("Microphone inaccessible. Autorise le micro pour répondre à voix haute."));
   }
   const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg", "audio/mp4"]
     .find(t => window.MediaRecorder?.isTypeSupported?.(t)) || "";
@@ -88,7 +91,7 @@ export async function ecouterReponse({ onParole, onTexteEnDirect, onTranscriptio
   if (Reconnaissance) {
     try {
       rec = new Reconnaissance();
-      rec.lang = "fr-FR"; rec.interimResults = true; rec.continuous = true;
+      rec.lang = LOCALE_VOIX; rec.interimResults = true; rec.continuous = true;
       rec.onresult = e => {
         let t = "";
         for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;

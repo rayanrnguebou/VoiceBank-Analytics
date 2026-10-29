@@ -3,19 +3,20 @@
 // converties par l'API, qui rédige aussi le résumé parlé dans la bonne monnaie.
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
 import { http } from "./api";
+import { LOCALE, tx } from "./i18n";
 
 const XAF_PAR_EUR = 655.957;
 // Repli si l'API est injoignable : FCFA et euro à parité fixe, autres taux indicatifs
 const PAR_DEFAUT = [
-  { code: "XAF", libelle: "FCFA", nom: "Franc CFA (CEMAC)", decimales: 0, taux_par_fcfa: 1 },
-  { code: "XOF", libelle: "FCFA", nom: "Franc CFA (UEMOA)", decimales: 0, taux_par_fcfa: 1 },
+  { code: "XAF", libelle: "FCFA", nom: tx("Franc CFA (CEMAC)"), decimales: 0, taux_par_fcfa: 1 },
+  { code: "XOF", libelle: "FCFA", nom: tx("Franc CFA (UEMOA)"), decimales: 0, taux_par_fcfa: 1 },
   { code: "EUR", libelle: "€", nom: "Euro", decimales: 2, taux_par_fcfa: 1 / XAF_PAR_EUR },
-  { code: "USD", libelle: "$", nom: "Dollar américain", decimales: 2, taux_par_fcfa: 1.08 / XAF_PAR_EUR },
-  { code: "GBP", libelle: "£", nom: "Livre sterling", decimales: 2, taux_par_fcfa: 0.85 / XAF_PAR_EUR },
-  { code: "CAD", libelle: "$ CA", nom: "Dollar canadien", decimales: 2, taux_par_fcfa: 1.48 / XAF_PAR_EUR },
-  { code: "CHF", libelle: "CHF", nom: "Franc suisse", decimales: 2, taux_par_fcfa: 0.95 / XAF_PAR_EUR },
-  { code: "CNY", libelle: "¥", nom: "Yuan chinois", decimales: 2, taux_par_fcfa: 7.8 / XAF_PAR_EUR },
-  { code: "NGN", libelle: "₦", nom: "Naira nigérian", decimales: 0, taux_par_fcfa: 1650 / XAF_PAR_EUR },
+  { code: "USD", libelle: "$", nom: tx("Dollar américain"), decimales: 2, taux_par_fcfa: 1.08 / XAF_PAR_EUR },
+  { code: "GBP", libelle: "£", nom: tx("Livre sterling"), decimales: 2, taux_par_fcfa: 0.85 / XAF_PAR_EUR },
+  { code: "CAD", libelle: tx("$ CA"), nom: tx("Dollar canadien"), decimales: 2, taux_par_fcfa: 1.48 / XAF_PAR_EUR },
+  { code: "CHF", libelle: "CHF", nom: tx("Franc suisse"), decimales: 2, taux_par_fcfa: 0.95 / XAF_PAR_EUR },
+  { code: "CNY", libelle: "¥", nom: tx("Yuan chinois"), decimales: 2, taux_par_fcfa: 7.8 / XAF_PAR_EUR },
+  { code: "NGN", libelle: "₦", nom: tx("Naira nigérian"), decimales: 0, taux_par_fcfa: 1650 / XAF_PAR_EUR },
 ];
 const CLE = "voicebank_devise";
 
@@ -24,12 +25,12 @@ const Contexte = createContext(null);
 export function fabriquerOutils(liste, code) {
   const d = liste.find(x => x.code === code) || liste[0];
   const convertir = xaf => (xaf == null || isNaN(Number(xaf)) ? null : Number(xaf) * d.taux_par_fcfa);
-  const nombre = (v, decimales) => Number(v).toLocaleString("fr-FR", { maximumFractionDigits: decimales, minimumFractionDigits: 0 });
+  const nombre = (v, decimales) => Number(v).toLocaleString(LOCALE, { maximumFractionDigits: decimales, minimumFractionDigits: 0 });
   // Montant déjà exprimé dans la monnaie choisie
   const formaterValeur = (v, { compact = false } = {}) => {
     if (v == null || isNaN(Number(v))) return "--";
     const x = Number(v), a = Math.abs(x);
-    if (compact && a >= 1e9) return `${nombre(x / 1e9, 1)} Mds ${d.libelle}`;
+    if (compact && a >= 1e9) return tx("{x} Mds {libelle}", { x: nombre(x / 1e9, 1), libelle: d.libelle });
     if (compact && a >= 1e6) return `${nombre(x / 1e6, 1)} M ${d.libelle}`;
     return `${nombre(x, a >= 1000 ? 0 : d.decimales)} ${d.libelle}`;
   };
@@ -68,9 +69,9 @@ export function useDevise() {
 export function SelecteurDevise({ className = "", compact = false }) {
   const d = useDevise();
   return (
-    <select aria-label="Monnaie" title="Monnaie d'affichage des montants" value={d.code} onChange={e => d.setCode(e.target.value)}
+    <select aria-label={tx("Monnaie")} title={tx("Monnaie d'affichage des montants")} value={d.code} onChange={e => d.setCode(e.target.value)}
       className={className}>
-      {d.liste.map(x => <option key={x.code} value={x.code}>{compact ? `${x.code === "XOF" ? "FCFA UEMOA" : x.code === "XAF" ? "FCFA" : x.code} ${x.code === "XAF" || x.code === "XOF" ? "" : x.libelle}`.trim() : `${x.nom} (${x.libelle})`}</option>)}
+      {d.liste.map(x => <option key={x.code} value={x.code}>{compact ? `${x.code === "XOF" ? tx("FCFA UEMOA") : x.code === "XAF" ? "FCFA" : x.code} ${x.code === "XAF" || x.code === "XOF" ? "" : x.libelle}`.trim() : `${x.nom} (${x.libelle})`}</option>)}
     </select>
   );
 }

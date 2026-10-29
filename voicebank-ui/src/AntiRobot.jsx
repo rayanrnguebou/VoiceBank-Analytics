@@ -1,6 +1,7 @@
 // Vérification anti-robot Cloudflare Turnstile (gratuite, le plus souvent invisible pour un humain).
 // Affichée seulement si REACT_APP_TURNSTILE_SITE_KEY est défini ; le jeton obtenu est envoyé à l'API.
 import { useEffect, useRef } from "react";
+import { LANGUE, tx } from "./i18n";
 
 export const CLE_SITE = import.meta.env.REACT_APP_TURNSTILE_SITE_KEY || "";
 const SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
@@ -13,7 +14,7 @@ function chargerScript() {
       const s = document.createElement("script");
       s.src = SCRIPT; s.async = true;
       s.onload = () => ok(window.turnstile);
-      s.onerror = () => { chargement = null; ko(new Error("Turnstile injoignable")); };
+      s.onerror = () => { chargement = null; ko(new Error(tx("Turnstile injoignable"))); };
       document.head.appendChild(s);
     });
   }
@@ -28,7 +29,7 @@ export default function AntiRobot({ onJeton, theme = "dark" }) {
     chargerScript().then(t => {
       if (!actif || !zone.current) return;
       id = t.render(zone.current, {
-        sitekey: CLE_SITE, theme, language: "fr", appearance: "interaction-only",
+        sitekey: CLE_SITE, theme, language: LANGUE, appearance: "interaction-only",
         callback: jeton => onJeton(jeton),
         "expired-callback": () => onJeton(null),
         "error-callback": () => onJeton(null),

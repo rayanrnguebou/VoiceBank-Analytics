@@ -216,6 +216,14 @@ def authentifier(nom: str, mot_de_passe: str) -> tuple[Utilisateur, int] | None:
     return Utilisateur(l.nom, l.role, l.doit_changer_mdp, l.acces_expire, l.id_org, l.role_org), l.version_jeton
 
 
+def noter_langue(nom: str):
+    """Langue de l'interface du compte (e-mails et rapports automatiques dans cette langue)."""
+    from .i18n import langue
+    if mode_base():
+        db.ecrire("UPDATE voicebank.utilisateurs SET langue = :l WHERE nom = :n AND langue IS DISTINCT FROM :l",
+                  {"n": nom, "l": langue()})
+
+
 def noter_connexion(nom: str):
     if mode_base():
         db.ecrire("UPDATE voicebank.utilisateurs SET echecs_connexion = 0, derniere_connexion = LOCALTIMESTAMP "

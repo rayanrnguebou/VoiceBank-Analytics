@@ -12,6 +12,8 @@ import { Prix } from "./Abonnement";
 import { SelecteurDevise } from "../devise";
 import { BandeauAnnonce } from "../maintenance";
 import { SaisieCodeConnexion } from "./DoubleAuth";
+import { tx } from "../i18n";
+import SelecteurLangue from "../SelecteurLangue";
 
 const CHAMP = "w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white text-sm outline-none focus:border-foret-500";
 const LIB = "block text-xs text-gray-400 mb-1";
@@ -41,7 +43,7 @@ function MotDePasseOublie({ identifiantInitial, onRetour }) {
   };
   const confirmer = async (e) => {
     e.preventDefault();
-    if (nouveau !== confirmation) { setErreur("Les deux saisies ne correspondent pas"); return; }
+    if (nouveau !== confirmation) { setErreur(tx("Les deux saisies ne correspondent pas")); return; }
     setErreur(null); setEnvoi(true);
     try {
       const r = await http.post("/auth/oubli/confirmer", { identifiant: identifiant.trim(), code: code.trim(), nouveau });
@@ -52,31 +54,31 @@ function MotDePasseOublie({ identifiantInitial, onRetour }) {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm font-semibold flex items-center gap-2"><KeyRound size={15} className="text-laiton-300" /> Mot de passe oublié</p>
+      <p className="text-sm font-semibold flex items-center gap-2"><KeyRound size={15} className="text-laiton-300" />{" "}{tx("Mot de passe oublié")}</p>
       {etape === "demande" ? (
         <form onSubmit={demander} className="space-y-4">
-          <p className="text-xs text-gray-400">Indique ton identifiant ou ton e-mail : tu recevras un code à 6 chiffres, valable 15 minutes.</p>
+          <p className="text-xs text-gray-400">{tx("Indique ton identifiant ou ton e-mail : tu recevras un code à 6 chiffres, valable 15 minutes.")}</p>
           <label className="block">
-            <span className={LIB}>Identifiant ou e-mail</span>
+            <span className={LIB}>{tx("Identifiant ou e-mail")}</span>
             <input value={identifiant} onChange={e => setIdentifiant(e.target.value)} autoComplete="username" required
               minLength={3} maxLength={64} className={CHAMP} />
           </label>
           <AntiRobot onJeton={setCaptcha} />
           {erreur && <p role="alert" className="text-sm text-red-400">{erreur}</p>}
-          <button type="submit" disabled={envoi || (CLE_SITE && !captcha)} className={BOUTON}><Mail size={15} /> {envoi ? "Envoi…" : "Recevoir un code"}</button>
+          <button type="submit" disabled={envoi || (CLE_SITE && !captcha)} className={BOUTON}><Mail size={15} /> {envoi ? tx("Envoi…") : tx("Recevoir un code")}</button>
         </form>
       ) : (
         <form onSubmit={confirmer} className="space-y-3">
           <p role="status" className="text-xs text-emerald-400">{info}</p>
           <input type="text" autoComplete="username" value={identifiant} readOnly hidden />
           <label className="block">
-            <span className={LIB}>Code reçu par e-mail</span>
+            <span className={LIB}>{tx("Code reçu par e-mail")}</span>
             <input value={code} onChange={e => setCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))} inputMode="numeric"
               autoComplete="one-time-code" required minLength={6} maxLength={6} placeholder="123456"
               className={`${CHAMP} tracking-[0.4em] font-mono text-center text-lg`} />
           </label>
           <label className="block">
-            <span className={LIB}>Nouveau mot de passe</span>
+            <span className={LIB}>{tx("Nouveau mot de passe")}</span>
             <input type="password" value={nouveau} onChange={e => setNouveau(e.target.value)} autoComplete="new-password"
               required maxLength={72} className={CHAMP} />
           </label>
@@ -90,20 +92,20 @@ function MotDePasseOublie({ identifiantInitial, onRetour }) {
             </ul>
           )}
           <label className="block">
-            <span className={LIB}>Confirme le nouveau mot de passe</span>
+            <span className={LIB}>{tx("Confirme le nouveau mot de passe")}</span>
             <input type="password" value={confirmation} onChange={e => setConfirmation(e.target.value)} autoComplete="new-password"
               required maxLength={72} className={CHAMP} />
           </label>
           {erreur && <p role="alert" className="text-sm text-red-400">{erreur}</p>}
           <button type="submit" disabled={envoi || code.length !== 6 || !regles.every(r => r.ok) || nouveau !== confirmation}
-            className={BOUTON}><KeyRound size={15} /> {envoi ? "Enregistrement…" : "Changer le mot de passe"}</button>
+            className={BOUTON}><KeyRound size={15} /> {envoi ? tx("Enregistrement…") : tx("Changer le mot de passe")}</button>
           <button type="button" onClick={() => (CLE_SITE ? (setCaptcha(null), setEtape("demande")) : demander())} disabled={envoi} className="text-xs text-foret-300 hover:underline">
-            Pas reçu ? Renvoyer un code
+            {tx("Pas reçu ? Renvoyer un code")}
           </button>
         </form>
       )}
       <button type="button" onClick={() => onRetour(null)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-white">
-        <ArrowLeft size={12} /> Retour à la connexion
+        <ArrowLeft size={12} />{" "}{tx("Retour à la connexion")}
       </button>
     </div>
   );
@@ -118,7 +120,7 @@ function ActivationInvitation({ jeton, compte, onConnecte, onAnnuler }) {
   const regles = reglesMotDePasse(nouveau, compte.split("@")[0]);
   const valider = async e => {
     e.preventDefault();
-    if (nouveau !== confirmation) { setErreur("Les deux saisies ne correspondent pas"); return; }
+    if (nouveau !== confirmation) { setErreur(tx("Les deux saisies ne correspondent pas")); return; }
     setErreur(null); setEnvoi(true);
     try {
       const r = await http.post("/auth/invitation", { identifiant: compte, jeton, nouveau });
@@ -129,11 +131,11 @@ function ActivationInvitation({ jeton, compte, onConnecte, onAnnuler }) {
   };
   return (
     <form onSubmit={valider} className="space-y-3">
-      <p className="text-sm font-semibold flex items-center gap-2"><KeyRound size={15} className="text-laiton-300" /> Activer ton compte</p>
-      <p className="text-xs text-gray-400">Bienvenue ! Choisis ton mot de passe pour <strong className="text-gray-200">{compte}</strong>. Toi seul le connaîtras.</p>
+      <p className="text-sm font-semibold flex items-center gap-2"><KeyRound size={15} className="text-laiton-300" />{" "}{tx("Activer ton compte")}</p>
+      <p className="text-xs text-gray-400">{tx("Bienvenue ! Choisis ton mot de passe pour")}{" "}<strong className="text-gray-200">{compte}</strong>{tx(". Toi seul le connaîtras.")}</p>
       <input type="text" autoComplete="username" value={compte} readOnly hidden />
       <label className="block">
-        <span className={LIB}>Mot de passe</span>
+        <span className={LIB}>{tx("Mot de passe")}</span>
         <input type="password" value={nouveau} onChange={e => setNouveau(e.target.value)} autoComplete="new-password" required maxLength={72} className={CHAMP} />
       </label>
       {nouveau && (
@@ -146,15 +148,15 @@ function ActivationInvitation({ jeton, compte, onConnecte, onAnnuler }) {
         </ul>
       )}
       <label className="block">
-        <span className={LIB}>Confirme le mot de passe</span>
+        <span className={LIB}>{tx("Confirme le mot de passe")}</span>
         <input type="password" value={confirmation} onChange={e => setConfirmation(e.target.value)} autoComplete="new-password" required maxLength={72} className={CHAMP} />
       </label>
       {erreur && <p role="alert" className="text-sm text-red-400">{erreur}</p>}
       <button type="submit" disabled={envoi || !regles.every(r => r.ok) || nouveau !== confirmation} className={BOUTON}>
-        <KeyRound size={15} /> {envoi ? "Activation…" : "Activer mon compte"}
+        <KeyRound size={15} /> {envoi ? tx("Activation…") : tx("Activer mon compte")}
       </button>
       <button type="button" onClick={onAnnuler} className="flex items-center gap-1 text-xs text-gray-400 hover:text-white">
-        <ArrowLeft size={12} /> J'ai déjà un compte
+        <ArrowLeft size={12} />{" "}{tx("J'ai déjà un compte")}
       </button>
     </form>
   );
@@ -194,12 +196,12 @@ function BoutonsSSO({ fournisseurs }) {
       {fournisseurs.map(f => (
         <button key={f} type="button" onClick={() => aller(f)} disabled={!!envoi}
           className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-white text-gray-900 text-sm font-medium hover:bg-gray-100 disabled:opacity-60">
-          <LogoSSO f={f} /> {envoi === f ? "Redirection…" : `Continuer avec ${NOMS_SSO[f] || f}`}
+          <LogoSSO f={f} /> {envoi === f ? tx("Redirection…") : tx("Continuer avec {x}", { x: NOMS_SSO[f] || f })}
         </button>
       ))}
       {erreur && <p role="alert" className="text-sm text-red-400">{erreur}</p>}
       <p className="flex items-center gap-3 text-xs text-gray-500 pt-1">
-        <span className="h-px flex-1 bg-gray-700" /> ou avec ton mot de passe <span className="h-px flex-1 bg-gray-700" />
+        <span className="h-px flex-1 bg-gray-700" />{" "}{tx("ou avec ton mot de passe")}{" "}<span className="h-px flex-1 bg-gray-700" />
       </p>
     </div>
   );
@@ -212,7 +214,7 @@ function RetourSSO({ onConnecte, onEchec }) {
     const q = new URLSearchParams(window.location.search);
     window.history.replaceState(null, "", "/");
     if (q.get("error") || !q.get("code") || !q.get("state")) {
-      setErreur(q.get("error") === "access_denied" ? "Connexion annulée." : "Connexion interrompue : recommence.");
+      setErreur(q.get("error") === "access_denied" ? tx("Connexion annulée.") : tx("Connexion interrompue : recommence."));
       return;
     }
     terminerSSO(q.get("code"), q.get("state")).then(r => (r.etape2fa ? setEtape(r.etape2fa) : onConnecte(r)))
@@ -220,12 +222,12 @@ function RetourSSO({ onConnecte, onEchec }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   if (etape) return <SaisieCodeConnexion etape={etape} onConnecte={onConnecte} onAnnuler={onEchec} />;
   if (!erreur) {
-    return <p role="status" className="flex items-center gap-2 text-sm text-gray-300"><RefreshCw size={14} className="animate-spin" /> Connexion en cours…</p>;
+    return <p role="status" className="flex items-center gap-2 text-sm text-gray-300"><RefreshCw size={14} className="animate-spin" />{" "}{tx("Connexion en cours…")}</p>;
   }
   return (
     <div className="space-y-3">
       <p role="alert" className="text-sm text-red-400">{erreur}</p>
-      <button type="button" onClick={onEchec} className="text-xs text-foret-300 hover:underline">Retour à la connexion</button>
+      <button type="button" onClick={onEchec} className="text-xs text-foret-300 hover:underline">{tx("Retour à la connexion")}</button>
     </div>
   );
 }
@@ -261,28 +263,27 @@ function Connexion({ onConnecte, oubliDisponible, sso, message }) {
       {(succes || message) && <p role="status" className="text-sm text-emerald-400">{succes || message}</p>}
       <BoutonsSSO fournisseurs={sso} />
       <label className="block">
-        <span className={LIB}>Identifiant ou e-mail</span>
+        <span className={LIB}>{tx("Identifiant ou e-mail")}</span>
         <input value={nom} onChange={e => setNom(e.target.value)} autoComplete="username" required maxLength={64} className={CHAMP} />
       </label>
       <label className="block">
-        <span className={LIB}>Mot de passe</span>
+        <span className={LIB}>{tx("Mot de passe")}</span>
         <input type="password" value={mdp} onChange={e => setMdp(e.target.value)} autoComplete="current-password"
           required maxLength={128} className={CHAMP} />
       </label>
       {erreur && <p role="alert" className="text-sm text-red-400">{erreur}</p>}
       <button type="submit" disabled={envoi} className={BOUTON}>
-        <Lock size={15} /> {envoi ? "Connexion…" : "Se connecter"}
+        <Lock size={15} /> {envoi ? tx("Connexion…") : tx("Se connecter")}
       </button>
       {oubliDisponible ? (
         <button type="button" onClick={() => { setOubli(true); setSucces(null); }} className="text-xs text-foret-300 hover:underline">
-          Mot de passe oublié ?
+          {tx("Mot de passe oublié ?")}
         </button>
       ) : (
-        <p className="text-xs text-gray-500">Mot de passe oublié ? Demande à l'administrateur de ton organisation de le réinitialiser.</p>
+        <p className="text-xs text-gray-500">{tx("Mot de passe oublié ? Demande à l'administrateur de ton organisation de le réinitialiser.")}</p>
       )}
       <p className="text-xs text-gray-500">
-        Les comptes d'une organisation sont créés par son administrateur. Pas encore cliente ? Commence par l'essai gratuit,
-        puis abonne ton organisation.
+        {tx("Les comptes d'une organisation sont créés par son administrateur. Pas encore cliente ? Commence par l'essai gratuit, puis abonne ton organisation.")}
       </p>
     </form>
   );
@@ -308,25 +309,25 @@ function Essai({ onConnecte, formules }) {
   return (
     <form onSubmit={valider} className="space-y-3">
       <label className="block">
-        <span className={LIB}>Nom complet</span>
+        <span className={LIB}>{tx("Nom complet")}</span>
         <input value={f.nom_complet} onChange={maj("nom_complet")} required minLength={2} maxLength={120} autoComplete="name" className={CHAMP} />
       </label>
       <label className="block">
-        <span className={LIB}>E-mail (ce sera ton identifiant)</span>
+        <span className={LIB}>{tx("E-mail (ce sera ton identifiant)")}</span>
         <input type="email" value={f.email} onChange={maj("email")} required maxLength={64} autoComplete="email" className={CHAMP} />
       </label>
       <label className="block">
-        <span className={LIB}>Tu es…</span>
+        <span className={LIB}>{tx("Tu es…")}</span>
         <select value={f.profil} onChange={maj("profil")} className={CHAMP}>
-          <option value="professionnel">Professionnel de la banque / finance</option>
-          <option value="entreprise">Représentant d'une entreprise</option>
-          <option value="recruteur">Recruteur</option>
-          <option value="etudiant">Étudiant</option>
-          <option value="autre">Autre</option>
+          <option value="professionnel">{tx("Professionnel de la banque / finance")}</option>
+          <option value="entreprise">{tx("Représentant d'une entreprise")}</option>
+          <option value="recruteur">{tx("Recruteur")}</option>
+          <option value="etudiant">{tx("Étudiant")}</option>
+          <option value="autre">{tx("Autre")}</option>
         </select>
       </label>
       <label className="block">
-        <span className={LIB}>Mot de passe</span>
+        <span className={LIB}>{tx("Mot de passe")}</span>
         <input type="password" value={f.mot_de_passe} onChange={maj("mot_de_passe")} required maxLength={72}
           autoComplete="new-password" className={CHAMP} />
       </label>
@@ -344,13 +345,12 @@ function Essai({ onConnecte, formules }) {
         aria-hidden="true" className="absolute -left-[9999px] w-px h-px opacity-0" />
       <label className="flex items-start gap-2 text-xs text-gray-400">
         <input type="checkbox" checked={accepte} onChange={e => setAccepte(e.target.checked)} required className="mt-0.5" />
-        <span>J'accepte que mes nom et e-mail soient conservés pour gérer mon compte. Les données affichées pendant l'essai
-          sont fictives ; je ne peux rien modifier.</span>
+        <span>{tx("J'accepte que mes nom et e-mail soient conservés pour gérer mon compte. Les données affichées pendant l'essai sont fictives ; je ne peux rien modifier.")}</span>
       </label>
       <AntiRobot onJeton={setCaptcha} />
       {erreur && <p role="alert" className="text-sm text-red-400">{erreur}</p>}
       <button type="submit" disabled={envoi || !accepte || !regles.every(r => r.ok) || (CLE_SITE && !captcha)} className={BOUTON}>
-        <Sparkles size={15} /> {envoi ? "Création…" : `Démarrer l'essai gratuit${formules ? ` (${formules.essai_jours} jours)` : ""}`}
+        <Sparkles size={15} /> {envoi ? tx("Création…") : (formules ? tx("Démarrer l'essai gratuit ({n} jours)", { n: formules.essai_jours }) : tx("Démarrer l'essai gratuit"))}
       </button>
     </form>
   );
@@ -414,25 +414,25 @@ export default function EcranAccueil({ onConnecte, annonce }) {
         <section>
           <div className="flex items-center gap-3 mb-8">
             <Logo />
-            <p className="font-semibold">VoiceBank Analytics</p>
+            <p className="font-semibold">{tx("VoiceBank Analytics")}</p>
+            <SelecteurLangue className="ml-auto" />
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold leading-tight">
-            Interroge tes données bancaires <span className="text-laiton-300">à la voix</span>.
+            {tx("Interroge tes données bancaires")}{" "}<span className="text-laiton-300">{tx("à la voix")}</span>.
           </h1>
           <p className="text-foret-100/70 mt-4 max-w-md">
-            Pose une question en français, obtiens la réponse chiffrée, le graphique et une analyse parlée : fraude,
-            crédit, clients, en quelques secondes.
+            {tx("Pose une question en français, obtiens la réponse chiffrée, le graphique et une analyse parlée : fraude, crédit, clients, en quelques secondes.")}
           </p>
           <ul className="mt-6 space-y-3 text-sm text-foret-100/80">
-            <li className="flex items-center gap-3"><AudioLines size={18} className="text-laiton-300" /> Assistant vocal et mode conversation</li>
-            <li className="flex items-center gap-3"><ShieldAlert size={18} className="text-laiton-300" /> Détection de fraude par IA (Isolation Forest + XGBoost)</li>
-            <li className="flex items-center gap-3"><Landmark size={18} className="text-laiton-300" /> Score de crédit expliqué, facteur par facteur</li>
+            <li className="flex items-center gap-3"><AudioLines size={18} className="text-laiton-300" />{" "}{tx("Assistant vocal et mode conversation")}</li>
+            <li className="flex items-center gap-3"><ShieldAlert size={18} className="text-laiton-300" />{" "}{tx("Détection de fraude par IA (Isolation Forest + XGBoost)")}</li>
+            <li className="flex items-center gap-3"><Landmark size={18} className="text-laiton-300" />{" "}{tx("Score de crédit expliqué, facteur par facteur")}</li>
           </ul>
           {prixMin && (
             <p className="mt-6 text-sm text-foret-100/60">
-              Essai gratuit {formules.essai_jours} jours, puis à partir de{" "}
+              {tx("Essai gratuit {essai_jours} jours, puis à partir de{x}", { essai_jours: formules.essai_jours, x: " " })}
               <strong className="text-white"><Prix fcfa={prixMin.prix} dark /> / {prixMin.libelle.toLowerCase()}</strong>
-              {" "}— MTN MoMo, Orange Money ou carte.{" "}
+              {tx("{x}— MTN MoMo, Orange Money ou carte.{x2}", { x: " ", x2: " " })}
               <SelecteurDevise compact className="ml-1 text-xs px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-200" />
             </p>
           )}
@@ -442,10 +442,10 @@ export default function EcranAccueil({ onConnecte, annonce }) {
           <BandeauAnnonce annonce={annonce} />
           {!invitation && !retourSso && (
             <>
-              <h2 className="font-semibold mb-3">Tu es…</h2>
+              <h2 className="font-semibold mb-3">{tx("Tu es…")}</h2>
               <div className="grid grid-cols-2 gap-3 mb-6">
-                {choix("visiteur", UserRound, "Visiteur", "Je découvre l'outil : essai gratuit, sans engagement")}
-                {choix("organisation", Building2, "Organisation", "J'ai un compte, ou mon entreprise est cliente")}
+                {choix("visiteur", UserRound, tx("Visiteur"), tx("Je découvre l'outil : essai gratuit, sans engagement"))}
+                {choix("organisation", Building2, tx("Organisation"), tx("J'ai un compte, ou mon entreprise est cliente"))}
               </div>
             </>
           )}
@@ -453,12 +453,12 @@ export default function EcranAccueil({ onConnecte, annonce }) {
           {deblocage && !deblocage.ok && <p role="alert" className="text-sm text-red-400 mb-4">{deblocage.texte}</p>}
           {serveur === "reveil" && (
             <p className="flex items-center gap-2 text-xs text-laiton-300 mb-4" role="status">
-              <RefreshCw size={12} className="animate-spin" /> Démarrage du serveur… jusqu'à une minute après une période sans visite.
+              <RefreshCw size={12} className="animate-spin" />{" "}{tx("Démarrage du serveur… jusqu'à une minute après une période sans visite.")}
             </p>
           )}
           {serveur === "injoignable" && (
             <p className="text-xs text-amber-400 mb-4" role="status">
-              Le serveur ne répond pas pour le moment : une mise à jour est sans doute en cours. Réessaie dans une minute.
+              {tx("Le serveur ne répond pas pour le moment : une mise à jour est sans doute en cours. Réessaie dans une minute.")}
             </p>
           )}
           {retourSso && <RetourSSO onConnecte={onConnecte} onEchec={() => setRetourSso(false)} />}
@@ -470,12 +470,12 @@ export default function EcranAccueil({ onConnecte, annonce }) {
           {!invitation && !retourSso && profil === "organisation" && <Connexion onConnecte={onConnecte} oubliDisponible={oubliDisponible} sso={sso} message={deblocage?.ok ? deblocage.texte : null} />}
           {!invitation && !profil && (
             <p className="text-sm text-gray-400 flex items-center gap-2">
-              <ArrowRight size={14} /> Choisis ton profil pour continuer.
+              <ArrowRight size={14} />{" "}{tx("Choisis ton profil pour continuer.")}
             </p>
           )}
           {!invitation && profil === "visiteur" && (
             <button type="button" onClick={() => setProfil("organisation")} className="mt-4 text-xs text-foret-300 hover:underline">
-              Déjà un compte ? Se connecter
+              {tx("Déjà un compte ? Se connecter")}
             </button>
           )}
         </section>

@@ -1,5 +1,6 @@
 // VOICEBANK ANALYTICS — client HTTP authentifié
 import axios from "axios";
+import { LANGUE, tx } from "./i18n";
 
 export const API = (import.meta.env.REACT_APP_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
@@ -26,6 +27,7 @@ export const http = axios.create({ baseURL: API, timeout: 30000 });
 http.interceptors.request.use(config => {
   const s = lireSession();
   if (s) config.headers.Authorization = `Bearer ${s.token}`;
+  config.headers["Accept-Language"] = LANGUE;      // messages de l'API dans la langue de l'interface
   return config;
 });
 
@@ -45,7 +47,7 @@ http.interceptors.response.use(
       window.dispatchEvent(new Event("voicebank:injoignable"));
     }
     if (e.response?.status === 401 && !e.config?.url?.includes("/auth/login") && !e.config?.url?.includes("/auth/essai")) {
-      if (lireSession()) noterMotifDeconnexion("Ta session a expiré ou a été fermée. Reconnecte-toi.");
+      if (lireSession()) noterMotifDeconnexion(tx("Ta session a expiré ou a été fermée. Reconnecte-toi."));
       ecrireSession(null);
       window.dispatchEvent(new Event("voicebank:deconnexion"));
     }
@@ -87,7 +89,7 @@ export async function demarrerSSO(fournisseur) {
 export async function terminerSSO(code, etat) {
   let s = null;
   try { s = JSON.parse(sessionStorage.getItem("voicebank_sso") || "null"); sessionStorage.removeItem("voicebank_sso"); } catch (e) { /* rien */ }
-  if (!s) throw new Error("Connexion commencée dans un autre onglet ou expirée : recommence.");
+  if (!s) throw new Error(tx("Connexion commencée dans un autre onglet ou expirée : recommence."));
   const { data } = await http.post(`/auth/sso/${s.f}/fin`, { code, etat, verificateur: s.v }, { timeout: 90000 });
   return suiteConnexion(data);
 }
@@ -121,9 +123,9 @@ export function deconnexion() {
 export function messageErreur(e) {
   const d = e?.response?.data?.detail;
   if (typeof d === "string") return d;
-  if (Array.isArray(d)) return "Données invalides";
-  if (e?.code === "ECONNABORTED") return "Le serveur met trop de temps à répondre";
+  if (Array.isArray(d)) return tx("Données invalides");
+  if (e?.code === "ECONNABORTED") return tx("Le serveur met trop de temps à répondre");
   if (!e?.response && !e?.isAxiosError && e?.message) return e.message;
-  if (!e?.response) return "API injoignable. Vérifie qu'elle est démarrée.";
-  return "Erreur inattendue";
+  if (!e?.response) return tx("API injoignable. Vérifie qu'elle est démarrée.");
+  return tx("Erreur inattendue");
 }

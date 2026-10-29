@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { CircleCheck, Circle, X, Rocket } from "lucide-react";
 import { http } from "../api";
+import { tx } from "../i18n";
 
 export default function Demarrage({ dark, utilisateur, acces, nbSources, nbQuestions, allerA }) {
   const cle = `voicebank_demarrage_${utilisateur}`;
@@ -11,10 +12,10 @@ export default function Demarrage({ dark, utilisateur, acces, nbSources, nbQuest
     http.get("/organisation").then(r => setMembres(r.data.data.membres.length)).catch(() => {});
   }, []);
   const etapes = [
-    { fait: nbSources > 0, titre: "Brancher les données de l'organisation", texte: "Base PostgreSQL, MySQL, SQL Server ou fichiers Excel / CSV.", page: "donnees", action: "Mes données" },
-    { fait: !!acces?.source_defaut, titre: "Choisir la base par défaut", texte: "Tous les membres arrivent directement dessus.", page: "donnees", action: "Définir" },
-    { fait: (membres || 0) > 1, titre: "Inviter l'équipe", texte: "Chaque analyste reçoit un e-mail pour activer son compte.", page: "organisation", action: "Inviter" },
-    { fait: nbQuestions > 0, titre: "Poser une première question", texte: "Par exemple : « Montant total par mois ».", page: null },
+    { fait: nbSources > 0, titre: tx("Brancher les données de l'organisation"), texte: tx("Base PostgreSQL, MySQL, SQL Server ou fichiers Excel / CSV."), page: "donnees", action: tx("Mes données") },
+    { fait: !!acces?.source_defaut, titre: tx("Choisir la base par défaut"), texte: tx("Tous les membres arrivent directement dessus."), page: "donnees", action: tx("Définir") },
+    { fait: (membres || 0) > 1, titre: tx("Inviter l'équipe"), texte: tx("Chaque analyste reçoit un e-mail pour activer son compte."), page: "organisation", action: tx("Inviter") },
+    { fait: nbQuestions > 0, titre: tx("Poser une première question"), texte: tx("Par exemple : « Montant total par mois »."), page: null },
   ];
   const faites = etapes.filter(e => e.fait).length;
   if (masque || faites === etapes.length) return null;
@@ -23,10 +24,10 @@ export default function Demarrage({ dark, utilisateur, acces, nbSources, nbQuest
     <div className={`rounded-2xl border p-5 mb-6 ${dark ? "bg-foret-900/30 border-foret-700" : "bg-foret-50 border-foret-200"}`}>
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
-          <h2 className={`font-bold flex items-center gap-2 ${dark ? "text-white" : "text-gray-900"}`}><Rocket size={17} className="text-laiton-400" /> Bien démarrer</h2>
-          <p className={`text-xs ${dark ? "text-gray-400" : "text-gray-600"}`}>{faites} étape{faites > 1 ? "s" : ""} sur {etapes.length} : quelques minutes pour mettre VoiceBank au service de ton organisation.</p>
+          <h2 className={`font-bold flex items-center gap-2 ${dark ? "text-white" : "text-gray-900"}`}><Rocket size={17} className="text-laiton-400" />{" "}{tx("Bien démarrer")}</h2>
+          <p className={`text-xs ${dark ? "text-gray-400" : "text-gray-600"}`}>{tx("{faites} étape", { faites })}{faites > 1 ? "s" : ""}{" "}{tx("sur {length} : quelques minutes pour mettre VoiceBank au service de ton organisation.", { length: etapes.length })}</p>
         </div>
-        <button onClick={fermer} aria-label="Masquer le guide" className="opacity-60 hover:opacity-100"><X size={15} /></button>
+        <button onClick={fermer} aria-label={tx("Masquer le guide")} className="opacity-60 hover:opacity-100"><X size={15} /></button>
       </div>
       <ol className="grid sm:grid-cols-2 gap-2">
         {etapes.map((e, i) => (

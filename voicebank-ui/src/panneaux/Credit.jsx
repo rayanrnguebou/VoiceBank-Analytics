@@ -6,6 +6,7 @@ import { Choix } from "../ChampListe";
 import ChampsEtablissement from "./ChampsEtablissement";
 import { useDevise } from "../devise";
 import ResultatRisque from "./Explication";
+import { LOCALE, tx } from "../i18n";
 
 // Compatibilité : l'ancien nom reste disponible
 export function Explication({ resultat, dark }) {
@@ -57,17 +58,17 @@ export default function PanelCredit({ dark }) {
   };
 
   const nombres = [
-    ["montant_fcfa", `Montant (${devise.libelle})`], ["mensualite_fcfa", `Mensualité (${devise.libelle})`],
-    ["revenu_annuel_fcfa", `Revenu annuel (${devise.libelle})`],
-    ["score_credit", "Score historique (300-850)"], ["taux_interet_pct", "Taux d'intérêt (%)"], ["duree_mois", "Durée (mois)"],
+    ["montant_fcfa", tx("Montant ({libelle})", { libelle: devise.libelle })], ["mensualite_fcfa", tx("Mensualité ({libelle})", { libelle: devise.libelle })],
+    ["revenu_annuel_fcfa", tx("Revenu annuel ({libelle})", { libelle: devise.libelle })],
+    ["score_credit", tx("Score historique (300-850)")], ["taux_interet_pct", tx("Taux d'intérêt (%)")], ["duree_mois", tx("Durée (mois)")],
   ];
 
   return (
     <div className="space-y-4">
       <div className={carte(dark)}>
-        <h2 className={titre(dark)}>Évaluer une demande de crédit</h2>
-        <p className={`${texteDiscret(dark)} mb-4`}>Probabilité de défaut estimée par un modèle d'IA (XGBoost), les facteurs qui l'expliquent et la décision conseillée.</p>
-        {!ref ? <p className={texteDiscret(dark)}>{api.erreur || "Chargement du modèle…"}</p> : (
+        <h2 className={titre(dark)}>{tx("Évaluer une demande de crédit")}</h2>
+        <p className={`${texteDiscret(dark)} mb-4`}>{tx("Probabilité de défaut estimée par un modèle d'IA (XGBoost), les facteurs qui l'expliquent et la décision conseillée.")}</p>
+        {!ref ? <p className={texteDiscret(dark)}>{api.erreur || tx("Chargement du modèle…")}</p> : (
           <form onSubmit={evaluer} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {nombres.map(([cle, nom]) => (
               <label key={cle}>
@@ -78,7 +79,7 @@ export default function PanelCredit({ dark }) {
                   className={champ(dark)} />
               </label>
             ))}
-            {[["type_credit", "Type de crédit"], ["garantie", "Garantie"]].map(([cle, nom]) => (
+            {[["type_credit", tx("Type de crédit")], ["garantie", tx("Garantie")]].map(([cle, nom]) => (
               <label key={cle}>
                 <span className={etiquette(dark)}>{nom}</span>
                 <Choix dark={dark} required valeur={form[cle] || ""} onChange={v => setForm(f => ({ ...f, [cle]: v }))} options={ref[cle] || []} />
@@ -87,13 +88,13 @@ export default function PanelCredit({ dark }) {
             <ChampsEtablissement dark={dark} valeurs={form} connues={{ banque: ref.banque }} avecVille={false}
               maj={m => setForm(f => ({ ...f, ...m }))} />
             <label>
-              <span className={etiquette(dark)}>Client de la diaspora</span>
+              <span className={etiquette(dark)}>{tx("Client de la diaspora")}</span>
               <select value={form.est_diaspora} onChange={e => setForm({ ...form, est_diaspora: e.target.value })} className={champ(dark)}>
-                <option>Non</option><option>Oui</option>
+                <option value="Non">{tx("Non")}</option><option value="Oui">{tx("Oui")}</option>
               </select>
             </label>
             <div className="sm:col-span-3 flex items-center gap-3">
-              <button type="submit" disabled={api.chargement} className={boutonPrincipal}>{api.chargement ? "Calcul…" : "Évaluer"}</button>
+              <button type="submit" disabled={api.chargement} className={boutonPrincipal}>{api.chargement ? tx("Calcul…") : tx("Évaluer")}</button>
               {api.erreur && <span className="text-sm text-red-500">{api.erreur}</span>}
             </div>
           </form>
@@ -102,9 +103,9 @@ export default function PanelCredit({ dark }) {
       </div>
 
       <div className={carte(dark)}>
-        <h2 className={titre(dark)}>Crédits en cours les plus à risque</h2>
+        <h2 className={titre(dark)}>{tx("Crédits en cours les plus à risque")}</h2>
         <p className={`${texteDiscret(dark)} mb-4`}>
-          {risques ? `Anticipation des défauts sur ${risques.analyses.toLocaleString("fr-FR")} crédits en cours. ` : ""}Clique sur un crédit pour voir l'explication.
+          {risques ? tx("Anticipation des défauts sur {x} crédits en cours. ", { x: risques.analyses.toLocaleString(LOCALE) }) : ""}{tx("Clique sur un crédit pour voir l'explication.")}
         </p>
         {liste.erreur && <p className="text-sm text-red-500">{liste.erreur}</p>}
         <div className="space-y-2">
@@ -114,7 +115,7 @@ export default function PanelCredit({ dark }) {
                 className={`w-full flex items-center justify-between gap-3 p-3 rounded-xl text-left ${dark ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-50 hover:bg-gray-100"}`}>
                 <div className="min-w-0">
                   <p className={`text-sm font-medium ${dark ? "text-white" : "text-gray-900"}`}>{c.id_credit} · {c.type_credit}</p>
-                  <p className={texteDiscret(dark)}>{c.banque} · {devise.formater(c.montant_fcfa, { compact: true })} · {c.duree_mois} mois</p>
+                  <p className={texteDiscret(dark)}>{tx("{banque} · {x} · {duree_mois} mois", { banque: c.banque, x: devise.formater(c.montant_fcfa, { compact: true }), duree_mois: c.duree_mois })}</p>
                 </div>
                 <span className={`text-xs font-semibold text-white px-2.5 py-1 rounded-full flex-shrink-0 ${COULEURS_NIVEAU[c.niveau_risque] || "bg-gray-500"}`}>
                   {(c.probabilite_defaut * 100).toFixed(0)} %
@@ -122,7 +123,7 @@ export default function PanelCredit({ dark }) {
               </button>
               {selection?.id === c.id_credit && (selection.resultat
                 ? <Explication resultat={selection.resultat} dark={dark} />
-                : <p className={`${texteDiscret(dark)} p-2`}>{detail.erreur || "Calcul…"}</p>)}
+                : <p className={`${texteDiscret(dark)} p-2`}>{detail.erreur || tx("Calcul…")}</p>)}
             </div>
           ))}
         </div>

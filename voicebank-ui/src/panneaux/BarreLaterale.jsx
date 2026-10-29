@@ -1,5 +1,7 @@
 // Barre latérale de navigation (fixe sur grand écran, tiroir sur mobile)
 import { useEffect } from "react";
+import { tx } from "../i18n";
+import SelecteurLangue from "../SelecteurLangue";
 import {
   AudioLines, LayoutDashboard, ShieldAlert, ScanSearch, Landmark, History,
   GraduationCap, Target, DatabaseZap, ScrollText, ChartColumn, ExternalLink, LogOut, X, UsersRound, KeyRound, CreditCard, Wallet,
@@ -57,74 +59,75 @@ export default function BarreLaterale({ page, allerA, estAdmin, voitAdmin, exter
       <aside
         className={`fixed lg:sticky top-0 left-0 z-40 h-screen w-64 flex-shrink-0 flex flex-col bg-foret-900 text-white
           transition-transform duration-200 lg:translate-x-0 ${ouverte ? "translate-x-0" : "-translate-x-full"}`}
-        aria-label="Navigation principale"
+        aria-label={tx("Navigation principale")}
       >
         <div className="flex items-center gap-3 px-5 pt-5 pb-6">
           <Logo />
           <div className="flex-1 min-w-0">
-            <p className="font-semibold leading-tight">VoiceBank</p>
-            <p className="text-xs text-foret-100/60 leading-tight">Analytics</p>
+            <p className="font-semibold leading-tight">{tx("VoiceBank")}</p>
+            <p className="text-xs text-foret-100/60 leading-tight">{tx("Analytics")}</p>
           </div>
-          <button onClick={onFermer} className="lg:hidden p-1.5 rounded-md hover:bg-white/10" aria-label="Fermer le menu">
+          <button onClick={onFermer} className="lg:hidden p-1.5 rounded-md hover:bg-white/10" aria-label={tx("Fermer le menu")}>
             <X size={18} />
           </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 space-y-1">
-          <Lien id="assistant" libelle="Assistant vocal" Icone={AudioLines} {...props} />
-          <Lien id="tableau" libelle="Tableau de bord" Icone={LayoutDashboard} {...props} />
-          <Lien id="donnees" libelle="Mes données" Icone={DatabaseZap} {...props} />
+          <Lien id="assistant" libelle={tx("Assistant vocal")} Icone={AudioLines} {...props} />
+          <Lien id="tableau" libelle={tx("Tableau de bord")} Icone={LayoutDashboard} {...props} />
+          <Lien id="donnees" libelle={tx("Mes données")} Icone={DatabaseZap} {...props} />
 
-          <p className="px-4 pt-5 pb-1.5 text-xs text-foret-100/45">Risques</p>
-          <Lien id="alertes" libelle="Alertes de fraude" Icone={ShieldAlert}
+          <p className="px-4 pt-5 pb-1.5 text-xs text-foret-100/45">{tx("Risques")}</p>
+          <Lien id="alertes" libelle={tx("Alertes de fraude")} Icone={ShieldAlert}
             badge={externe ? 0 : compteurs.alertes} badgeAlerte {...props} />
-          <Lien id="analyse" libelle="Analyse de transaction" Icone={ScanSearch} {...props} />
-          <Lien id="credit" libelle="Score de crédit" Icone={Landmark} {...props} />
-          <Lien id="modeles" libelle="Fiche des modèles" Icone={ClipboardCheck} {...props} />
+          <Lien id="analyse" libelle={tx("Analyse de transaction")} Icone={ScanSearch} {...props} />
+          <Lien id="credit" libelle={tx("Score de crédit")} Icone={Landmark} {...props} />
+          <Lien id="modeles" libelle={tx("Fiche des modèles")} Icone={ClipboardCheck} {...props} />
 
-          <p className="px-4 pt-5 pb-1.5 text-xs text-foret-100/45">Rapports</p>
-          <Lien id="historique" libelle="Historique" Icone={History} badge={nbHistorique} {...props} />
-          {!(acces?.type === "essai") && <Lien id="notifications" libelle="Notifications" Icone={BellRing} {...props} />}
+          <p className="px-4 pt-5 pb-1.5 text-xs text-foret-100/45">{tx("Rapports")}</p>
+          <Lien id="historique" libelle={tx("Historique")} Icone={History} badge={nbHistorique} {...props} />
+          {!(acces?.type === "essai") && <Lien id="notifications" libelle={tx("Notifications")} Icone={BellRing} {...props} />}
           {POWER_BI_URL && (
             <a href={POWER_BI_URL} target="_blank" rel="noopener noreferrer"
               className="group w-full flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-sm text-foret-100/75 hover:bg-white/5 hover:text-white">
               <ChartColumn size={17} strokeWidth={1.75} className="text-foret-100/60 group-hover:text-foret-100" />
-              <span className="flex-1">Rapport Power BI</span>
+              <span className="flex-1">{tx("Rapport Power BI")}</span>
               <ExternalLink size={13} className="text-foret-100/50" />
             </a>
           )}
 
           {externe && (
             <>
-              <p className="px-4 pt-5 pb-1.5 text-xs text-foret-100/45">{acces?.organisation ? "Mon organisation" : "Mon compte"}</p>
+              <p className="px-4 pt-5 pb-1.5 text-xs text-foret-100/45">{acces?.organisation ? tx("Mon organisation") : tx("Mon compte")}</p>
               {acces?.organisation && (
-                <Lien id="organisation" libelle={acces.type_organisation === "particulier" ? "Mon compte" : "Membres"}
+                <Lien id="organisation" libelle={acces.type_organisation === "particulier" ? tx("Mon compte") : tx("Membres")}
                   Icone={Building2} {...props} />
               )}
               {acces?.organisation && acces.type_organisation !== "particulier" && ["admin", "auditeur"].includes(acces.role_org) && (
-                <Lien id="journal" libelle="Journal" Icone={ScrollText} {...props} />
+                <Lien id="journal" libelle={tx("Journal")} Icone={ScrollText} {...props} />
               )}
-              <Lien id="abonnement" libelle="Abonnement" Icone={CreditCard} {...props} />
+              <Lien id="abonnement" libelle={tx("Abonnement")} Icone={CreditCard} {...props} />
             </>
           )}
 
           {voitAdmin && (
             <>
               <p className="px-4 pt-5 pb-1.5 text-xs text-foret-100/45 flex items-center gap-2">
-                Administration
-                {!estAdmin && <span className="px-1.5 py-0.5 rounded bg-white/10 text-[10px] uppercase tracking-wide text-foret-100/70">Démo</span>}
+                {tx("Administration")}
+                {!estAdmin && <span className="px-1.5 py-0.5 rounded bg-white/10 text-[10px] uppercase tracking-wide text-foret-100/70">{tx("Démo")}</span>}
               </p>
-              <Lien id="apprentissage" libelle="Apprentissage" Icone={GraduationCap} badge={compteurs.signalements} {...props} />
-              <Lien id="fiabilite" libelle="Fiabilité" Icone={Target} {...props} />
-              <Lien id="audit" libelle="Audit" Icone={ScrollText} {...props} />
-              <Lien id="comptes" libelle="Comptes" Icone={UsersRound} {...props} />
-              {estAdmin && <Lien id="abonnements" libelle="Abonnements" Icone={Wallet} {...props} />}
-              {estAdmin && <Lien id="maintenance" libelle="Maintenance" Icone={Wrench} {...props} />}
+              <Lien id="apprentissage" libelle={tx("Apprentissage")} Icone={GraduationCap} badge={compteurs.signalements} {...props} />
+              <Lien id="fiabilite" libelle={tx("Fiabilité")} Icone={Target} {...props} />
+              <Lien id="audit" libelle={tx("Audit")} Icone={ScrollText} {...props} />
+              <Lien id="comptes" libelle={tx("Comptes")} Icone={UsersRound} {...props} />
+              {estAdmin && <Lien id="abonnements" libelle={tx("Abonnements")} Icone={Wallet} {...props} />}
+              {estAdmin && <Lien id="maintenance" libelle={tx("Maintenance")} Icone={Wrench} {...props} />}
             </>
           )}
         </nav>
 
-        <div className="m-3 p-3 rounded-xl bg-white/5 flex items-center gap-3">
+        <div className="mx-3 mt-2 flex justify-end"><SelecteurLangue /></div>
+        <div className="m-3 mt-2 p-3 rounded-xl bg-white/5 flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-laiton-400 text-foret-900 flex items-center justify-center font-semibold uppercase">
             {session.utilisateur.slice(0, 1)}
           </div>
@@ -132,15 +135,15 @@ export default function BarreLaterale({ page, allerA, estAdmin, voitAdmin, exter
             <p className="text-sm font-medium truncate">{session.utilisateur}</p>
             <p className="text-xs text-foret-100/60 truncate" title={acces?.organisation || undefined}>
               {session.role === "client" && acces?.organisation
-                ? `${{ admin: "Admin", analyste: "Analyste", lecteur: "Lecteur", auditeur: "Auditeur" }[acces.role_org] || "Membre"} · ${acces.organisation}`
-                : { admin: "Administrateur", analyste: "Analyste", visiteur: "Essai gratuit", client: "Abonné" }[session.role] || session.role}
+                ? `${{ admin: tx("Admin"), analyste: tx("Analyste"), lecteur: tx("Lecteur"), auditeur: tx("Auditeur") }[acces.role_org] || tx("Membre")} · ${acces.organisation}`
+                : { admin: tx("Administrateur"), analyste: tx("Analyste"), visiteur: tx("Essai gratuit"), client: tx("Abonné") }[session.role] || session.role}
             </p>
           </div>
-          <button onClick={() => { onMotDePasse(); onFermer(); }} aria-label="Changer mon mot de passe et la double authentification" title="Sécurité du compte : mot de passe, double authentification"
+          <button onClick={() => { onMotDePasse(); onFermer(); }} aria-label={tx("Changer mon mot de passe et la double authentification")} title={tx("Sécurité du compte : mot de passe, double authentification")}
             className="p-2 rounded-lg text-foret-100/70 hover:text-white hover:bg-white/10">
             <KeyRound size={16} />
           </button>
-          <button onClick={onDeconnexion} aria-label="Se déconnecter" title="Se déconnecter"
+          <button onClick={onDeconnexion} aria-label={tx("Se déconnecter")} title={tx("Se déconnecter")}
             className="p-2 rounded-lg text-foret-100/70 hover:text-white hover:bg-white/10">
             <LogOut size={16} />
           </button>

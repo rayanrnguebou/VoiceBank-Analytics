@@ -69,6 +69,9 @@ os.environ.update({
     # faisait planter l'interpréteur (« terminate called without an active exception »).
     "WHISPER_LOCAL_PRECHARGER": "false",
     "ALLOWED_ORIGINS": "http://localhost:3000",
+    # Les tests se connectent souvent en administrateur : la double authentification obligatoire est
+    # vérifiée à part (test_double_auth.py).
+    "DOUBLE_AUTH_ADMINS": "facultative",
 })
 
 from fastapi.testclient import TestClient  # noqa: E402

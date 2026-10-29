@@ -81,3 +81,9 @@ REVOKE ALL ON voicebank.suivi_alertes, voicebank.commentaires_alerte, voicebank.
               voicebank.taches_planifiees FROM voicebank_reader;
 -- Le journal d'audit est en ajout seul : ni UPDATE ni DELETE pour l'application.
 ALTER ROLE voicebank_app SET statement_timeout = '15s';
+
+-- Double authentification et protection des connexions
+GRANT SELECT, INSERT, UPDATE, DELETE ON voicebank.double_authentification TO voicebank_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON voicebank.echecs_connexion TO voicebank_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON voicebank.appareils_connus TO voicebank_app;
+REVOKE ALL ON voicebank.double_authentification, voicebank.echecs_connexion, voicebank.appareils_connus FROM voicebank_reader;

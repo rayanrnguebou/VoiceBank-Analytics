@@ -119,17 +119,20 @@ def test_essais_limites_expiration_et_demandes(client, admin, boite):
     assert len(boite) == avant == 3
 
 
-def test_compte_verrouille_debloque_par_la_recuperation(client, admin, boite):
+def test_compte_protege_debloque_par_la_recuperation(client, admin, boite):
     h = _activer(client, admin, "lea.recup")
     client.post("/auth/email", headers=h, json={"mot_de_passe": BON_MDP, "email": "lea@exemple.cm"})
-    for _ in range(5):
-        _login(client, "lea.recup", "mauvais")
-    assert _login(client, "lea.recup", BON_MDP).status_code == 401           # verrouillé
+    for n in range(20):                                    # attaque depuis 4 adresses : compte protégé
+        client.post("/auth/login", headers={"X-Forwarded-For": f"198.51.100.{n % 4 + 1}"},
+                    json={"nom": "lea.recup", "mot_de_passe": "mauvais"})
+    nouvelle = {"X-Forwarded-For": "192.0.2.77"}
+    r = client.post("/auth/login", headers=nouvelle, json={"nom": "lea.recup", "mot_de_passe": BON_MDP})
+    assert r.status_code == 429 and "protégé" in r.json()["detail"]
     client.post("/auth/oubli", json={"identifiant": "lea@exemple.cm"})
     r = client.post("/auth/oubli/confirmer", json={"identifiant": "lea.recup", "code": _code(boite, "lea@exemple.cm"),
                                                    "nouveau": NOUVEAU})
     assert r.status_code == 200
-    assert _login(client, "lea.recup", NOUVEAU).status_code == 200
+    assert client.post("/auth/login", headers=nouvelle, json={"nom": "lea.recup", "mot_de_passe": NOUVEAU}).status_code == 200
 
 
 def test_email_a_la_creation_et_unicite(client, admin, boite):

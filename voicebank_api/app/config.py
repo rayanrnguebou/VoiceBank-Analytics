@@ -102,6 +102,10 @@ RATE_LIMIT_ACTIF = _env("RATE_LIMIT_ACTIF", "true").lower() == "true"
 # Anti-robot Cloudflare Turnstile (gratuit) : clé secrète côté API ; la clé de site va dans l'interface
 # (REACT_APP_TURNSTILE_SITE_KEY). Vide : vérification désactivée.
 TURNSTILE_SECRET = _env("TURNSTILE_SECRET")
+# Double authentification (code à 6 chiffres) : « obligatoire » pour les administrateurs, ou « facultative »
+DOUBLE_AUTH_ADMINS = _env("DOUBLE_AUTH_ADMINS", "obligatoire").lower()
+# Surveillance des erreurs (sentry.io, offre gratuite) : adresse DSN du projet. Vide : désactivé.
+SENTRY_DSN = _env("SENTRY_DSN")
 # Connexion avec un compte d'entreprise (OpenID Connect). Vide : bouton masqué. Adresse de retour à déclarer
 # chez le fournisseur : <URL_INTERFACE>/connexion-sso
 GOOGLE_CLIENT_ID = _env("GOOGLE_CLIENT_ID")

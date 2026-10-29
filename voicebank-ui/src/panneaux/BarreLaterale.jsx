@@ -136,7 +136,7 @@ export default function BarreLaterale({ page, allerA, estAdmin, voitAdmin, exter
                 : { admin: "Administrateur", analyste: "Analyste", visiteur: "Essai gratuit", client: "Abonné" }[session.role] || session.role}
             </p>
           </div>
-          <button onClick={() => { onMotDePasse(); onFermer(); }} aria-label="Changer mon mot de passe" title="Changer mon mot de passe"
+          <button onClick={() => { onMotDePasse(); onFermer(); }} aria-label="Changer mon mot de passe et la double authentification" title="Sécurité du compte : mot de passe, double authentification"
             className="p-2 rounded-lg text-foret-100/70 hover:text-white hover:bg-white/10">
             <KeyRound size={16} />
           </button>

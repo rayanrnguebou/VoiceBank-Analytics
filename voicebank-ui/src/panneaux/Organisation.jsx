@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Building2, UserPlus, Mail, RotateCcw, UserX, UserCheck, ShieldCheck, Clock, Copy, Check, Users, Pencil, X, Database,
-  ScrollText, Download,
+  ScrollText, Download, Smartphone,
 } from "lucide-react";
 import { useAPI } from "../useAPI";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate, telechargerCsv, nomFichier } from "../ui";
@@ -74,6 +74,12 @@ export default function PanelOrganisation({ dark, onAbonnement }) {
     resultat(res, "Membre ajouté");
   };
   const renvoyer = async m => resultat(await action.appeler("post", `/organisation/membres/${encodeURIComponent(m.nom)}/inviter`), "Invitation renvoyée");
+  const reinit2fa = async m => {
+    if (!window.confirm(`Réinitialiser la double authentification de ${m.nom_complet || m.nom} (téléphone perdu) ? `
+      + "Sa session sera fermée et il la réactivera à sa prochaine connexion.")) return;
+    const r = await action.appeler("post", `/organisation/membres/${encodeURIComponent(m.nom)}/double-auth/reinitialiser`);
+    if (r) { setSucces(`Double authentification de ${m.nom_complet || m.nom} réinitialisée.`); setInfo(null); charger(); }
+  };
   const modifier = async (m, corps, message) => {
     if (message && !window.confirm(message)) return;
     const res = await action.appeler("post", `/organisation/membres/${encodeURIComponent(m.nom)}/modifier`, corps);
@@ -227,7 +233,10 @@ export default function PanelOrganisation({ dark, onAbonnement }) {
                       )}
                     </td>
                   )}
-                  <td className="p-2"><Badge statut={m.statut} /></td>
+                  <td className="p-2">
+                    <div className="flex flex-wrap gap-1"><Badge statut={m.statut} />
+                      {m.double_auth && <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-foret-500/15 text-foret-500" title="Double authentification active">2FA</span>}</div>
+                  </td>
                   <td className="p-2 text-xs">{m.derniere_connexion ? formaterDate(m.derniere_connexion) : "—"}</td>
                   {o.peut_gerer && (
                     <td className="p-2">
@@ -237,6 +246,10 @@ export default function PanelOrganisation({ dark, onAbonnement }) {
                             <button onClick={() => renvoyer(m)} className={`${boutonSecondaire(dark)} flex items-center gap-1`} title="Renvoyer l'invitation">
                               <RotateCcw size={12} /> Renvoyer
                             </button>
+                          )}
+                          {m.double_auth && (
+                            <button onClick={() => reinit2fa(m)} className={`${boutonSecondaire(dark)} flex items-center gap-1`}
+                              title="Téléphone perdu : le membre réactivera la double authentification"><Smartphone size={12} /> Réinit. 2FA</button>
                           )}
                           {m.actif ? (
                             <button onClick={() => modifier(m, { actif: false }, `Désactiver ${m.nom_complet || m.nom} ? Sa session sera fermée et une place se libère.`)}

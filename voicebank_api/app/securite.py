@@ -55,6 +55,7 @@ class Utilisateur:
     id_org: int | None = None        # organisation cliente (abonnement partagé)
     role_org: str | None = None      # « admin » (gère l'organisation) ou « analyste »
     doit_configurer_2fa: bool = False  # administrateur sans double authentification : à activer d'abord
+    session: str | None = None       # session ouverte à la connexion (« Mes appareils »), portée par le jeton
 
     @property
     def externe(self) -> bool:
@@ -233,11 +234,14 @@ def noter_connexion(nom: str):
 def creer_jeton(u: Utilisateur, version: int = 0, debut: int | None = None) -> str:
     """« auth » : heure de la connexion d'origine, conservée d'un renouvellement à l'autre."""
     maintenant = datetime.now(timezone.utc)
-    return jwt.encode({
+    corps = {
         "sub": u.nom, "role": u.role, "ver": version, "iat": maintenant,
         "auth": int(debut or maintenant.timestamp()),
         "exp": maintenant + timedelta(minutes=config.JWT_DUREE_MIN),
-    }, config.JWT_SECRET, algorithm=ALGO)
+    }
+    if u.session:
+        corps["sid"] = u.session
+    return jwt.encode(corps, config.JWT_SECRET, algorithm=ALGO)
 
 
 def debut_session(jeton: str) -> int | None:
@@ -267,19 +271,24 @@ def _depuis_jeton(cred: HTTPAuthorizationCredentials | None) -> Utilisateur:
         if COMPTES.get(data["sub"], (None,))[0] != data["role"]:
             raise erreur
         return Utilisateur(data["sub"], data["role"])
+    sid = data.get("sid")
     r = db.ecrire("SELECT role, actif, doit_changer_mdp, version_jeton, id_org, role_org, "
                   f"{_SQL_ACCES_EXPIRE} AS acces_expire, EXISTS (SELECT 1 FROM voicebank.double_authentification d "
-                  "WHERE d.utilisateur = utilisateurs.nom AND d.active) AS a_2fa FROM voicebank.utilisateurs "
-                  "WHERE nom = :n", {"n": data["sub"]})
+                  "WHERE d.utilisateur = utilisateurs.nom AND d.active) AS a_2fa, "
+                  "EXISTS (SELECT 1 FROM voicebank.sessions s WHERE s.id_session = :s AND s.utilisateur = utilisateurs.nom "
+                  "AND NOT s.revoquee) AS session_ouverte FROM voicebank.utilisateurs "
+                  "WHERE nom = :n", {"n": data["sub"], "s": sid or ""})
     l = r.lignes[0] if r.lignes else None
     # Compte supprimé, désactivé, rôle changé ou mot de passe changé : la session est révoquée.
     # Exception : visiteur devenu client après paiement (pas besoin de se reconnecter).
     meme_role = l is not None and (l.role == data["role"] or {l.role, data["role"]} <= ROLES_EXTERNES)
     if l is None or not l.actif or not meme_role or l.version_jeton != data.get("ver"):
         raise erreur
+    if sid and not l.session_ouverte:            # session déconnectée à distance (« Mes appareils »)
+        raise erreur
     from .double_auth import requise
     return Utilisateur(data["sub"], l.role, l.doit_changer_mdp, l.acces_expire, l.id_org, l.role_org,
-                       requise(l.role, l.role_org) and not l.a_2fa)
+                       requise(l.role, l.role_org) and not l.a_2fa, sid)
 
 
 def version_jeton(nom: str) -> int:

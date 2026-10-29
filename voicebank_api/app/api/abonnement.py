@@ -79,7 +79,7 @@ def verifier_abonnement(request: Request, reference: str = Path(min_length=8, ma
     if res["statut"] == "paye":
         audit.journaliser(u.nom, "abonnement_paye", {"reference": res["reference"], "formule": res["formule"]},
                           ip_client(request))
-        res["jeton"] = _reponse_jeton(Utilisateur(u.nom, "client"), securite.version_jeton(u.nom))
+        res["jeton"] = _reponse_jeton(Utilisateur(u.nom, "client", session=u.session), securite.version_jeton(u.nom))
     return res
 
 

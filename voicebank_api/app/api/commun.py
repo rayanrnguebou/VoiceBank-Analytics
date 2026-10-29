@@ -13,7 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from .. import audit, config, credit, db, devises, evaluation, fraude, nl2sql, paiement, resume, transcription
 from ..garde_sql import SQLRefuse, valider_sql
 from ..masquage import masquer_ligne, masquer_lignes
-from .. import courriel, maintenance, organisations, recuperation, securite
+from .. import courriel, maintenance, organisations, recuperation, securite, sessions
 from ..connecteur import service as sources
 from ..paiement import PaiementRefuse
 from ..securite import (CompteRefuse, Utilisateur, admin_organisation, admin_ou_decouverte, admin_requis, authentifier,
@@ -342,6 +342,8 @@ def _question_vers_resultat(texte: str, u: Utilisateur, contexte: ContexteQuesti
 
 
 def _reponse_jeton(u: Utilisateur, version: int, debut: int | None = None) -> dict:
+    if u.session and securite.mode_base():
+        sessions.toucher(u.session, version)          # la session reste active dans « Mes appareils »
     return {"access_token": creer_jeton(u, version, debut), "token_type": "bearer",
             "utilisateur": u.nom, "role": u.role, "doit_changer_mot_de_passe": u.doit_changer,
             "expire_dans_min": config.JWT_DUREE_MIN, "doit_configurer_2fa": u.doit_configurer_2fa}

@@ -884,5 +884,15 @@
  "Ton compte et tes données personnelles ont été effacés. Merci d'avoir utilisé VoiceBank.": "Your account and personal data have been deleted. Thank you for using VoiceBank.",
  "Effacer le compte {nom} et ses données personnelles (demande de la personne) ? Ses paiements et son journal d'activité sont gardés sous un identifiant anonyme. C'est définitif.": "Delete the account {nom} and its personal data (at the person's request)? Payments and activity log are kept under an anonymous identifier. This cannot be undone.",
  "Droit à l'effacement (loi n° 2024/017)": "Right to erasure (Law No. 2024/017)",
- "Effacer": "Delete"
+ "Effacer": "Delete",
+ "{appareil} est déconnecté.": "{appareil} has been signed out.",
+ "Déconnecter tous les autres appareils ? Ils devront se reconnecter avec le mot de passe.": "Sign out all other devices? They will need to sign in again with the password.",
+ "Les autres appareils sont déconnectés.": "The other devices have been signed out.",
+ "Mes appareils": "My devices",
+ "Connexions des 30 derniers jours. Un e-mail te prévient quand un nouvel appareil se connecte.": "Sign-ins from the last 30 days. An email warns you when a new device signs in.",
+ "cet appareil": "this device",
+ "adresse inconnue": "unknown address",
+ "dernière activité le {date}": "last active {date}",
+ "terminée": "ended",
+ "Déconnecter les autres appareils": "Sign out other devices"
 }

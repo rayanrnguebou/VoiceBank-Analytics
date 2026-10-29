@@ -98,3 +98,7 @@ GRANT EXECUTE ON FUNCTION voicebank.pseudonymiser_compte(VARCHAR, VARCHAR), voic
       TO voicebank_app;
 GRANT DELETE ON voicebank.logs_vocaux TO voicebank_app;              -- questions d'un compte effacé
 GRANT DELETE ON voicebank.profils_facturation, voicebank.preferences_notifications TO voicebank_app;
+
+-- Sessions (« Mes appareils ») : invisibles pour le lecteur et l'IA
+GRANT SELECT, INSERT, UPDATE, DELETE ON voicebank.sessions TO voicebank_app;
+REVOKE ALL ON voicebank.sessions FROM voicebank_reader;

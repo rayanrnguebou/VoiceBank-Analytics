@@ -2,7 +2,9 @@
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from .. import double_auth
+from dataclasses import replace
+
+from .. import double_auth, sessions
 from ..securite import CompteRefuse, utilisateur_courant
 from .commun import (  # noqa: F401
     ActivationInvitation,
@@ -113,7 +115,7 @@ def activer_invitation(request: Request, body: ActivationInvitation):
     """Lien reçu par e-mail : la personne choisit son mot de passe et elle est connectée."""
     u, version = _compte(lambda: organisations.activer_invitation(body.identifiant, body.jeton, body.nouveau))
     audit.journaliser(u.nom, "invitation_acceptee", {"org": u.id_org}, ip_client(request))
-    return _reponse_jeton(u, version)
+    return _reponse_jeton(replace(u, session=sessions.ouvrir(u.nom, ip_client(request), "invitation", version)), version)
 
 
 @router.get("/admin/organisations")

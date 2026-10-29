@@ -165,9 +165,14 @@ function NouvelleSource({ dark, types, onCree, onAnnuler }) {
             <label><span className={etiquette(dark)}>Mot de passe</span>
               <input type="password" value={f.mot_de_passe} onChange={maj("mot_de_passe")} maxLength={256} autoComplete="new-password" className={champ(dark)} /></label>
             <label><span className={etiquette(dark)}>Chiffrement SSL</span>
-              <select value={f.ssl} onChange={maj("ssl")} className={champ(dark)}>
-                <option value="prefere">Si disponible</option><option value="exige">Exigé</option><option value="desactive">Désactivé</option>
-              </select></label>
+              <select value={f.ssl} onChange={maj("ssl")} className={champ(dark)}
+                title="Vérifié : chiffré et identité du serveur contrôlée (certificat reconnu). Exigé : chiffré sans contrôle d'identité.">
+                <option value="prefere">Si disponible</option><option value="exige">Exigé</option>
+                {type !== "sqlserver" && <option value="verifie">Vérifié (certificat contrôlé)</option>}
+                <option value="desactive">Désactivé</option>
+              </select>
+              {f.ssl === "verifie" && <span className={`${texteDiscret(dark)} block mt-1`}>Saisis le nom exact du serveur (pas son adresse IP) : il doit figurer sur son certificat.</span>}
+            </label>
             {type !== "mysql" && (
               <label><span className={etiquette(dark)}>Schéma (facultatif)</span>
                 <input value={f.schema} onChange={maj("schema")} maxLength={128} pattern="[A-Za-z0-9_]+" placeholder={type === "sqlserver" ? "dbo" : "public"} className={champ(dark)} /></label>

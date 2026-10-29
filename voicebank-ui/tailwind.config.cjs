@@ -1,7 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 // Identité VoiceBank : vert « forêt » institutionnel, accent laiton, neutres légèrement verdis.
 module.exports = {
-  content: ["./src/**/*.{js,jsx,ts,tsx}"],
+  content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
       colors: {

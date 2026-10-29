@@ -70,7 +70,8 @@ jobs:
           cache: npm
           cache-dependency-path: voicebank-ui/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - run: npm test -- --watchAll=false
+      - run: npm run lint
+      - run: npm test
         env:
           CI: "true"
       - run: npm run build

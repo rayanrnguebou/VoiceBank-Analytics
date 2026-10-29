@@ -1,3 +1,4 @@
+import { versOptions } from "./referentiel";
 import { useState } from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import ChampListe, { filtrer, Choix } from "./ChampListe";
@@ -59,7 +60,6 @@ test("Choix : menu classique pour une liste courte, recherche pour une longue", 
 });
 
 test("référentiel : l'autre nom ou le sigle sert à la recherche, pas à l'affichage", () => {
-  const { versOptions } = require("./referentiel");
   const villes = versOptions(["Paris", "Londres|London", "Bruxelles|Brussels"]);
   expect(villes[1]).toEqual({ valeur: "Londres", libelle: "Londres", alias: "London" });
   expect(filtrer(villes, "lond").map(o => o.valeur)).toEqual(["Londres"]);

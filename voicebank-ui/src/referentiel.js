@@ -18,7 +18,7 @@ export function chargerReferentiel(type, iso) {
   if (!iso) return Promise.resolve([]);
   const cle = `${type}/${iso}`;
   if (!cache.has(cle)) {
-    cache.set(cle, fetch(`${process.env.PUBLIC_URL || ""}/referentiel/${cle}.json`)
+    cache.set(cle, fetch(`${import.meta.env.BASE_URL || "/"}referentiel/${cle}.json`)
       .then(r => (r.ok ? r.json() : []))
       .then(versOptions)
       .catch(() => { cache.delete(cle); return []; }));

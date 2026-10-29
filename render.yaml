@@ -33,6 +33,8 @@ services:
         value: "false"
       - key: URL_INTERFACE              # retour après paiement (adresse de l'interface)
         value: https://voicebank-ui.onrender.com
+      - key: TURNSTILE_SECRET           # anti-robot (Cloudflare Turnstile) : clé secrète
+        sync: false
       - key: NOTCHPAY_PUBLIC_KEY        # paiement : business.notchpay.co → Settings → API Keys
         sync: false
       - key: NOTCHPAY_HASH_KEY          # signature des webhooks (même page)
@@ -77,11 +79,13 @@ services:
       # Si l'API change d'adresse (domaine personnalisé), mets-la aussi dans connect-src.
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://voicebank-api.onrender.com; media-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        value: "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://voicebank-api.onrender.com https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; media-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     envVars:
       - key: REACT_APP_API_URL         # ex. https://voicebank-api.onrender.com
         sync: false
       - key: REACT_APP_POWER_BI_URL
+        sync: false
+      - key: REACT_APP_TURNSTILE_SITE_KEY   # anti-robot (Cloudflare Turnstile) : clé de site, publique
         sync: false
 
 databases:

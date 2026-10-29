@@ -1,7 +1,7 @@
 // VOICEBANK ANALYTICS — client HTTP authentifié
 import axios from "axios";
 
-export const API = (process.env.REACT_APP_API_URL || "http://localhost:8000").replace(/\/$/, "");
+export const API = (import.meta.env.REACT_APP_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
 // Le jeton est gardé en sessionStorage : il disparaît à la fermeture de l'onglet.
 const CLE_JETON = "voicebank_jeton";

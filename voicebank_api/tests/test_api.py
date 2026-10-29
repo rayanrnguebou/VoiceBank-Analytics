@@ -325,7 +325,7 @@ def test_comptes_invalides_refuses_au_demarrage(monkeypatch, valeur):
 def test_erreur_500_garde_les_entetes_cors(client, analyste):
     from app import db
     with patch.object(db, "lire", side_effect=RuntimeError("panne")), \
-         patch("app.main._lire", side_effect=RuntimeError("panne")):
+         patch("app.api.demo._lire", side_effect=RuntimeError("panne")):
         r = client.get("/dashboard", headers={**analyste, "Origin": "http://localhost:3000"})
     assert r.status_code == 500 and r.json()["detail"] == "Erreur interne du serveur"
     assert r.headers.get("access-control-allow-origin") == "http://localhost:3000"

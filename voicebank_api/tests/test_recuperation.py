@@ -40,13 +40,13 @@ def _code(boite, email):
 def test_indisponible_sans_service_d_email(client, monkeypatch):
     monkeypatch.setattr(config, "BREVO_API_KEY", "")
     monkeypatch.setattr(config, "SMTP_HOTE", "")
-    assert client.get("/auth/options").json() == {"oubli_par_email": False}
+    assert client.get("/auth/options").json()["oubli_par_email"] is False
     assert client.post("/auth/oubli", json={"identifiant": "rayan"}).status_code == 503
 
 
 def test_parcours_complet_avec_un_compte_interne(client, admin, boite):
     h = _activer(client, admin, "awa.recup")
-    assert client.get("/auth/options").json() == {"oubli_par_email": True}
+    assert client.get("/auth/options").json()["oubli_par_email"] is True
     # Le titulaire ajoute son adresse (mot de passe actuel exigé)
     assert client.post("/auth/email", headers=h, json={"mot_de_passe": "faux", "email": "awa@exemple.cm"}).status_code == 400
     r = client.post("/auth/email", headers=h, json={"mot_de_passe": BON_MDP, "email": "Awa@Exemple.cm"})

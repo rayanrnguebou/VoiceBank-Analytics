@@ -54,13 +54,24 @@ def niveau(proba: float) -> str:
     return ("Critique" if proba > 0.7 else "Élevé" if proba > 0.5 else "Moyen" if proba > 0.3 else "Faible")
 
 
+OUVERTES = ("banque",)   # une banque inconnue du modèle est acceptée : effet moyen des banques connues
+
+
 def _encoder(col: str, valeur, strict: bool) -> tuple[int, bool]:
     enc = modele["encoders"][col]
     if valeur in enc.classes_:
         return int(enc.transform([valeur])[0]), True
-    if strict:
+    if strict and (col not in OUVERTES or not str(valeur or "").strip()):
         raise ValueError(f"Valeur inconnue pour {col} : {valeur}")
     return 0, False
+
+
+def _deplier(X: pd.DataFrame, inconnues: list[str]) -> pd.DataFrame:
+    """Une ligne par valeur connue de chaque colonne inconnue (pour en moyenner l'effet)."""
+    for col in inconnues:
+        n = len(modele["encoders"][col].classes_)
+        X = pd.concat([X.assign(**{f"{col}_enc": i}) for i in range(n)], ignore_index=True)
+    return X
 
 
 def _features(c: dict, strict: bool) -> tuple[pd.DataFrame, list[str]]:
@@ -90,8 +101,9 @@ def scorer(c: dict, strict: bool = True) -> dict:
     duree_mois, est_diaspora, type_credit, garantie, banque."""
     import xgboost as xgb
     X, inconnues = _features(c, strict)
-    proba = float(modele["xgb"].predict_proba(X)[0, 1])
-    contrib = modele["xgb"].get_booster().predict(xgb.DMatrix(X), pred_contribs=True)[0][:-1]
+    Xd = _deplier(X, inconnues)
+    proba = float(modele["xgb"].predict_proba(Xd)[:, 1].mean())
+    contrib = modele["xgb"].get_booster().predict(xgb.DMatrix(Xd), pred_contribs=True)[:, :-1].mean(axis=0)
     valeurs = _valeurs_affichees(c, X.iloc[0])
     facteurs = sorted(
         ({"variable": LIBELLES[f], "code": f, "valeur": valeurs.get(f), "impact": round(float(v), 3),
@@ -107,8 +119,9 @@ def scorer(c: dict, strict: bool = True) -> dict:
         "recommandations": recommandations(niv, facteurs, c, float(X.iloc[0]["ratio_mensualite"])),
     }
     if inconnues:
-        resultat["avertissement"] = ("Catégorie inconnue du modèle pour : " + ", ".join(inconnues)
-                                     + " ; valeur par défaut utilisée.")
+        resultat["avertissement"] = ("Le modèle de démonstration n'a pas appris " + " et ".join(
+            f"la valeur « {c.get(x)} » ({x.replace('_', ' ')})" for x in inconnues)
+            + " : son effet est estimé par la moyenne des valeurs qu'il connaît.")
     return resultat
 
 

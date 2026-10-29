@@ -10,6 +10,7 @@ import { LectureSeule, useLectureSeule, TITRE_LECTURE_SEULE } from "./lectureSeu
 import PanelSources from "./panneaux/Connecteur";
 import PanelOrganisation from "./panneaux/Organisation";
 import { Choix } from "./ChampListe";
+import ChampsEtablissement, { PAYS_MODELE } from "./panneaux/ChampsEtablissement";
 import ResultatRisque from "./panneaux/Explication";
 import { PanelOperationsSource, PanelAnalyseSource, PanelCreditSource } from "./panneaux/RisquesSource";
 import Demarrage from "./panneaux/Demarrage";
@@ -1131,8 +1132,9 @@ function PanelAnalyse({ dark }) {
   const analyser = async (e) => {
     e.preventDefault();
     setResultat(null);
+    const { pays, ...operation } = form;     // le pays sert à proposer banques et villes ; « Internationale » le traduit pour le modèle
     const res = await appeler("post", "/ia/analyser-transaction", {
-      ...form, montant_fcfa: Number(form.montant_fcfa), heure: form.heure || null,
+      ...operation, montant_fcfa: Number(form.montant_fcfa), heure: form.heure || null,
     });
     if (res) setResultat(res);
   };
@@ -1140,7 +1142,7 @@ function PanelAnalyse({ dark }) {
   const champ = `w-full px-3 py-2 rounded-xl border text-sm outline-none ${
     dark ? "bg-gray-700 border-gray-600 text-white focus:border-foret-500" : "bg-gray-50 border-gray-200 text-gray-900 focus:border-foret-500"}`;
   const etiquette = `block text-xs mb-1 ${dark ? "text-gray-400" : "text-gray-500"}`;
-  const listes = [["type_transaction", "Type"], ["canal", "Canal"], ["banque", "Banque"], ["ville", "Ville"]];
+  const listes = [["type_transaction", "Type"], ["canal", "Canal"]];
 
   return (
     <div className={`rounded-2xl border p-6 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
@@ -1171,6 +1173,8 @@ function PanelAnalyse({ dark }) {
               <Choix dark={dark} required valeur={form[cle] || ""} onChange={v => setForm(f => ({ ...f, [cle]: v }))} options={ref[cle] || []} />
             </label>
           ))}
+          <ChampsEtablissement dark={dark} valeurs={form} connues={{ banque: ref.banque, ville: ref.ville }}
+            maj={m => setForm(f => ({ ...f, ...m, ...(m.pays ? { est_internationale: m.pays === PAYS_MODELE ? "Non" : "Oui" } : {}) }))} />
           <label>
             <span className={etiquette}>Internationale</span>
             <select value={form.est_internationale} onChange={e => setForm({ ...form, est_internationale: e.target.value })} className={champ}>

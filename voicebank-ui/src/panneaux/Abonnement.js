@@ -5,7 +5,8 @@ import { useAPI } from "../useAPI";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate } from "../ui";
 import { useDevise, SelecteurDevise } from "../devise";
 import ChampListe from "../ChampListe";
-import { NOMS_PAYS, VILLES, indicatif } from "../listes";
+import { NOMS_PAYS, indicatif } from "../listes";
+import { useReferentiel } from "../referentiel";
 
 // Les abonnements sont facturés en FCFA (mobile money) ; dans une autre monnaie, on montre l'équivalent.
 const fcfa = n => `${Number(n || 0).toLocaleString("fr-FR")} FCFA`;
@@ -74,12 +75,13 @@ function Champ({ dark, libelle, valeur, onChange, requis = true, ...props }) {
   );
 }
 
-// Pays (liste), ville (suggestions selon le pays, saisie libre acceptée) ; l'indicatif suit le pays
+// Pays (liste), ville (toutes les localités du pays, saisie libre acceptée) ; l'indicatif suit le pays
 function ChampsLieu({ dark, valeurs, maj }) {
+  const villes = useReferentiel("villes", valeurs.pays);
   const changerPays = pays => {
     const ancien = indicatif(valeurs.pays), nouveau = indicatif(pays);
     const tel = (valeurs.telephone || "").trim();
-    const suite = { ...valeurs, pays, ville: (VILLES[pays] || []).includes(valeurs.ville) ? valeurs.ville : "" };
+    const suite = { ...valeurs, pays, ville: pays === valeurs.pays ? valeurs.ville : "" };
     if (nouveau) {
       if (!tel || tel === `+${ancien}`) suite.telephone = `+${nouveau} `;                       // vide ou indicatif seul
       else if (ancien && tel.startsWith(`+${ancien} `)) suite.telephone = `+${nouveau} ${tel.slice(ancien.length + 2)}`;
@@ -91,9 +93,21 @@ function ChampsLieu({ dark, valeurs, maj }) {
       <label className="block"><span className={etiquette(dark)}>Pays</span>
         <ChampListe dark={dark} valeur={valeurs.pays} onChange={changerPays} options={NOMS_PAYS} required placeholder="Tape les premières lettres…" /></label>
       <label className="block"><span className={etiquette(dark)}>Ville</span>
-        <ChampListe dark={dark} valeur={valeurs.ville} onChange={v => maj({ ...valeurs, ville: v })} options={VILLES[valeurs.pays] || []}
-          libre required maxLength={60} placeholder={VILLES[valeurs.pays] ? "Tape les premières lettres…" : "Ta ville"} /></label>
+        <ChampListe dark={dark} valeur={valeurs.ville} onChange={v => maj({ ...valeurs, ville: v })} options={villes.options}
+          libre required maxLength={60} placeholder={villes.options.length ? "Tape les premières lettres…" : "Ta ville"} /></label>
     </>
+  );
+}
+
+// Raison sociale : pour une banque ou une microfinance, les établissements du pays sont proposés (saisie libre)
+function RaisonSociale({ dark, orga, maj }) {
+  const financier = ["banque", "microfinance"].includes(orga.secteur);
+  const banques = useReferentiel("banques", financier ? orga.pays : null);
+  if (!financier) return <Champ dark={dark} libelle="Raison sociale" valeur={orga.raison_sociale} onChange={maj} maxLength={150} />;
+  return (
+    <label className="block"><span className={etiquette(dark)}>Raison sociale</span>
+      <ChampListe dark={dark} valeur={orga.raison_sociale || ""} onChange={maj} options={banques.options} libre required maxLength={150}
+        placeholder={`Nom ou sigle de l'établissement${orga.pays ? ` (${orga.pays})` : ""}…`} /></label>
   );
 }
 
@@ -139,7 +153,7 @@ function FormulaireCommande({ dark, formule, compte, onAnnuler }) {
 
       {type === "organisation" ? (
         <div className="grid sm:grid-cols-2 gap-3">
-          <Champ dark={dark} libelle="Raison sociale" valeur={orga.raison_sociale} onChange={o("raison_sociale")} maxLength={150} />
+          <RaisonSociale dark={dark} orga={orga} maj={o("raison_sociale")} />
           <label className="block"><span className={etiquette(dark)}>Secteur</span>
             <select value={orga.secteur} onChange={e => o("secteur")(e.target.value)} className={champ(dark)}>
               {SECTEURS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}

@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useAPI } from "../useAPI";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, COULEURS_NIVEAU } from "../ui";
 import { Choix } from "../ChampListe";
+import ChampsEtablissement from "./ChampsEtablissement";
 import { useDevise } from "../devise";
 import ResultatRisque from "./Explication";
 
@@ -43,7 +44,7 @@ export default function PanelCredit({ dark }) {
     e.preventDefault();
     setResultat(null);
     const nums = [...MONETAIRES, "score_credit", "taux_interet_pct", "duree_mois"];
-    const corps = { ...form };
+    const { pays, ...corps } = form;           // le pays sert seulement à proposer les banques
     nums.forEach(k => { corps[k] = Number(corps[k]); });
     const res = await api.appeler("post", "/ia/score-credit", corps);
     if (res) setResultat(res);
@@ -77,12 +78,14 @@ export default function PanelCredit({ dark }) {
                   className={champ(dark)} />
               </label>
             ))}
-            {[["type_credit", "Type de crédit"], ["garantie", "Garantie"], ["banque", "Banque"]].map(([cle, nom]) => (
+            {[["type_credit", "Type de crédit"], ["garantie", "Garantie"]].map(([cle, nom]) => (
               <label key={cle}>
                 <span className={etiquette(dark)}>{nom}</span>
                 <Choix dark={dark} required valeur={form[cle] || ""} onChange={v => setForm(f => ({ ...f, [cle]: v }))} options={ref[cle] || []} />
               </label>
             ))}
+            <ChampsEtablissement dark={dark} valeurs={form} connues={{ banque: ref.banque }} avecVille={false}
+              maj={m => setForm(f => ({ ...f, ...m }))} />
             <label>
               <span className={etiquette(dark)}>Client de la diaspora</span>
               <select value={form.est_diaspora} onChange={e => setForm({ ...form, est_diaspora: e.target.value })} className={champ(dark)}>

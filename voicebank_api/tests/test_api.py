@@ -110,7 +110,7 @@ def test_analyse_transaction(client, analyste):
     gros = client.post("/ia/analyser-transaction", headers=analyste, json={
         **txn, "montant_fcfa": 5e9, "type_transaction": "Transfert international", "est_internationale": "Oui"}).json()
     assert gros["score_anomalie"] > j["score_anomalie"]
-    txn["banque"] = "Banque inventée"
+    txn["canal"] = "Canal inventé"          # banque et ville sont libres (toute l'Afrique, l'Europe…), pas le canal
     assert client.post("/ia/analyser-transaction", json=txn, headers=analyste).status_code == 422
 
 

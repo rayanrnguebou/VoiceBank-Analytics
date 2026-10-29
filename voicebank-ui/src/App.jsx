@@ -31,6 +31,8 @@ import { PanelGraphiques } from "./graphiques";
 import { CLE_STORAGE, MAX_HISTORIQUE, chargerHistorique, sauverHistorique, CarteResultat, PanelHistorique } from "./panneaux/Historique";
 import { BoutonMicro } from "./panneaux/Micro";
 import { KpiCard, PanelAnalyse, BarreSourceRisque } from "./panneaux/Analyse";
+import { PAGE_ETAT } from "./etatService";
+import { useFavoris, BarreFavoris } from "./panneaux/Favoris";
 
 export default function App() {
   const [session, setSession] = useState(() => lireSession());
@@ -260,6 +262,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
       data: res.data, duree_ms: res.duree_ms, avertissement: res.avertissement || null,
       resume: res.resume || null, commentaire: res.commentaire || null, relance: res.relance || null,
       suite: !!res.suite, question_precedente: res.question_precedente || null, nom_source: src ? src.nom : null,
+      id_source: src ? src.id : 0,
       devise: res.devise || "XAF", colonnes_monetaires: res.colonnes_monetaires || [],
     }, ...prev].slice(0, MAX_HISTORIQUE));
     // Le résumé (affiché) est lu en premier, puis l'analyse plus poussée et la relance
@@ -272,6 +275,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
     }
   };
   poserRef.current = poserQuestion;
+  const favoris = useFavoris(true);
 
   const choisirSource = useCallback(async (s, question, garderPage = false) => {
     let choix = null;
@@ -520,6 +524,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
                     </button>
                   ))}
                 </div>
+                <BarreFavoris favoris={favoris} idSource={sourceActive?.id || 0} onPoser={q => poserQuestion(q)} desactive={chargement} dark={dark} />
               </div>
 
               {/* ── Résultats des questions ───────────────────── */}
@@ -537,7 +542,9 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
                     </button>
                   </div>
                   {historique.slice(0, 5).map(item => (
-                    <CarteResultat key={item.id} item={item} dark={dark} onSupprimer={supprimerItem} role={session.role} />
+                    <CarteResultat key={item.id} item={item} dark={dark} onSupprimer={supprimerItem} role={session.role}
+                      favori={!!favoris.trouve(item.question, item.id_source)}
+                      onFavori={() => favoris.basculer(item.question, item.id_source, item.devise)} />
                   ))}
                   {historique.length > 5 && (
                     <button onClick={() => allerA("historique")}
@@ -599,13 +606,14 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
           {externe && page === "organisation"    && <PanelOrganisation dark={dark} onAbonnement={() => allerA("abonnement")} />}
           {externe && page === "journal"         && <PanelJournal dark={dark} />}
           {estAdmin && page === "abonnements"    && <PanelAbonnements dark={dark} />}
-          {estAdmin && page === "maintenance"    && <PanelMaintenance dark={dark} />}
+          {estAdmin && page === "maintenance"    && <PanelMaintenance dark={dark} utilisateur={session.utilisateur} />}
         </main>
         </LectureSeule.Provider>
 
         <footer className={`px-4 sm:px-8 py-4 text-xs ${dark ? "text-gray-600" : "text-gray-400"}`}>
           {tx("© {x} VoiceBank Analytics — Rayan Nguebou Temgoua", { x: new Date().getFullYear() })}
           {" · "}<a href={`/confidentialite/${LANGUE === "en" ? "#en" : ""}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{tx("Politique de confidentialité")}</a>
+          {PAGE_ETAT && <>{" · "}<a href={PAGE_ETAT} target="_blank" rel="noopener noreferrer" className="hover:underline">{tx("État du service")}</a></>}
         </footer>
       </div>
     </div>

@@ -102,3 +102,8 @@ GRANT DELETE ON voicebank.profils_facturation, voicebank.preferences_notificatio
 -- Sessions (« Mes appareils ») : invisibles pour le lecteur et l'IA
 GRANT SELECT, INSERT, UPDATE, DELETE ON voicebank.sessions TO voicebank_app;
 REVOKE ALL ON voicebank.sessions FROM voicebank_reader;
+
+-- Questions favorites : invisibles pour le lecteur et l'IA
+GRANT SELECT, INSERT, UPDATE, DELETE ON voicebank.questions_favorites TO voicebank_app;
+GRANT USAGE ON SEQUENCE voicebank.questions_favorites_id_favori_seq TO voicebank_app;
+REVOKE ALL ON voicebank.questions_favorites FROM voicebank_reader;

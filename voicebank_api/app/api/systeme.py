@@ -74,3 +74,16 @@ def regler_maintenance(request: Request, body: ReglageMaintenance, u: Utilisateu
     e = maintenance.modifier(u.nom, body.active, body.message, body.fin_prevue, annonce)
     audit.journaliser(u.nom, "maintenance", {"active": body.active, "annonce": bool(annonce)}, ip_client(request))
     return e
+
+
+@router.post("/admin/sentry/test")
+def tester_sentry(request: Request, u: Utilisateur = Depends(admin_requis)):
+    """Envoie une erreur de test à Sentry : l'e-mail d'alerte doit arriver (Administration → Maintenance)."""
+    from .. import alertes_erreurs
+    from fastapi import HTTPException
+    try:
+        evenement = alertes_erreurs.envoyer_test(u.nom)
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
+    audit.journaliser(u.nom, "test_sentry", {"evenement": evenement}, ip_client(request))
+    return {"status": "ok", "evenement": evenement}

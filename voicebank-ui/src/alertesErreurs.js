@@ -11,9 +11,21 @@ function nettoyerUrl(url) {
   }
 }
 
+export const alertesInterfaceActives = !!DSN;
+
+// Bouton « Envoyer une erreur de test » : une erreur de l'interface part chez Sentry (projet « navigateur »).
+export async function envoyerErreurTestInterface(par) {
+  if (!DSN) throw new Error("REACT_APP_SENTRY_DSN absent");
+  const Sentry = await import("@sentry/browser");
+  if (!Sentry.getClient()) await demarrerAlertesErreurs();
+  const id = Sentry.captureException(new Error(`Erreur de test VoiceBank (interface), déclenchée par ${par} : la surveillance fonctionne.`));
+  await Sentry.flush(5000);
+  return id;
+}
+
 export function demarrerAlertesErreurs() {
-  if (!DSN) return;
-  import("@sentry/browser").then(Sentry => {
+  if (!DSN) return Promise.resolve();
+  return import("@sentry/browser").then(Sentry => {
     Sentry.init({
       dsn: DSN,
       environment: import.meta.env.MODE,

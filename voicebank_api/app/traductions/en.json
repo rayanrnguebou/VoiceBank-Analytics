@@ -663,5 +663,18 @@
  "inconnue": "unknown",
  "Pour cet appareil, utilise « Se déconnecter ».": "For this device, use “Sign out”.",
  "Session introuvable": "Session not found",
- "Navigateur inconnu": "Unknown browser"
+ "Navigateur inconnu": "Unknown browser",
+ "Question trop courte": "Question too short",
+ "Base introuvable": "Database not found",
+ "Cette question est déjà dans tes favoris.": "This question is already in your favourites.",
+ "Favori introuvable": "Favourite not found",
+ "{n} favoris au maximum : retire d'abord une question.": "{n} favourites at most: remove a question first.",
+ "Favoris indisponibles sans base de comptes.": "Favourites unavailable without an account database.",
+ "Votre question de la semaine : « {q} »": "Your question of the week: “{q}”",
+ "Envoi choisi dans l'assistant (Favoris → « chaque lundi par e-mail »). Décochez-le pour ne plus le recevoir.": "Sending chosen in the assistant (Favourites → “every Monday by email”). Untick it to stop receiving it.",
+ "Aucun résultat cette semaine pour cette question.": "No results this week for this question.",
+ "{n} résultat(s).": "{n} result(s).",
+ "Base interrogée : {base}. Les {n} premières lignes sont ci-dessous ; le fichier joint contient toutes les lignes.": "Database queried: {base}. The first {n} rows are below; the attached file contains all rows.",
+ "{n} résultat(s) · {base}": "{n} result(s) · {base}",
+ "Sentry n'est pas configuré : renseigne SENTRY_DSN sur Render (voir README, « Surveillance »).": "Sentry is not configured: set SENTRY_DSN on Render (see README, “Monitoring”)."
 }

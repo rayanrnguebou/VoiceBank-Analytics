@@ -36,3 +36,19 @@ def demarrer(version: str = "?"):
                     traces_sample_rate=0.0, before_send=_nettoyer)
     log.info("Alertes d'erreurs Sentry actives")
     return True
+
+
+def envoyer_test(par: str) -> str:
+    """Bouton « Envoyer une erreur de test » (Administration → Maintenance) : vérifie que l'e-mail de Sentry arrive.
+    Retourne l'identifiant de l'événement chez Sentry."""
+    if not config.SENTRY_DSN:
+        raise RuntimeError("Sentry n'est pas configuré : renseigne SENTRY_DSN sur Render (voir README, « Surveillance »).")
+    import sentry_sdk
+    if not sentry_sdk.get_client().is_active():
+        demarrer()
+    try:
+        raise RuntimeError(f"Erreur de test VoiceBank (API), déclenchée par {par} : la surveillance fonctionne.")
+    except RuntimeError as e:
+        identifiant = sentry_sdk.capture_exception(e)
+    sentry_sdk.flush(timeout=5)
+    return identifiant or ""

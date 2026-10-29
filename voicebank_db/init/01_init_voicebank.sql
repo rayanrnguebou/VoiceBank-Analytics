@@ -725,3 +725,19 @@ CREATE TABLE IF NOT EXISTS voicebank.sessions (
     revoquee            BOOLEAN      NOT NULL DEFAULT FALSE
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_utilisateur ON voicebank.sessions (utilisateur, derniere_activite DESC);
+
+-- ══════════════════════════════════════════════════════════
+-- QUESTIONS FAVORITES : relancées en un clic, et, si demandé, réponse envoyée chaque lundi par e-mail
+-- ══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS voicebank.questions_favorites (
+    id_favori           SERIAL       PRIMARY KEY,
+    utilisateur         VARCHAR(64)  NOT NULL REFERENCES voicebank.utilisateurs(nom) ON DELETE CASCADE,
+    question            VARCHAR(500) NOT NULL,
+    id_source           INTEGER      REFERENCES voicebank.sources_donnees(id_source) ON DELETE CASCADE,  -- NULL : démonstration
+    devise              CHAR(3)      NOT NULL DEFAULT 'XAF',
+    envoi_hebdo         BOOLEAN      NOT NULL DEFAULT FALSE,
+    date_creation       TIMESTAMP    NOT NULL DEFAULT LOCALTIMESTAMP,
+    dernier_envoi       TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_favoris_unique
+    ON voicebank.questions_favorites (utilisateur, COALESCE(id_source, 0), LOWER(question));

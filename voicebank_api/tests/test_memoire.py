@@ -84,3 +84,20 @@ def test_requetes_utilisateur_notees_mais_pas_les_sondes(client):
     assert taches._activite["t"] == 0
     client.get("/maintenance")
     assert taches._activite["t"] > 0
+
+
+def test_erreur_de_test_sentry(client, admin, analyste, monkeypatch):
+    from app import alertes_erreurs
+    assert client.post("/admin/sentry/test", headers=analyste).status_code == 403
+    monkeypatch.setattr(config, "SENTRY_DSN", "")
+    r = client.post("/admin/sentry/test", headers=admin)
+    assert r.status_code == 409 and "SENTRY_DSN" in r.json()["detail"]
+    envoyes = []
+    import sentry_sdk
+    monkeypatch.setattr(config, "SENTRY_DSN", "https://cle@o1.ingest.sentry.io/1")
+    monkeypatch.setattr(sentry_sdk, "capture_exception", lambda e: envoyes.append(str(e)) or "abc123")
+    monkeypatch.setattr(sentry_sdk, "flush", lambda timeout=None: None)
+    monkeypatch.setattr(alertes_erreurs, "demarrer", lambda *a: True)
+    r = client.post("/admin/sentry/test", headers=admin)
+    assert r.status_code == 200 and r.json()["evenement"] == "abc123"
+    assert "Erreur de test VoiceBank (API), déclenchée par rayan" in envoyes[0]

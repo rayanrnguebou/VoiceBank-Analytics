@@ -11,6 +11,7 @@ import PanelSources from "./panneaux/Connecteur";
 import PanelOrganisation from "./panneaux/Organisation";
 import { Choix } from "./ChampListe";
 import ChampsEtablissement, { PAYS_MODELE } from "./panneaux/ChampsEtablissement";
+import { PanelFiches, PanelNotifications } from "./panneaux/Surveillance";
 import ResultatRisque from "./panneaux/Explication";
 import { PanelOperationsSource, PanelAnalyseSource, PanelCreditSource } from "./panneaux/RisquesSource";
 import Demarrage from "./panneaux/Demarrage";
@@ -1524,6 +1525,8 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
     analyse:       { titre: "Analyse de transaction",  sousTitre: "Estimer le risque de fraude d'une opération" },
     credit:        { titre: "Score de crédit",         sousTitre: sourceActive ? `Portefeuille de crédits de « ${sourceActive.nom} »` : "Risque de défaut d'une demande ou d'un crédit en cours" },
     historique:    { titre: "Historique",              sousTitre: "Questions de la session et rapport PDF" },
+    modeles:       { titre: "Fiche des modèles",       sousTitre: sourceActive ? `Modèles d'IA appris sur « ${sourceActive.nom} » : données, fiabilité, dérive` : "Modèles d'IA de la démonstration : données, fiabilité, limites" },
+    notifications: { titre: "Notifications",           sousTitre: "Alertes, résumé du matin et rapports PDF reçus par e-mail" },
     apprentissage: { titre: "Apprentissage",           sousTitre: "Réponses signalées et corrections enregistrées" },
     fiabilite:     { titre: "Fiabilité",               sousTitre: "Taux de bonnes réponses sur les questions de référence" },
     audit:         { titre: "Audit",                   sousTitre: "Qui a fait quoi, et quand" },
@@ -1776,6 +1779,8 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
                                                   : <PanelAnalyse dark={dark} />)}
           {page === "credit"     && (sourceActive ? <PanelCreditSource key={sourceActive.id} source={sourceActive} dark={dark} />
                                                   : <PanelCredit dark={dark} />)}
+          {page === "modeles"    && <PanelFiches key={sourceActive ? sourceActive.id : 0} source={sourceActive} dark={dark} />}
+          {page === "notifications" && <PanelNotifications dark={dark} />}
           {page === "historique" && (
             <PanelHistorique historique={historique} dark={dark} onSupprimerItem={supprimerItem} onToutEffacer={toutEffacer} />
           )}

@@ -458,3 +458,139 @@ def test_bombe_de_decompression_refusee():
         fichiers.verifier("piege.xlsx", piege)
     with pytest.raises(fichiers.FichierRefuse, match="abîmé"):
         fichiers.verifier("faux.xlsx", b"PK\x03\x04" + b"\x00" * 50)
+
+
+# ════════════════ Suivi des alertes, fiches des modèles, rapports, tâches automatiques ════════════════
+
+def _premiere_alerte(client, h, source):
+    ops = client.get(f"/sources/{source}/risques/operations", headers=h).json()["data"]["operations"]
+    suivies = [o for o in ops if o.get("suivi")]
+    assert suivies, "les opérations atypiques (Moyen et plus) deviennent des alertes suivies"
+    assert all(o["niveau_risque"] in ("Critique", "Élevé") for o in suivies)
+    assert all(o["suivi"] is None for o in ops if o["niveau_risque"] in ("Moyen", "Faible"))
+    return suivies[0], ops
+
+
+def test_suivi_des_alertes(client, admin, analyste, source_pg):
+    a, _ = _premiere_alerte(client, admin, source_pg)
+    i = a["suivi"]["id"]
+    assert a["suivi"]["statut"] == "nouvelle"
+    d = client.get(f"/sources/{source_pg}/alertes/{i}", headers=admin).json()
+    assert d["data"]["statut"] == "nouvelle" and d["peut_traiter"] and [p["nom"] for p in d["assignables"]] == ["rayan"]
+    # Assignation : passe « en cours », tracée dans l'historique
+    r = client.post(f"/sources/{source_pg}/alertes/{i}", headers=admin, json={"assigne_a": "rayan"})
+    assert r.status_code == 200 and r.json()["data"]["statut"] == "en_cours" and r.json()["data"]["assigne_a"] == "rayan"
+    assert client.post(f"/sources/{source_pg}/alertes/{i}", headers=admin, json={"assigne_a": "analyste1"}).status_code == 400
+    # Un verdict s'explique
+    r = client.post(f"/sources/{source_pg}/alertes/{i}", headers=admin, json={"statut": "fausse_alerte"})
+    assert r.status_code == 400 and "verdict" in r.json()["detail"]
+    r = client.post(f"/sources/{source_pg}/alertes/{i}", headers=admin,
+                    json={"statut": "fausse_alerte", "commentaire": "Virement de salaire habituel, vérifié avec le client."})
+    h = r.json()["data"]["historique"]
+    assert [x["nature"] for x in h] == ["assignation", "statut", "commentaire"]
+    assert h[1]["texte"] == "En cours → Fausse alerte" and r.json()["data"]["date_cloture"]
+    # La fausse alerte ne redevient pas « nouvelle » à l'analyse suivante
+    _, ops = _premiere_alerte(client, admin, source_pg)
+    meme = [o for o in ops if o.get("suivi") and o["suivi"]["id"] == i]
+    assert meme and meme[0]["suivi"]["statut"] == "fausse_alerte"
+    s = client.get(f"/sources/{source_pg}/suivi", headers=admin).json()
+    assert s["statistiques"]["fausses_alertes"] >= 1 and s["statistiques"]["verdicts"] >= 1
+    assert s["notification"]["niveaux"] == ["Critique"]                 # moins de 10 verdicts : règle par défaut
+    # Isolation : un autre compte ne voit ni ne traite les alertes de cette base ; pas de suivi sur la démo
+    assert client.get(f"/sources/{source_pg}/alertes/{i}", headers=analyste).status_code == 404
+    assert client.post(f"/sources/{source_pg}/alertes/{i}", headers=analyste, json={"commentaire": "x"}).status_code == 404
+    assert client.get("/sources/0/suivi", headers=admin).status_code == 404
+    assert client.get(f"/sources/{source_pg}/alertes/999999", headers=admin).status_code == 404
+
+
+def test_fiches_des_modeles(client, admin, source_pg):
+    f = client.get(f"/sources/{source_pg}/modeles", headers=admin).json()["data"]
+    op = f["operations"]
+    assert op["donnees"]["table"] and op["donnees"]["operations"] > 100 and "Montant" in op["donnees"]["variables"]
+    assert op["derive"]["etat"] in ("stable", "a_surveiller", "forte") and op["derive"]["indice"] >= 0
+    assert op["fiabilite"]["fraudes_connues"] > 0 and op["verdicts"]["notification"]["niveaux"]
+    assert [s["niveau"] for s in op["seuils"]] == ["Critique", "Élevé", "Moyen"] and op["limites"]
+    assert "credits" in f
+    demo = client.get("/sources/0/modeles", headers=admin).json()["data"]
+    assert demo["operations"]["fiabilite"]["auc"] and 0 < demo["credits"]["fiabilite"]["auc"] < 1
+    assert demo["credits"]["fiabilite"]["niveau"] in ("bonne", "correcte", "faible")
+
+
+def test_derive_mesuree_par_le_psi():
+    import numpy as np
+
+    from app.connecteur.risques import etat_derive, psi
+    rng = np.random.default_rng(1)
+    a = rng.normal(10, 1, 5000)
+    bornes = np.quantile(a, np.linspace(0, 1, 11))
+    bornes[0], bornes[-1] = -np.inf, np.inf
+    assert etat_derive(psi(a, rng.normal(10, 1, 2000), bornes)) == "stable"
+    assert etat_derive(psi(a, rng.normal(11.5, 1, 2000), bornes)) == "forte"
+
+
+def test_rapport_pdf(client, admin, analyste, source_pg):
+    import io
+
+    from pypdf import PdfReader
+    r = client.get(f"/sources/{source_pg}/rapport?periode=mois", headers=admin)
+    assert r.status_code == 200 and r.headers["content-type"] == "application/pdf"
+    assert "voicebank_rapport_mensuel_" in r.headers["content-disposition"]
+    texte = "\n".join(p.extract_text() for p in PdfReader(io.BytesIO(r.content)).pages)
+    for attendu in ("Rapport de risque mensuel", "Synthèse de la période", "Points d'attention",
+                    "Alertes ouvertes les plus critiques", "Modèles d'IA utilisés", "Méthodologie"):
+        assert attendu in texte, attendu
+    assert "@" not in texte                               # aucune adresse e-mail de client dans le rapport
+    assert client.get(f"/sources/{source_pg}/rapport", headers=analyste).status_code == 404
+
+
+def test_taches_automatiques(client, admin, source_pg, monkeypatch):
+    from app import courriel, db
+    envois = []
+    monkeypatch.setattr(courriel, "envoyer_en_arriere_plan", lambda dest, m: envois.append((dest, m)))
+    ancien = db.ecrire("SELECT email FROM voicebank.utilisateurs WHERE nom = 'rayan'").scalar()
+    db.ecrire("UPDATE voicebank.utilisateurs SET email = 'rayan@voicebank.test' WHERE nom = 'rayan'")
+    try:
+        _taches_automatiques(client, admin, source_pg, monkeypatch, envois)
+    finally:
+        db.ecrire("UPDATE voicebank.utilisateurs SET email = :e WHERE nom = 'rayan'", {"e": ancien})
+
+
+def _taches_automatiques(client, admin, source_pg, monkeypatch, envois):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app import config, taches
+    a = urlsplit(ADMIN_PG)                                # l'application ne peut pas effacer des alertes : compte admin
+    with psycopg2.connect(urlunsplit((a.scheme, a.netloc, "/voicebank_test", a.query, ""))) as c, c.cursor() as cur:
+        cur.execute("DELETE FROM voicebank.suivi_alertes WHERE id_source = %s", (source_pg,))
+        cur.execute("DELETE FROM voicebank.taches_planifiees")
+    assert client.post("/notifications", headers=admin, json={"alertes_critiques": True, "resume_quotidien": True,
+                                                              "rapport_hebdo": True, "rapport_mensuel": True}).status_code == 200
+    lundi_1er = datetime(2026, 6, 1, 8, 30, tzinfo=ZoneInfo("Africa/Douala"))
+    rapport = taches.executer(force=True, maintenant=lundi_1er)
+    etapes = rapport["sources"][source_pg]
+    assert etapes["nouvelles_alertes"] > 0 and etapes["notifiees"] >= 1, etapes
+    envois_rayan = [(d, m) for d, m in envois if d == "rayan@voicebank.test"]   # les autres bases préviennent leurs membres
+    sujets = [m.sujet for _, m in envois_rayan]
+    assert any("nouvelle(s) alerte(s)" in s and "Banque partenaire" in s for s in sujets), sujets
+    assert any(s.startswith("Résumé du 01/06") for s in sujets), sujets
+    pdfs = [m for _, m in envois_rayan if m.pieces]
+    assert {p.pieces[0][0].split("_")[2] for p in pdfs} == {"hebdomadaire", "mensuel"}
+    assert all(p.pieces[0][1][:4] == b"%PDF" for p in pdfs)
+    assert all("Banque partenaire" in m.sujet for _, m in envois_rayan if not m.sujet.startswith("Rapport"))
+    # Deuxième passage : rien n'est envoyé deux fois
+    n = len(envois)
+    taches.executer(maintenant=lundi_1er)
+    assert len(envois) == n
+    # Préférences respectées
+    client.post("/notifications", headers=admin, json={"alertes_critiques": False, "resume_quotidien": False,
+                                                       "rapport_hebdo": False, "rapport_mensuel": False})
+    assert client.get("/notifications", headers=admin).json()["data"]["resume_quotidien"] is False
+    assert taches.destinataires(source_pg, "resume_quotidien") == []
+    # Déclenchement par GitHub Actions : invisible sans la bonne clé
+    monkeypatch.setattr(config, "TACHES_CLE", "")
+    assert client.post("/taches/executer").status_code == 404
+    monkeypatch.setattr(config, "TACHES_CLE", "cle-des-taches-de-test-2026")
+    assert client.post("/taches/executer", headers={"X-Cle-Taches": "mauvaise"}).status_code == 404
+    r = client.post("/taches/executer", headers={"X-Cle-Taches": "cle-des-taches-de-test-2026"})
+    assert r.status_code == 200 and "sources" in r.json()

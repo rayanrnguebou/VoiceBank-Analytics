@@ -394,12 +394,19 @@ def _risque(action):
 
 
 def operations_atypiques(id_source: int, proprietaire: str, devise: str = "XAF") -> dict:
+    """Opérations atypiques de la base ; sur une base d'organisation, chacune devient une alerte suivie
+    (statut, personne assignée) — les montants sont enregistrés dans la monnaie de la base."""
+    from .. import suivi
     profil, ts, eng, base, cle = _contexte(id_source, proprietaire)
-    res = _risque(lambda r: r.operations_atypiques(eng, ts, profil, base, cle))
+    res = _risque(lambda r: r.operations_atypiques(eng, ts, profil, base, cle, limite=200))
+    ops = res["operations"]
+    if id_source != DEMO_ID:
+        suivi.enregistrer(id_source, ops)
+        ops = suivi.annoter(id_source, ops)
     conv = lambda v: devises.convertir(v, base, devise)  # noqa: E731
     ops = [{**o, "montant": conv(o["montant"]), "raisons": [
-        {**f, "valeur": f["valeur"] if f["variable"] != "Montant" else None} for f in o["raisons"]]} for o in res["operations"]]
-    return {**res, "operations": ops, "devise": devise}
+        {**f, "valeur": f["valeur"] if f["variable"] != "Montant" else None} for f in o["raisons"]]} for o in ops]
+    return {**res, "operations": ops, "devise": devise, "suivi_actif": id_source != DEMO_ID}
 
 
 def formulaire_operation(id_source: int, proprietaire: str, devise: str = "XAF") -> dict:
@@ -425,6 +432,24 @@ def portefeuille_credits(id_source: int, proprietaire: str, devise: str = "XAF")
     a_risque = [{**c, "montant": None if c.get("montant") is None else devises.convertir(c["montant"], base, devise)}
                 for c in res.get("a_risque", [])]
     return {**res, "a_risque": a_risque, "devise": devise, "devise_base": base}
+
+
+def fiches_modeles(id_source: int, proprietaire: str) -> dict:
+    """Fiches des modèles appris sur la base (fraude et crédit), chacune indépendante de l'autre."""
+    profil, ts, eng, base, cle = _contexte(id_source, proprietaire)
+    res = {}
+    for nom, f in (("operations", "fiche_operations"), ("credits", "fiche_credits")):
+        try:
+            res[nom] = _risque(lambda r: getattr(r, f)(eng, ts, profil, base, cle))
+        except SourceRefusee as e:
+            res[nom] = {"indisponible": str(e)}
+    return res
+
+
+def operations_base(id_source: int, proprietaire: str) -> tuple[dict, str]:
+    """Opérations atypiques dans la monnaie de la base (pour le suivi et les tâches automatiques)."""
+    profil, ts, eng, base, cle = _contexte(id_source, proprietaire)
+    return _risque(lambda r: r.operations_atypiques(eng, ts, profil, base, cle, limite=200)), base
 
 
 def _colonnes_citees(sql: str, dialecte: str) -> set[str]:

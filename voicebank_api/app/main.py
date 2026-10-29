@@ -12,8 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
-from . import config, credit, fraude, maintenance, securite, transcription
-from .api import abonnement, admin, assistant, auth, demo, organisation, sources, systeme
+from . import config, credit, fraude, maintenance, securite, taches, transcription
+from .api import abonnement, admin, assistant, auth, demo, organisation, sources, surveillance, systeme
 from .api.commun import VERSION_API, _lire, _SQL_CREDIT, reponse_maintenance  # noqa: F401  (utilisés par les tests)
 from .limites import limiter
 
@@ -82,6 +82,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["Authorization", "Content-Type"],
+    expose_headers=["Content-Disposition"],      # nom des fichiers téléchargés (rapports PDF)
 )
 
 
@@ -104,6 +105,7 @@ fraude.charger()
 credit.charger()
 
 transcription.precharger_en_arriere_plan()
+taches.demarrer_en_arriere_plan()
 
 
 try:
@@ -112,5 +114,5 @@ except Exception:
     log.exception("Amorçage des comptes impossible (base indisponible ?) : nouvel essai au prochain démarrage")
 
 
-for _r in (systeme, auth, abonnement, demo, assistant, admin, organisation, sources):
+for _r in (systeme, auth, abonnement, demo, assistant, admin, organisation, sources, surveillance):
     app.include_router(_r.router)

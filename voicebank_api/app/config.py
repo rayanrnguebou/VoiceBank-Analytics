@@ -152,6 +152,12 @@ EMAIL_SIGNATURE_NOM = _env("EMAIL_SIGNATURE_NOM", "Rayan Nguebou Temgoua")
 EMAIL_SIGNATURE_FONCTION = _env("EMAIL_SIGNATURE_FONCTION", "Fondateur, VoiceBank Analytics")
 EMAIL_CONTACT = _env("EMAIL_CONTACT") or EMAIL_EXPEDITEUR
 
+# ── Tâches automatiques (surveillance horaire, résumé du matin, rapports PDF) ──
+# TACHES_CLE : secret partagé avec GitHub Actions, qui appelle POST /taches/executer chaque heure.
+TACHES_CLE = _env("TACHES_CLE")
+# Secours : l'API exécute aussi les tâches toutes les 15 min tant qu'elle est éveillée (désactivé pendant les tests).
+TACHES_AUTO = _env("TACHES_AUTO", "false" if ENV == "test" else "true").lower() == "true"
+
 # ── Connecteur : bases et fichiers des organisations ─────────
 # Clé de chiffrement des identifiants de connexion (n'importe quelle chaîne longue et secrète).
 # À défaut, dérivée de JWT_SECRET (changer JWT_SECRET rendrait alors les identifiants illisibles).

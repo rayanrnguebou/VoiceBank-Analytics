@@ -261,6 +261,27 @@ sont appris sur la base elle-même (résultat gardé 10 minutes, échantillon de
   de défaut par segment et classe les crédits en cours (régression logistique ; fiabilité mesurée en validation
   croisée, probabilités calibrées sur le taux réel du portefeuille). Si la fiabilité est faible, la page le dit.
 
+**Suivi des alertes** : sur la base d'une organisation, chaque opération très atypique (niveau Élevé ou Critique,
+environ 2 % des opérations) devient une alerte à traiter : personne assignée, commentaires, verdict
+(« fraude confirmée », « fausse alerte » — expliqué en une phrase, obligatoire) ou « résolue », historique complet
+(en ajout seul : il ne peut pas être modifié). Une fausse alerte ne revient plus ; la précision mesurée sur les
+verdicts s'affiche dans la fiche du modèle et règle les e-mails immédiats (seulement les plus graves si le modèle se
+trompe souvent, aussi le risque élevé s'il est fiable).
+
+**Surveillance automatique** (chaque heure) : nouvelles alertes enregistrées, e-mail immédiat pour les plus graves,
+résumé du matin à 7 h (heure de Douala), rapport PDF le lundi (hebdomadaire) et le 1er du mois (mensuel). Chacun
+choisit ce qu'il reçoit (menu **Notifications**). Pour l'activer en ligne : Render crée `TACHES_CLE` ; recopie sa
+valeur dans les secrets GitHub `TACHES_CLE`, avec `API_URL` (adresse de l'API) — le workflow « Tâches automatiques »
+l'appelle chaque heure et réveille l'API. Sans ces secrets, l'API exécute les tâches seule quand elle est éveillée.
+
+**Rapports PDF** (bouton sur la page des alertes) : synthèse de la période, points d'attention rédigés
+automatiquement, alertes ouvertes les plus critiques, portefeuille de crédits, modèles utilisés, méthodologie ;
+aucune donnée personnelle.
+
+**Fiche des modèles** (menu Risques) : pour chaque modèle d'IA, les données utilisées, la méthode, les seuils, la
+fiabilité mesurée, la précision sur vos verdicts, la **dérive** (indice PSI : les opérations récentes ressemblent-elles
+à celles de l'apprentissage ?) et les limites — ce que demandent les régulateurs pour valider un modèle.
+
 **Base par défaut de l'organisation** : l'administrateur clique « Définir par défaut » sur une source (Mes données) ;
 chaque membre arrive alors directement dessus (il peut toujours revenir à la démonstration). Un guide
 « Bien démarrer » accompagne l'administrateur d'une nouvelle organisation (brancher les données, base par défaut,

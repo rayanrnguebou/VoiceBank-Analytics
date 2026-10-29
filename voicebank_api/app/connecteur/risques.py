@@ -14,6 +14,7 @@ Les colonnes de données personnelles ne sont jamais utilisées.
 import logging
 import threading
 import time
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -91,6 +92,7 @@ class ModeleOperations:
                  ident: str | None, devise: str, h: str | None = None):
         from sklearn.ensemble import IsolationForest
         self.table, self.m, self.d, self.cats, self.fraude, self.ident = t, m, d, cats, fraude, ident
+        self.cree_le = datetime.now().isoformat(timespec="seconds")
         self.devise = "FCFA" if devise in ("XAF", "XOF") else devise
         self.h = h or d            # colonne d'où lire l'heure (horodatage, ou colonne « heure » séparée)
         self.df = df
@@ -315,6 +317,103 @@ def operations_atypiques(eng, type_source: str, profil: dict, devise: str, cle, 
     return {"resume": resume, "operations": resultats, "devise": devise}
 
 
+# ── Fiche du modèle : données, méthode, seuils, fiabilité, dérive ───────────────────────
+
+def psi(reference: np.ndarray, recent: np.ndarray, bornes: np.ndarray) -> float:
+    """Population Stability Index : < 0,1 stable ; 0,1 à 0,25 à surveiller ; > 0,25 dérive forte."""
+    a = np.histogram(reference, bins=bornes)[0].astype(float)
+    b = np.histogram(recent, bins=bornes)[0].astype(float)
+    a = np.clip(a / max(a.sum(), 1), 1e-4, None)
+    b = np.clip(b / max(b.sum(), 1), 1e-4, None)
+    return float(np.sum((b - a) * np.log(b / a)))
+
+
+def psi_categories(reference: pd.Series, recent: pd.Series, n: int = 12) -> float:
+    valeurs = reference.astype(str).value_counts().index[:n]
+    def parts(s):
+        v = s.astype(str).where(s.astype(str).isin(valeurs), "_autre").value_counts(normalize=True)
+        return v.reindex(list(valeurs) + ["_autre"]).fillna(0).clip(lower=1e-4).to_numpy()
+    a, b = parts(reference), parts(recent)
+    return float(np.sum((b - a) * np.log(b / a)))
+
+
+def etat_derive(v: float | None) -> str | None:
+    return None if v is None else "stable" if v < 0.1 else "a_surveiller" if v < 0.25 else "forte"
+
+
+def _derive(mod: "ModeleOperations") -> dict:
+    df = mod.df
+    if mod.d:
+        dates = pd.to_datetime(df[mod.d].astype(str), errors="coerce", format="mixed")
+        fin = dates.max()
+        if pd.notna(fin):
+            recent = dates >= fin - pd.Timedelta(days=30)
+            nom_recent = "30 derniers jours"
+        else:
+            recent = pd.Series(False, index=df.index)
+    else:
+        recent = pd.Series(False, index=df.index)
+    if not mod.d or recent.sum() < 30 or (~recent).sum() < 30:
+        # Pas de dates exploitables : les 20 % lus en premier (les plus récents si la table est triée) contre le reste
+        k = max(int(len(df) * 0.2), 1)
+        recent = pd.Series([i < k for i in range(len(df))], index=df.index)
+        nom_recent = "20 % d'opérations les plus récentes"
+    if recent.sum() < 30 or (~recent).sum() < 30:
+        return {"etat": None, "detail": "Pas assez d'opérations pour mesurer la dérive."}
+    m = np.log1p(df[mod.m].astype(float).clip(lower=0).to_numpy())
+    bornes = np.unique(np.quantile(m[~recent.to_numpy()], np.linspace(0, 1, 11)))
+    bornes[0], bornes[-1] = -np.inf, np.inf
+    mesures = {"Montant": psi(m[~recent.to_numpy()], m[recent.to_numpy()], bornes)}
+    for c in mod.cats[:3]:
+        mesures[libelle(c)] = psi_categories(df.loc[~recent, c], df.loc[recent, c])
+    pire = max(mesures, key=mesures.get)
+    v = mesures[pire]
+    etat = etat_derive(v)
+    texte = {"stable": "Les opérations récentes ressemblent à celles sur lesquelles le modèle a appris.",
+             "a_surveiller": f"Changement modéré des habitudes ({pire.lower()}) : à surveiller.",
+             "forte": f"Les habitudes ont nettement changé ({pire.lower()}) : les alertes peuvent être moins fiables ; "
+                      "le modèle se réapprend automatiquement sur les opérations récentes."}[etat]
+    return {"etat": etat, "indice": round(v, 3), "variable": pire, "detail": texte, "periode_recente": nom_recent,
+            "par_variable": {k: round(x, 3) for k, x in mesures.items()}, "operations_recentes": int(recent.sum())}
+
+
+def fiche_operations(eng, type_source: str, profil: dict, devise: str, cle) -> dict:
+    mod = _modele_operations(eng, type_source, profil, devise, cle)
+    df = mod.df
+    variables = ["Montant"] + [libelle(c) for c in mod.cats] + (["Heure"] if mod.heures is not None else [])
+    fiche = {
+        "nom": "Détection des opérations atypiques",
+        "objectif": "Repérer les opérations qui s'écartent des habitudes de la base, pour vérification humaine.",
+        "methode": ("Isolation Forest (150 arbres) appris sur les opérations de la base, complété par des repères "
+                    "lisibles (écart au montant habituel par type, valeurs rares, heure rare) ; le score est le rang de "
+                    "l'opération parmi toutes : 0,98 = plus atypique que 98 % des opérations."),
+        "donnees": {"table": _titre(mod.table), "operations": int(len(df)),
+                    "periode": [str(df[mod.d].min())[:10], str(df[mod.d].max())[:10]] if mod.d else None,
+                    "variables": variables, "donnees_personnelles": "aucune (noms, comptes et téléphones exclus)"},
+        "appris_le": mod.cree_le, "reapprentissage": "automatique toutes les 10 minutes au plus, sur les 20 000 "
+                                                    "opérations les plus récentes",
+        "seuils": [{"niveau": "Critique", "rang": 0.995, "part": "0,5 % des opérations"},
+                   {"niveau": "Élevé", "rang": 0.98, "part": "1,5 %"},
+                   {"niveau": "Moyen", "rang": 0.90, "part": "8 %"}],
+        "fiabilite": None,
+        "derive": _derive(mod),
+        "limites": ["Une opération atypique n'est pas forcément frauduleuse : le modèle oriente la vérification, "
+                    "il ne décide pas.",
+                    "Une fraude qui ressemble aux opérations habituelles (même montant, même canal) n'est pas repérée.",
+                    "Les montants trop faibles ne déclenchent au plus qu'une alerte « Moyen »."],
+    }
+    if mod.fraude:
+        connues = df[mod.fraude].map(_vrai)
+        n = int(connues.sum())
+        if n:
+            vues = int((connues & (df["_score"] >= 0.95)).sum())
+            fiche["fiabilite"] = {"fraudes_connues": n, "reperees_pct": round(100 * vues / n, 1), "hasard_pct": 5.0,
+                                  "explication": f"{round(100 * vues / n)} % des fraudes connues de la base sont parmi "
+                                                 "les 5 % d'opérations jugées les plus atypiques (le hasard en "
+                                                 "trouverait 5 %)."}
+    return fiche
+
+
 def formulaire_operation(eng, type_source: str, profil: dict, devise: str, cle) -> dict:
     mod = _modele_operations(eng, type_source, profil, devise, cle)
     return {"table": mod.table["nom"], "titre": _titre(mod.table), "montant": mod.m, "devise": devise,
@@ -441,6 +540,39 @@ def _conseils_credit(niveau: str, facteurs: list[dict]) -> list[str]:
     return res
 
 
+def fiche_credits(eng, type_source: str, profil: dict, devise: str, cle) -> dict:
+    p = portefeuille(eng, type_source, profil, devise, cle)
+    m = p.get("modele")
+    fiche = {
+        "nom": "Risque de défaut des crédits",
+        "objectif": "Classer les crédits en cours selon leur probabilité de défaut, pour agir avant l'impayé.",
+        "methode": ("Régression logistique apprise sur les crédits de la base dont l'issue est connue (en défaut ou en "
+                    "retard d'après la colonne de statut) ; les catégories sont remplacées par leur taux de défaut observé."),
+        "donnees": {"table": p["titre"], "credits": p["credits"], "defauts": p["defauts"],
+                    "taux_defaut": p["taux_defaut"], "colonne_statut": p["colonne_statut"],
+                    "variables": (m or {}).get("variables", []),
+                    "donnees_personnelles": "aucune (noms, comptes et téléphones exclus)"},
+        "appris_le": datetime.now().isoformat(timespec="seconds"),
+        "reapprentissage": "automatique toutes les 10 minutes au plus",
+        "seuils": [{"niveau": "Critique", "regle": "probabilité de défaut ≥ 70 %"},
+                   {"niveau": "Élevé", "regle": "≥ 1,8 fois le taux moyen du portefeuille ou ≥ 50 %"},
+                   {"niveau": "Moyen", "regle": "≥ 1,25 fois le taux moyen"}],
+        "fiabilite": None, "derive": None,
+        "limites": ["Le modèle ne connaît que les colonnes de la base : revenus, garanties ou historique absents ne "
+                    "sont pas pris en compte.",
+                    "Fiabilité mesurée en validation croisée (sur des crédits non vus pendant l'apprentissage)."],
+    }
+    if m:
+        fiche["fiabilite"] = {"auc": m["auc"], "niveau": m["fiabilite"], "avertissement": m.get("avertissement"),
+                              "explication": None if m["auc"] is None else
+                              f"AUC {str(m['auc']).replace('.', ',')} : 0,5 = hasard, 1 = parfait ; "
+                              f"fiabilité {m['fiabilite']}."}
+    else:
+        fiche["indisponible"] = ("Pas assez de défauts connus (15 au moins) pour apprendre un modèle : seuls les taux "
+                                 "de défaut par segment sont calculés.")
+    return fiche
+
+
 def _classer_en_cours(df: pd.DataFrame, numeriques: list[dict], cats: list[str], ident: str | None, devise: str,
                       col_montant: str | None = None) -> dict:
     from sklearn.linear_model import LogisticRegression
@@ -499,7 +631,7 @@ def _classer_en_cours(df: pd.DataFrame, numeriques: list[dict], cats: list[str],
     avertissement = None
     if fiabilite == "faible":
         avertissement = ("Les colonnes de cette base prédisent mal les défauts (fiabilité faible) : ce classement est indicatif. "
-                         "Appuie-toi d'abord sur les taux par segment ci-dessus.")
+                         "Appuie-toi d'abord sur les taux de défaut par segment (page Score de crédit).")
     return {"a_risque": a_risque, "modele": {"type": "Régression logistique", "auc": auc, "fiabilite": fiabilite,
                                              "taux_base": round(taux_base, 4), "avertissement": avertissement,
                                              "variables": [libelle(c) for c in X.columns]}}

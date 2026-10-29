@@ -4,6 +4,7 @@ Envoi par Brevo (API HTTPS) en priorité, sinon SMTP. Sans configuration, rien n
 La mise en page utilise des tableaux et des styles en ligne : c'est ce que les messageries (Gmail,
 Outlook, mobiles) affichent correctement.
 """
+import base64
 import html
 import logging
 import smtplib
@@ -49,6 +50,7 @@ class Message:
     apres: list[str] = field(default_factory=list)           # paragraphes après le bouton
     apercu: str = ""                                         # texte d'aperçu dans la boîte de réception
     note: str | None = None                                  # mention discrète en bas (sécurité…)
+    pieces: list[tuple[str, bytes, str]] = field(default_factory=list)   # pièces jointes : (nom, contenu, type MIME)
 
 
 def _e(t) -> str:
@@ -140,7 +142,9 @@ def envoyer_message(destinataire: str, m: Message):
                 json={"sender": {"name": config.EMAIL_NOM_EXPEDITEUR, "email": config.EMAIL_EXPEDITEUR},
                       "replyTo": {"email": config.EMAIL_CONTACT or config.EMAIL_EXPEDITEUR},
                       "to": [{"email": destinataire}], "subject": m.sujet, "htmlContent": contenu_html,
-                      "textContent": texte})
+                      "textContent": texte,
+                      **({"attachment": [{"name": nom, "content": base64.b64encode(contenu).decode()}
+                                         for nom, contenu, _ in m.pieces]} if m.pieces else {})})
         except httpx.HTTPError as e:
             raise EnvoiImpossible(f"Brevo injoignable : {e}")
         if r.status_code >= 300:
@@ -157,6 +161,9 @@ def envoyer_message(destinataire: str, m: Message):
         msg["Reply-To"] = config.EMAIL_CONTACT
     msg.set_content(texte)
     msg.add_alternative(contenu_html, subtype="html")
+    for nom, contenu, mime in m.pieces:
+        principal, _, secondaire = mime.partition("/")
+        msg.add_attachment(contenu, maintype=principal, subtype=secondaire or "octet-stream", filename=nom)
     contexte = ssl.create_default_context()
     try:
         if config.SMTP_PORT == 465:

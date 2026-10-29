@@ -1,0 +1,40 @@
+# Surveillance automatique des bases des organisations, chaque heure : nouvelles alertes (e-mail immédiat pour les
+# plus graves), résumé du matin à 7 h (heure de Douala), rapports PDF le lundi et le 1er du mois.
+# Réveille aussi l'API sur l'offre gratuite de Render (elle s'endort après 15 minutes sans visite).
+# Secrets à créer (GitHub → Settings → Secrets and variables → Actions) :
+#   API_URL     : adresse de l'API, ex. https://voicebank-api.onrender.com
+#   TACHES_CLE  : la même valeur que la variable TACHES_CLE de l'API sur Render (longue et secrète)
+name: Tâches automatiques
+
+on:
+  schedule:
+    - cron: "11 * * * *"        # chaque heure, à la 11e minute
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  executer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Déclencher les tâches
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          TACHES_CLE: ${{ secrets.TACHES_CLE }}
+        run: |
+          if [ -z "$API_URL" ] || [ -z "$TACHES_CLE" ]; then
+            echo "Secrets API_URL / TACHES_CLE absents : tâches ignorées (l'API les exécute seule quand elle est éveillée)."
+            exit 0
+          fi
+          # 1er essai : réveille l'API si elle dort (jusqu'à ~1 min sur l'offre gratuite)
+          curl -s -o /dev/null --max-time 90 "$API_URL/health" || true
+          code=$(curl -s -o reponse.json -w "%{http_code}" --max-time 400 -X POST "$API_URL/taches/executer" \
+                 -H "X-Cle-Taches: $TACHES_CLE")
+          echo "Réponse HTTP $code"
+          python3 -c "import json; d = json.load(open('reponse.json')); print(json.dumps({k: v for k, v in d.items() if k != 'sources'}, ensure_ascii=False)); print('Bases surveillées :', len(d.get('sources', {})))" || cat reponse.json
+          if [ "$code" != "200" ]; then
+            echo "::error::Les tâches automatiques ont échoué (HTTP $code)"
+            exit 1
+          fi

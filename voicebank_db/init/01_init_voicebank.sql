@@ -512,6 +512,60 @@ END $$;
 
 
 -- ══════════════════════════════════════════════════════════
+-- SUIVI DES ALERTES DES BASES CONNECTÉES, NOTIFICATIONS, TÂCHES PLANIFIÉES
+-- ══════════════════════════════════════════════════════════
+-- Chaque opération atypique repérée dans la base d'une organisation devient une alerte suivie : statut,
+-- personne assignée, commentaires. Les verdicts (fraude confirmée / fausse alerte) servent de retour au modèle.
+CREATE TABLE IF NOT EXISTS voicebank.suivi_alertes (
+    id_suivi        SERIAL       PRIMARY KEY,
+    id_source       INTEGER      NOT NULL REFERENCES voicebank.sources_donnees(id_source) ON DELETE CASCADE,
+    ref_operation   VARCHAR(200) NOT NULL,                -- identifiant de l'opération (ou empreinte si absent)
+    date_operation  TIMESTAMP,
+    montant         NUMERIC(20, 2),
+    niveau          VARCHAR(10)  NOT NULL,
+    score           NUMERIC(6, 4) NOT NULL,
+    raisons         JSONB,
+    categories      JSONB,
+    statut          VARCHAR(20)  NOT NULL DEFAULT 'nouvelle'
+                    CHECK (statut IN ('nouvelle', 'en_cours', 'fraude_confirmee', 'fausse_alerte', 'resolue')),
+    assigne_a       VARCHAR(64),
+    date_detection  TIMESTAMP    NOT NULL DEFAULT LOCALTIMESTAMP,
+    date_maj        TIMESTAMP    NOT NULL DEFAULT LOCALTIMESTAMP,
+    date_cloture    TIMESTAMP,
+    maj_par         VARCHAR(64),
+    notifiee        BOOLEAN      NOT NULL DEFAULT FALSE,
+    UNIQUE (id_source, ref_operation)
+);
+CREATE INDEX IF NOT EXISTS idx_suivi_alertes_source ON voicebank.suivi_alertes (id_source, statut);
+
+CREATE TABLE IF NOT EXISTS voicebank.commentaires_alerte (
+    id_commentaire  SERIAL       PRIMARY KEY,
+    id_suivi        INTEGER      NOT NULL REFERENCES voicebank.suivi_alertes(id_suivi) ON DELETE CASCADE,
+    auteur          VARCHAR(64)  NOT NULL,
+    nature          VARCHAR(20)  NOT NULL DEFAULT 'commentaire' CHECK (nature IN ('commentaire', 'statut', 'assignation')),
+    texte           TEXT         NOT NULL,
+    date_commentaire TIMESTAMP   NOT NULL DEFAULT LOCALTIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_commentaires_alerte ON voicebank.commentaires_alerte (id_suivi);
+
+-- Ce que chacun veut recevoir par e-mail
+CREATE TABLE IF NOT EXISTS voicebank.preferences_notifications (
+    utilisateur       VARCHAR(64) PRIMARY KEY REFERENCES voicebank.utilisateurs(nom) ON DELETE CASCADE,
+    alertes_critiques BOOLEAN NOT NULL DEFAULT TRUE,
+    resume_quotidien  BOOLEAN NOT NULL DEFAULT TRUE,
+    rapport_hebdo     BOOLEAN NOT NULL DEFAULT FALSE,
+    rapport_mensuel   BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- Dernière exécution des tâches automatiques (analyse horaire, résumé du matin, rapports)
+CREATE TABLE IF NOT EXISTS voicebank.taches_planifiees (
+    nom               VARCHAR(120) PRIMARY KEY,
+    derniere_execution TIMESTAMP,
+    resultat          JSONB
+);
+
+
+-- ══════════════════════════════════════════════════════════
 -- TRIGGER : mise à jour automatique de updated_at
 -- ══════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION voicebank.update_updated_at()

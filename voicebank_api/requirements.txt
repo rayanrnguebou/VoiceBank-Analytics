@@ -26,3 +26,4 @@ openpyxl==3.1.5       # Excel .xlsx
 cryptography==50.0.2  # chiffrement des identifiants de connexion
 httpx==0.28.1           # paiement, e-mails (Brevo), anti-robot
 certifi==2026.10.19     # autorités de certification (connexion « vérifiée » aux bases)
+reportlab==5.1.0       # rapports PDF (hebdomadaires / mensuels)

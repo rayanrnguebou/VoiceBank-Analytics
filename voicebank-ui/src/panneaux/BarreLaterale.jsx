@@ -3,8 +3,7 @@ import { useEffect } from "react";
 import {
   AudioLines, LayoutDashboard, ShieldAlert, ScanSearch, Landmark, History,
   GraduationCap, Target, DatabaseZap, ScrollText, ChartColumn, ExternalLink, LogOut, X, UsersRound, KeyRound, CreditCard, Wallet,
-  Building2, Wrench,
-} from "lucide-react";
+  Building2, Wrench, ClipboardCheck, BellRing } from "lucide-react";
 
 const POWER_BI_URL = import.meta.env.REACT_APP_POWER_BI_URL || "";
 
@@ -81,9 +80,11 @@ export default function BarreLaterale({ page, allerA, estAdmin, voitAdmin, exter
             badge={externe ? 0 : compteurs.alertes} badgeAlerte {...props} />
           <Lien id="analyse" libelle="Analyse de transaction" Icone={ScanSearch} {...props} />
           <Lien id="credit" libelle="Score de crédit" Icone={Landmark} {...props} />
+          <Lien id="modeles" libelle="Fiche des modèles" Icone={ClipboardCheck} {...props} />
 
           <p className="px-4 pt-5 pb-1.5 text-xs text-foret-100/45">Rapports</p>
           <Lien id="historique" libelle="Historique" Icone={History} badge={nbHistorique} {...props} />
+          {!(acces?.type === "essai") && <Lien id="notifications" libelle="Notifications" Icone={BellRing} {...props} />}
           {POWER_BI_URL && (
             <a href={POWER_BI_URL} target="_blank" rel="noopener noreferrer"
               className="group w-full flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-sm text-foret-100/75 hover:bg-white/5 hover:text-white">

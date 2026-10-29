@@ -26,8 +26,15 @@ PSEUDO_COLONNES = {"user", "uid", "sessiontimezone", "dbtimezone", "ora_rowscn",
                    "ora_login_user", "ora_client_ip_address"}
 
 
+def _extraire(partie: str):
+    return lambda self, e: f"EXTRACT({partie} FROM {self.sql(e, 'this')})"
+
+
 class Oraclevb(Oracle):
     class Generator(Oracle.Generator):
+        TRANSFORMS = {**Oracle.Generator.TRANSFORMS, exp.Year: _extraire("YEAR"), exp.Month: _extraire("MONTH"),
+                      exp.Day: _extraire("DAY")}
+
         def identifier_sql(self, expression: exp.Identifier) -> str:
             nom = expression.this
             if expression.quoted and isinstance(nom, str) and nom == nom.lower() and nom != nom.upper():

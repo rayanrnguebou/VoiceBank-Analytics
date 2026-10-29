@@ -21,6 +21,8 @@ def test_dialecte_identifiants():
     # Casse mixte (créée entre guillemets) : conservée
     assert exp.to_identifier("MonMontant", quoted=True).sql(dialect=oracle.DIALECTE) == '"MonMontant"'
     assert Q.NOMS_DIALECTES[oracle.DIALECTE] == "Oracle"
+    annee = exp.select(exp.Year(this=exp.column("paid_at")), exp.Month(this=exp.column("paid_at"))).from_("payments")
+    assert annee.sql(dialect=oracle.DIALECTE) == "SELECT EXTRACT(YEAR FROM paid_at), EXTRACT(MONTH FROM paid_at) FROM payments"
 
 
 @pytest.mark.parametrize("sql", [

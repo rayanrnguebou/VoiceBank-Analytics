@@ -16,7 +16,7 @@ des corrections, mesure de la fiabilité et journal d'audit.
 | API | FastAPI, SQLAlchemy, sqlglot (validation SQL), JWT, bcrypt |
 | IA | Gemini (texte → SQL, résumés), Whisper (Groq ou local faster-whisper), scikit-learn, XGBoost (SHAP natif) |
 | Données | PostgreSQL 15 (pg_trgm pour le RAG), Power BI |
-| Qualité | 139 tests API, tests d'interface, GitHub Actions, jeu d'évaluation de 50 questions |
+| Qualité | 330 tests API, 26 tests d'interface, 23 parcours dans un vrai navigateur + 70 attaques, GitHub Actions, jeu d'évaluation de 50 questions |
 
 ## Fonctionnalités
 
@@ -648,6 +648,27 @@ Les tests créent une base `voicebank_test` jetable (données synthétiques), te
 endpoints, et vérifient les protections : accès sans jeton, rôle insuffisant, jetons falsifiés,
 injections SQL (19 attaques), SQL malveillant renvoyé par l'IA, empoisonnement du RAG, upload
 audio dangereux, CORS, limitation des tentatives de connexion.
+
+### Tests de bout en bout (vrai navigateur)
+
+`tests_e2e/` rejoue 23 parcours complets dans Chromium (Playwright) contre l'API et l'interface lancées en local :
+connexion, assistant vocal et conversation, essai gratuit et paiement simulé, organisation et invitations par
+e-mail, rôles, connecteur (base PostgreSQL et fichier Excel), surveillance des alertes, maintenance, double
+authentification, Google / Microsoft, anglais, favoris, appareils… puis **70 attaques** contre l'API (isolation
+entre organisations, élévation de privilèges, jetons falsifiés, SQL, SSRF, paiement).
+
+```bash
+pip install -r voicebank_api/requirements-dev.txt -r tests_e2e/requirements.txt
+python -m playwright install chromium
+npm ci --prefix voicebank-ui
+python tests_e2e/lancer.py --pg postgresql://postgres:MDP@localhost:5432/postgres     # 6 à 8 minutes
+python tests_e2e/lancer.py --pg … --seulement test_offre,attaques                     # quelques scénarios
+```
+
+Le lanceur crée une base jetable (`vbe2e`, données fictives), une base « externe » pour le connecteur, un faux
+serveur d'e-mails (les messages arrivent dans `tests_e2e/sortie/mails`), construit l'interface et démarre l'API
+(ports 3000, 8000 et 1025 libres). Les captures d'écran vont dans `tests_e2e/sortie/captures`. GitHub Actions
+les lance à chaque modification (job « Bout en bout ») et garde captures et journal de l'API en cas d'échec.
 
 ## Sécurité
 

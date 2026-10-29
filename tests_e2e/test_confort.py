@@ -30,6 +30,7 @@ def mails(destinataire, motif, apres):
 def connexion(page, nom, mdp):
     page.goto(URL)
     page.evaluate("sessionStorage.clear()")
+    page.reload()
     page.get_by_role("button", name="Organisation").click()
     page.get_by_label("Identifiant ou e-mail").fill(nom); page.get_by_label("Mot de passe").fill(mdp)
     page.get_by_role("button", name="Se connecter").click()

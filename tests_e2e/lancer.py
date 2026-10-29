@@ -198,11 +198,16 @@ def main():
             print(f"\n══ {nom}", flush=True)
             debut = time.time()
             try:
-                r = subprocess.run([PY, str(ICI / f"{nom}.py")], cwd=captures, env=env_tests, timeout=900)
-                ok = r.returncode == 0
-            except subprocess.TimeoutExpired:
-                ok = False
-                print("Délai dépassé (15 min)")
+                r = subprocess.run([PY, str(ICI / f"{nom}.py")], cwd=captures, env=env_tests, timeout=900,
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                sortie, ok = r.stdout, r.returncode == 0
+            except subprocess.TimeoutExpired as e:
+                sortie, ok = (e.stdout or b"").decode(errors="replace") + "\nDélai dépassé (15 min)", False
+            print(sortie, flush=True)
+            if not ok and os.environ.get("GITHUB_ACTIONS"):
+                # Annotation lisible sur la page de l'exécution, sans télécharger les journaux
+                fin = "\n".join(sortie.strip().splitlines()[-45:])
+                print(f"::error title=Bout en bout : {nom}::" + fin.replace("%", "%25").replace("\r", "").replace("\n", "%0A"))
             bilan.append((nom, ok, time.time() - debut))
             if not ok:          # un scénario interrompu ne doit pas laisser la maintenance active pour les suivants
                 psql(env_tests["E2E_BASE"], "-c", "DELETE FROM voicebank.parametres WHERE cle = 'maintenance'")

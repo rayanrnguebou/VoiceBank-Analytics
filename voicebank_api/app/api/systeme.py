@@ -1,0 +1,60 @@
+"""Accueil, santé du service et maintenance."""
+from fastapi import APIRouter
+
+from .commun import (  # noqa: F401
+    Depends,
+    ReglageMaintenance,
+    Request,
+    Utilisateur,
+    VERSION_API,
+    admin_requis,
+    audit,
+    config,
+    credit,
+    datetime,
+    db,
+    fraude,
+    ip_client,
+    maintenance,
+    transcription,
+)
+
+router = APIRouter()
+
+
+@router.get("/")
+def accueil():
+    return {"message": "VoiceBank Analytics API", "version": VERSION_API, "status": "OK"}
+
+
+@router.get("/health")
+def health():
+    ok = db.base_ok()
+    return {"status": "ok" if ok else "degraded",
+            "database": "connectee" if ok else "deconnectee",
+            "gemini": "disponible" if config.GEMINI_API_KEY else "non configure",
+            "whisper": transcription.etat(),
+            "modeles_ia": sorted(k for k in fraude.modeles if k != "meta") + (["credit"] if credit.disponible() else []),
+            "maintenance": maintenance.etat()["active"],
+            "timestamp": datetime.now().isoformat()}
+
+
+@router.get("/maintenance")
+def etat_maintenance():
+    """Public : maintenance en cours et annonce de maintenance prévue (bandeau)."""
+    return maintenance.public()
+
+
+@router.get("/admin/maintenance")
+def lire_maintenance(u: Utilisateur = Depends(admin_requis)):
+    return maintenance.etat(force=True)
+
+
+@router.post("/admin/maintenance")
+def regler_maintenance(request: Request, body: ReglageMaintenance, u: Utilisateur = Depends(admin_requis)):
+    annonce = None
+    if body.annonce_message and body.annonce_message.strip():
+        annonce = {"message": body.annonce_message.strip()[:300], "debut": body.annonce_debut, "fin": body.annonce_fin}
+    e = maintenance.modifier(u.nom, body.active, body.message, body.fin_prevue, annonce)
+    audit.journaliser(u.nom, "maintenance", {"active": body.active, "annonce": bool(annonce)}, ip_client(request))
+    return e

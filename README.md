@@ -426,10 +426,11 @@ pip install -r requirements-dev.txt
 copy .env.example .env                             # puis remplis-le
 uvicorn main:app --reload
 
-# Interface
+# Interface (Vite : http://localhost:3000)
 cd voicebank-ui
 npm ci
-npm start
+npm start            # développement ; npm run build pour la version en ligne
+npm test             # tests (Vitest) ; npm run lint pour le contrôle du code
 ```
 
 Sur une base déjà existante (créée avec l'ancienne version), applique la migration de sécurité
@@ -462,7 +463,8 @@ audio dangereux, CORS, limitation des tentatives de connexion.
 - Déconnexion automatique après 15 min d'inactivité (avertissement 1 min avant) ; le jeton est
   renouvelé tant que l'utilisateur est actif, donc pas de coupure en pleine analyse.
 - Interface sur Render : Content-Security-Policy, HSTS, micro autorisé uniquement pour le site.
-- Dependabot propose chaque mois les mises à jour de sécurité des dépendances (testées par la CI).
+- Dependabot propose chaque mois les mises à jour de sécurité des dépendances (testées par la CI) ;
+  l'interface est construite avec Vite (0 vulnérabilité connue à l'`npm audit`).
 - 5 tentatives de connexion par minute et par IP ; limites sur les endpoints IA.
 - Le SQL dynamique est validé (sqlglot) **et** exécuté avec un compte PostgreSQL en lecture seule.
 - L'API se connecte avec un compte sans privilèges d'administration (`voicebank_app`).
@@ -472,12 +474,26 @@ audio dangereux, CORS, limitation des tentatives de connexion.
 - Noms, e-mails, téléphones et numéros de compte masqués pour le rôle analyste.
 - Journal d'audit en ajout seul (le compte de l'API ne peut ni le modifier ni l'effacer).
 - L'historique navigateur est en `sessionStorage` (effacé à la fermeture et à la déconnexion).
+- Session de 12 h au plus, renouvellements compris (`SESSION_MAX_HEURES`) : un jeton volé ne se prolonge pas.
+- Exports CSV protégés contre l'injection de formules ; fichiers Excel piégés (bombe de décompression) refusés.
+- **Anti-robot** (facultatif, gratuit) sur l'inscription à l'essai et le mot de passe oublié : crée un widget sur
+  [Cloudflare Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) (domaine `voicebank-ui.onrender.com`),
+  puis renseigne `TURNSTILE_SECRET` (API) et `REACT_APP_TURNSTILE_SITE_KEY` (interface) sur Render. Sans ces clés,
+  la vérification est simplement désactivée.
+- **Connexion vérifiée aux bases des organisations** : l'option SSL « Vérifié » contrôle le certificat du serveur
+  (autorité reconnue, nom du serveur) en plus du chiffrement ; à préférer dès que la base a un certificat valide.
+- **Rotation de la clé des identifiants** (`CLE_SOURCES`) : mets la nouvelle clé dans `CLE_SOURCES` et l'ancienne
+  dans `CLE_SOURCES_ANCIENNES`, redémarre, lance `python -m app.outils.rechiffrer_sources`, puis vide
+  `CLE_SOURCES_ANCIENNES`. Aucune coupure : les deux clés fonctionnent pendant l'opération.
 
 ## Structure
 
 ```
-voicebank_api/      API FastAPI (app/), tests (tests/), evaluation/, Dockerfile
-voicebank-ui/       Interface React, Dockerfile + nginx.conf
+voicebank_api/      API FastAPI, tests (tests/), evaluation/, Dockerfile
+  app/main.py         assemblage : sécurité (en-têtes, CORS, maintenance), chargement des modèles
+  app/api/            un routeur par domaine : auth, abonnement, demo, assistant, admin, organisation, sources…
+  app/connecteur/     bases et fichiers des organisations (analyse, garde SQL, risques)
+voicebank-ui/       Interface React (Vite), Dockerfile + nginx.conf ; outils/ : génération des villes et banques
 voicebank_db/       init/ (scripts SQL auto), securite/roles.sql, chargement des CSV
 voicebank_ia/       entraînement des modèles + modèles sauvegardés
 voicebank_whisper/  transcription vocale locale (secours de Groq)

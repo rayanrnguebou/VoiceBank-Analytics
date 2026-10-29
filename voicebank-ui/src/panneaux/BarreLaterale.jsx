@@ -6,7 +6,7 @@ import {
   Building2, Wrench,
 } from "lucide-react";
 
-const POWER_BI_URL = process.env.REACT_APP_POWER_BI_URL || "";
+const POWER_BI_URL = import.meta.env.REACT_APP_POWER_BI_URL || "";
 
 export function Logo() {
   // Monogramme : une onde sonore sur fond laiton (même dessin que public/favicon.svg)

@@ -19,7 +19,8 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from pathlib import Path
 
-from cryptography.fernet import Fernet, InvalidToken
+import certifi
+from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL
 from sqlalchemy.pool import NullPool
@@ -43,9 +44,18 @@ class ConnexionRefusee(Exception):
 
 # ── Chiffrement des identifiants ───────────────────────────────────────
 
-def _fernet() -> Fernet:
-    cle = base64.urlsafe_b64encode(hashlib.sha256(("voicebank-sources:" + config.CLE_SOURCES).encode()).digest())
-    return Fernet(cle)
+def _cle(secret: str) -> Fernet:
+    return Fernet(base64.urlsafe_b64encode(hashlib.sha256(("voicebank-sources:" + secret).encode()).digest()))
+
+
+def _fernet() -> MultiFernet:
+    """Chiffre avec CLE_SOURCES ; déchiffre aussi avec les anciennes clés (rotation sans coupure)."""
+    return MultiFernet([_cle(config.CLE_SOURCES)] + [_cle(c) for c in config.CLE_SOURCES_ANCIENNES])
+
+
+def rechiffrer(jeton: str) -> str:
+    """Rechiffre avec la clé actuelle un jeton chiffré avec une ancienne clé (lève InvalidToken si illisible)."""
+    return _fernet().rotate(jeton.encode()).decode()
 
 
 def chiffrer(donnees: dict) -> str:
@@ -128,17 +138,29 @@ def moteur(type_source: str, cfg: dict, chemin_fichier: Path | None = None):
         raise ConnexionRefusee("Port invalide")
     ssl = cfg.get("ssl", "prefere")
     commun = dict(username=cfg.get("utilisateur"), password=cfg.get("mot_de_passe"), port=port, database=cfg.get("base"))
+    # « verifie » : chiffrement ET identité du serveur contrôlée (certificat signé par une autorité reconnue, au nom
+    # de l'hôte saisi) ; « exige » chiffre sans vérifier l'identité ; « prefere » chiffre si le serveur le propose.
+    if ssl == "verifie" and type_source == "sqlserver":
+        raise ConnexionRefusee("La vérification du certificat n'est pas encore disponible pour SQL Server : "
+                               "choisis « Exigé ».")
     if type_source == "postgresql":
         url = URL.create("postgresql+psycopg2", host=cfg["hote"], **commun)
         args = {"hostaddr": ip, "connect_timeout": 10,
-                "sslmode": {"exige": "require", "desactive": "disable"}.get(ssl, "prefer"),
+                "sslmode": {"verifie": "verify-full", "exige": "require", "desactive": "disable"}.get(ssl, "prefer"),
                 "options": f"-c default_transaction_read_only=on -c statement_timeout={t * 1000}",
                 "application_name": "VoiceBank Analytics"}
+        if ssl == "verifie":
+            args["sslrootcert"] = certifi.where()      # autorités reconnues (le nom vérifié est celui saisi, pas l'IP)
     elif type_source == "mysql":
-        url = URL.create("mysql+pymysql", host=ip, query={"charset": "utf8mb4"}, **commun)
+        # En mode vérifié, le certificat est contrôlé au nom de l'hôte : une redirection DNS vers une autre machine
+        # échouerait faute de certificat valide pour ce nom.
+        url = URL.create("mysql+pymysql", host=cfg["hote"] if ssl == "verifie" else ip, query={"charset": "utf8mb4"},
+                         **commun)
         args = {"connect_timeout": 10, "read_timeout": t + 5, "write_timeout": t + 5}
         if ssl == "exige":
             args["ssl"] = {"check_hostname": False}
+        elif ssl == "verifie":
+            args["ssl"] = {"ca": certifi.where(), "check_hostname": True}
     elif type_source == "sqlserver":
         url = URL.create("mssql+pymssql", host=ip, **commun)
         args = {"login_timeout": 10, "timeout": t + 5, "appname": "VoiceBank Analytics"}
@@ -198,5 +220,8 @@ def message_erreur(e: Exception) -> str:
     if "does not exist" in t or "unknown database" in t or "cannot open database" in t or "4060" in t:
         return "Base de données introuvable : vérifie son nom."
     if "ssl" in t:
+        if "certificate" in t or "certificat" in t or "verify" in t:
+            return ("Certificat du serveur non reconnu (autorité inconnue ou nom différent) : la connexion « vérifiée » "
+                    "a été refusée par sécurité. Utilise le nom exact du serveur, ou l'option « Exigé ».")
         return "Problème de chiffrement SSL : essaie l'option SSL « préféré » ou « exigé »."
     return "Connexion impossible à la base. Vérifie les informations saisies."

@@ -4,6 +4,7 @@ import {
   Lock, Sparkles, Building2, UserRound, AudioLines, ShieldAlert, Landmark, RefreshCw, Circle, CircleCheck, ArrowRight,
   Mail, KeyRound, ArrowLeft,
 } from "lucide-react";
+import AntiRobot, { CLE_SITE } from "../AntiRobot";
 import { http, connexion, inscriptionEssai, messageErreur, lireMotifDeconnexion, appliquerJeton } from "../api";
 import { Logo } from "./BarreLaterale";
 import { reglesMotDePasse } from "./Comptes";
@@ -26,12 +27,13 @@ function MotDePasseOublie({ identifiantInitial, onRetour }) {
   const [erreur, setErreur] = useState(null);
   const [envoi, setEnvoi] = useState(false);
   const regles = reglesMotDePasse(nouveau, identifiant.split("@")[0]);
+  const [captcha, setCaptcha] = useState(null);
 
   const demander = async (e) => {
     e?.preventDefault();
     setErreur(null); setEnvoi(true);
     try {
-      const r = await http.post("/auth/oubli", { identifiant: identifiant.trim() });
+      const r = await http.post("/auth/oubli", { identifiant: identifiant.trim(), captcha });
       setInfo(r.data.message); setEtape("code");
     } catch (err) { setErreur(messageErreur(err)); }
     finally { setEnvoi(false); }
@@ -58,8 +60,9 @@ function MotDePasseOublie({ identifiantInitial, onRetour }) {
             <input value={identifiant} onChange={e => setIdentifiant(e.target.value)} autoComplete="username" required
               minLength={3} maxLength={64} className={CHAMP} />
           </label>
+          <AntiRobot onJeton={setCaptcha} />
           {erreur && <p role="alert" className="text-sm text-red-400">{erreur}</p>}
-          <button type="submit" disabled={envoi} className={BOUTON}><Mail size={15} /> {envoi ? "Envoi…" : "Recevoir un code"}</button>
+          <button type="submit" disabled={envoi || (CLE_SITE && !captcha)} className={BOUTON}><Mail size={15} /> {envoi ? "Envoi…" : "Recevoir un code"}</button>
         </form>
       ) : (
         <form onSubmit={confirmer} className="space-y-3">
@@ -93,7 +96,7 @@ function MotDePasseOublie({ identifiantInitial, onRetour }) {
           {erreur && <p role="alert" className="text-sm text-red-400">{erreur}</p>}
           <button type="submit" disabled={envoi || code.length !== 6 || !regles.every(r => r.ok) || nouveau !== confirmation}
             className={BOUTON}><KeyRound size={15} /> {envoi ? "Enregistrement…" : "Changer le mot de passe"}</button>
-          <button type="button" onClick={() => demander()} disabled={envoi} className="text-xs text-foret-300 hover:underline">
+          <button type="button" onClick={() => (CLE_SITE ? (setCaptcha(null), setEtape("demande")) : demander())} disabled={envoi} className="text-xs text-foret-300 hover:underline">
             Pas reçu ? Renvoyer un code
           </button>
         </form>
@@ -215,11 +218,12 @@ function Essai({ onConnecte, formules }) {
   const [envoi, setEnvoi] = useState(false);
   const regles = reglesMotDePasse(f.mot_de_passe, f.email.split("@")[0]);
   const maj = cle => e => setF({ ...f, [cle]: e.target.value });
+  const [captcha, setCaptcha] = useState(null);
 
   const valider = async (e) => {
     e.preventDefault();
     setErreur(null); setEnvoi(true);
-    try { onConnecte(await inscriptionEssai({ ...f, email: f.email.trim(), accepte_conditions: accepte })); }
+    try { onConnecte(await inscriptionEssai({ ...f, email: f.email.trim(), accepte_conditions: accepte, captcha })); }
     catch (err) { setErreur(messageErreur(err)); }
     finally { setEnvoi(false); }
   };
@@ -266,8 +270,9 @@ function Essai({ onConnecte, formules }) {
         <span>J'accepte que mes nom et e-mail soient conservés pour gérer mon compte. Les données affichées pendant l'essai
           sont fictives ; je ne peux rien modifier.</span>
       </label>
+      <AntiRobot onJeton={setCaptcha} />
       {erreur && <p role="alert" className="text-sm text-red-400">{erreur}</p>}
-      <button type="submit" disabled={envoi || !accepte || !regles.every(r => r.ok)} className={BOUTON}>
+      <button type="submit" disabled={envoi || !accepte || !regles.every(r => r.ok) || (CLE_SITE && !captcha)} className={BOUTON}>
         <Sparkles size={15} /> {envoi ? "Création…" : `Démarrer l'essai gratuit${formules ? ` (${formules.essai_jours} jours)` : ""}`}
       </button>
     </form>

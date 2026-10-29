@@ -99,6 +99,9 @@ ALLOWED_ORIGINS = [o.strip().rstrip("/") for o in _env(
 
 TAILLE_MAX_AUDIO = int(_env("TAILLE_MAX_AUDIO_MO", "10")) * 1024 * 1024
 RATE_LIMIT_ACTIF = _env("RATE_LIMIT_ACTIF", "true").lower() == "true"
+# Anti-robot Cloudflare Turnstile (gratuit) : clé secrète côté API ; la clé de site va dans l'interface
+# (REACT_APP_TURNSTILE_SITE_KEY). Vide : vérification désactivée.
+TURNSTILE_SECRET = _env("TURNSTILE_SECRET")
 
 # ── Offre publique : essai gratuit et abonnements ─────────────
 INSCRIPTION_ESSAI = _env("INSCRIPTION_ESSAI", "true").lower() == "true"
@@ -153,6 +156,9 @@ EMAIL_CONTACT = _env("EMAIL_CONTACT") or EMAIL_EXPEDITEUR
 # Clé de chiffrement des identifiants de connexion (n'importe quelle chaîne longue et secrète).
 # À défaut, dérivée de JWT_SECRET (changer JWT_SECRET rendrait alors les identifiants illisibles).
 CLE_SOURCES = _env("CLE_SOURCES") or JWT_SECRET
+# Rotation : mets la nouvelle clé dans CLE_SOURCES et l'ancienne ici (séparées par des virgules s'il y en a
+# plusieurs), puis lance « python -m app.outils.rechiffrer_sources » ; ensuite cette variable peut être vidée.
+CLE_SOURCES_ANCIENNES = [c.strip() for c in _env("CLE_SOURCES_ANCIENNES").split(",") if c.strip()]
 # false (en ligne) : refuse les adresses privées (127.0.0.1, 10.x, 192.168.x…) pour éviter qu'un
 # utilisateur fasse sonder le réseau interne du serveur. true en local (base sur le réseau de l'entreprise).
 CONNECTEUR_RESEAU_PRIVE = _env("CONNECTEUR_RESEAU_PRIVE", "false").lower() == "true"

@@ -871,5 +871,18 @@
  "… et {n} ligne(s) supplémentaire(s)": "… and {n} more row(s)",
  "Le serveur met trop de temps à répondre. Le calcul continue : réessaie dans une minute, le résultat sera prêt.": "The server is taking too long to respond. The calculation continues: try again in a minute, the result will be ready.",
  "Calcul en cours sur le serveur…": "Calculation in progress on the server…",
- "Les analyses peuvent prendre jusqu'à une minute ; les visites suivantes sont immédiates.": "Analyses can take up to a minute; the following visits are instant."
+ "Les analyses peuvent prendre jusqu'à une minute ; les visites suivantes sont immédiates.": "Analyses can take up to a minute; the following visits are instant.",
+ "Mes données personnelles": "My personal data",
+ "Tu peux télécharger tout ce que VoiceBank garde sur ton compte (profil, questions posées, paiements, connexions).": "You can download everything VoiceBank keeps about your account (profile, questions asked, payments, sign-ins).",
+ "Télécharger mes données": "Download my data",
+ "Effacement du compte :": "Account deletion:",
+ "Supprimer mon compte": "Delete my account",
+ "Ton profil, tes questions, tes préférences, ta double authentification et, si tu es seul dans ton organisation, ses bases connectées seront effacés. C'est définitif.": "Your profile, questions, preferences, two-factor authentication and, if you are alone in your organisation, its connected databases will be erased. This cannot be undone.",
+ "Conservés au titre de la loi : paiements et facturation ({paiements}), journal d'activité ({audit}), sous un identifiant anonyme.": "Kept as required by law: payments and billing ({paiements}), activity log ({audit}), under an anonymous identifier.",
+ "Tape SUPPRIMER pour confirmer": "Type DELETE to confirm",
+ "Effacer définitivement": "Delete permanently",
+ "Ton compte et tes données personnelles ont été effacés. Merci d'avoir utilisé VoiceBank.": "Your account and personal data have been deleted. Thank you for using VoiceBank.",
+ "Effacer le compte {nom} et ses données personnelles (demande de la personne) ? Ses paiements et son journal d'activité sont gardés sous un identifiant anonyme. C'est définitif.": "Delete the account {nom} and its personal data (at the person's request)? Payments and activity log are kept under an anonymous identifier. This cannot be undone.",
+ "Droit à l'effacement (loi n° 2024/017)": "Right to erasure (Law No. 2024/017)",
+ "Effacer": "Delete"
 }

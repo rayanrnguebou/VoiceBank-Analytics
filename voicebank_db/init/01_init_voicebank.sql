@@ -647,3 +647,59 @@ ALTER TABLE voicebank.appareils_connus ADD CONSTRAINT appareils_connus_utilisate
 ALTER TABLE voicebank.double_authentification DROP CONSTRAINT IF EXISTS double_authentification_utilisateur_fkey;
 ALTER TABLE voicebank.double_authentification ADD CONSTRAINT double_authentification_utilisateur_fkey
     FOREIGN KEY (utilisateur) REFERENCES voicebank.utilisateurs(nom) ON DELETE CASCADE;
+
+-- ══════════════════════════════════════════════════════════
+-- DONNÉES PERSONNELLES (loi camerounaise n° 2024/017) : effacement d'un compte, durées de conservation.
+-- Les deux fonctions s'exécutent avec les droits du propriétaire du schéma : l'application peut les appeler,
+-- mais ne peut ni supprimer un compte ni effacer le journal d'audit récent par elle-même.
+-- ══════════════════════════════════════════════════════════
+ALTER TABLE voicebank.utilisateurs ADD COLUMN IF NOT EXISTS efface_le TIMESTAMP;
+
+-- Un compte effacé change d'identifiant (« efface-… ») : son adresse e-mail est libérée et n'apparaît plus que
+-- dans le journal d'audit (conservé 5 ans pour la traçabilité) ; ses paiements restent rattachés au pseudonyme.
+CREATE OR REPLACE FUNCTION voicebank.pseudonymiser_compte(ancien VARCHAR, nouveau VARCHAR) RETURNS VOID
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = voicebank, pg_temp AS $$
+DECLARE r RECORD;
+BEGIN
+    IF nouveau NOT LIKE 'efface-%' OR ancien LIKE 'efface-%' THEN
+        RAISE EXCEPTION 'pseudonyme invalide';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM voicebank.utilisateurs WHERE nom = ancien AND efface_le IS NOT NULL) THEN
+        RAISE EXCEPTION 'compte non effacé : %', ancien;
+    END IF;
+    INSERT INTO voicebank.utilisateurs
+    SELECT (jsonb_populate_record(NULL::voicebank.utilisateurs, to_jsonb(u) || jsonb_build_object('nom', nouveau))).*
+    FROM voicebank.utilisateurs u WHERE u.nom = ancien;
+    FOR r IN SELECT c.conrelid::regclass AS tbl, a.attname AS col
+             FROM pg_constraint c JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+             WHERE c.contype = 'f' AND c.confrelid = 'voicebank.utilisateurs'::regclass LOOP
+        EXECUTE format('UPDATE %s SET %I = $1 WHERE %I = $2', r.tbl, r.col, r.col) USING nouveau, ancien;
+    END LOOP;
+    DELETE FROM voicebank.utilisateurs WHERE nom = ancien;
+END $$;
+REVOKE ALL ON FUNCTION voicebank.pseudonymiser_compte(VARCHAR, VARCHAR) FROM PUBLIC;
+
+-- Durées de conservation (appliquées chaque jour par les tâches automatiques). Durées écrites ici, pas en paramètre :
+-- l'application ne peut pas s'en servir pour effacer des données récentes.
+CREATE OR REPLACE FUNCTION voicebank.appliquer_conservation() RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = voicebank, pg_temp AS $$
+DECLARE res JSONB := '{}'; n INTEGER;
+BEGIN
+    DELETE FROM voicebank.journal_audit WHERE date_evenement < LOCALTIMESTAMP - INTERVAL '5 years';
+    GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('journal_audit', n);
+    DELETE FROM voicebank.logs_vocaux WHERE date_requete < LOCALTIMESTAMP - INTERVAL '12 months';
+    GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('questions', n);
+    DELETE FROM voicebank.echecs_connexion WHERE dernier_echec < LOCALTIMESTAMP - INTERVAL '1 day'
+        AND (bloque_jusqua IS NULL OR bloque_jusqua < LOCALTIMESTAMP);
+    GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('echecs_connexion', n);
+    DELETE FROM voicebank.appareils_connus WHERE derniere_connexion < LOCALTIMESTAMP - INTERVAL '180 days';
+    GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('appareils', n);
+    DELETE FROM voicebank.codes_recuperation WHERE expire < LOCALTIMESTAMP - INTERVAL '1 day';
+    GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('codes', n);
+    DELETE FROM voicebank.paiements WHERE statut <> 'paye' AND date_creation < LOCALTIMESTAMP - INTERVAL '30 days';
+    GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('paiements_abandonnes', n);
+    DELETE FROM voicebank.paiements WHERE statut = 'paye' AND date_creation < LOCALTIMESTAMP - INTERVAL '10 years';
+    GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('paiements_anciens', n);
+    RETURN res;
+END $$;
+REVOKE ALL ON FUNCTION voicebank.appliquer_conservation() FROM PUBLIC;

@@ -634,5 +634,16 @@
  "Semaine": "Week",
  "Mois": "Month",
  "Année": "Year",
- "{formater_nombre} résultats.": "{formater_nombre} results."
+ "{formater_nombre} résultats.": "{formater_nombre} results.",
+ "Compte interne à la plateforme : il se désactive dans Administration → Comptes.": "Internal platform account: it is deactivated in Administration → Accounts.",
+ "Vous êtes le seul administrateur de votre organisation, qui a d'autres membres : nommez d'abord un autre administrateur (Mon organisation → Membres) ou retirez les membres.": "You are the only administrator of your organisation, which has other members: first appoint another administrator (My organisation → Members) or remove the members.",
+ "Tapez SUPPRIMER pour confirmer.": "Type DELETE to confirm.",
+ "Votre compte et vos données personnelles ont été effacés.": "Your account and personal data have been deleted.",
+ "Comptes gérés par la configuration du serveur : rien à exporter ni à effacer.": "Accounts managed by the server configuration: nothing to export or delete.",
+ "12 mois": "12 months",
+ "5 ans": "5 years",
+ "10 ans": "10 years",
+ "180 jours": "180 days",
+ "24 heures": "24 hours",
+ "90 jours après la fin de l'essai": "90 days after the end of the trial"
 }

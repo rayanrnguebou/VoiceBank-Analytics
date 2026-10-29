@@ -236,6 +236,21 @@ def rapports_periodiques(src, maintenant_local: datetime) -> dict:
 
 # ── Exécution ────────────────────────────────────────────────────────
 
+def conservation_quotidienne() -> dict:
+    """Une fois par jour : durées de conservation des données personnelles (donnees_personnelles.py)."""
+    derniere = _derniere("conservation")
+    if derniere and datetime.now() - derniere < timedelta(hours=23):
+        return {"ignoree": "déjà faite aujourd'hui"}
+    from . import donnees_personnelles
+    try:
+        res = donnees_personnelles.appliquer_conservation()
+    except Exception as e:
+        log.exception("Conservation des données : échec")
+        res = {"erreur": str(e)[:200]}
+    _noter("conservation", res)
+    return res
+
+
 def executer(force: bool = False, maintenant: datetime | None = None) -> dict:
     """Exécute toutes les tâches dues. Retourne un compte rendu (aussi gardé dans taches_planifiees)."""
     from sqlalchemy import text
@@ -246,7 +261,7 @@ def executer(force: bool = False, maintenant: datetime | None = None) -> dict:
         if not conn.execute(text("SELECT pg_try_advisory_lock(:v)"), {"v": VERROU}).scalar():
             return {"deja_en_cours": True}
         try:
-            rapport = {"sources": {}, "attente_calme_s": 0.0}
+            rapport = {"sources": {}, "attente_calme_s": 0.0, "conservation": conservation_quotidienne()}
             for src in sources_surveillees():
                 rapport["attente_calme_s"] += attendre_calme(90)     # une base à la fois, entre deux visites
                 etapes = {}

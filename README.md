@@ -151,6 +151,21 @@ Envoi des e-mails (sans configuration, le lien est remplacé par « demande à t
 - ou **SMTP** (`SMTP_HOTE`, `SMTP_PORT`, `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE`, `EMAIL_EXPEDITEUR`),
   par exemple Gmail avec un « mot de passe d'application ». Render bloque le SMTP en offre gratuite.
 
+#### Données personnelles (loi camerounaise n° 2024/017)
+
+- **Télécharger mes données** (*Sécurité de mon compte*) : fichier JSON avec tout ce que VoiceBank garde sur le
+  compte (profil, questions posées, paiements, appareils, journal d'activité), sans mot de passe ni secret.
+- **Supprimer mon compte** (mot de passe + « SUPPRIMER ») : profil, questions, préférences, double authentification,
+  appareils et, si le compte est seul dans son organisation, ses bases connectées sont effacés ; le compte prend un
+  identifiant anonyme (`efface-…`) et son adresse e-mail est libérée. Les **paiements** (10 ans, comptabilité OHADA)
+  et le **journal d'audit** (5 ans) sont gardés sous cet identifiant. Le seul administrateur d'une organisation qui a
+  d'autres membres doit d'abord nommer un autre administrateur. Une demande reçue par e-mail s'exécute dans
+  *Administration → Comptes → Effacer*.
+- **Durées de conservation**, appliquées chaque jour par les tâches automatiques (`voicebank.appliquer_conservation()`,
+  fonction de la base : l'application ne peut ni supprimer un compte ni effacer l'audit récent elle-même) : questions
+  12 mois, appareils connus 180 jours, tentatives de connexion 24 h, journal d'audit 5 ans, paiements 10 ans,
+  paiements abandonnés 30 jours, essais gratuits sans abonnement effacés 90 jours après leur fin.
+
 ## Clés IA (Gemini et Groq)
 
 Les deux sont facultatives : sans elles, les questions fréquentes marchent (règles locales + RAG),

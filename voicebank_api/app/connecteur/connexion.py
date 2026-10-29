@@ -72,7 +72,10 @@ def verifier_hote(hote: str) -> str:
         raise ConnexionRefusee(f"Serveur introuvable : {hote}")
     for a in sorted(adresses):
         ip = ipaddress.ip_address(a.split("%")[0])
-        interdite = (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:      # ::ffff:127.0.0.1 → 127.0.0.1
+            ip = ip.ipv4_mapped
+        # « non globale » couvre aussi 100.64.0.0/10 (réseau partagé des hébergeurs), 0.0.0.0/8, 198.18.0.0/15…
+        interdite = (not ip.is_global or ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast
                      or ip.is_reserved or ip.is_unspecified)
         if interdite and not config.CONNECTEUR_RESEAU_PRIVE:
             raise ConnexionRefusee("Adresse privée ou locale refusée : la base doit être joignable sur Internet "

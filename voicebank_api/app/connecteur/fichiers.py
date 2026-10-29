@@ -8,6 +8,7 @@ import logging
 import re
 import sqlite3
 import tempfile
+import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -21,6 +22,8 @@ EXTENSIONS = {"csv", "txt", "xlsx"}
 MAX_LIGNES = 200_000
 MAX_COLONNES = 200
 MAX_FICHIERS = 5
+MAX_DECOMPRESSE = 250 * 1024 * 1024      # un .xlsx est une archive : taille une fois décompressée
+MAX_RATIO = 150                           # au-delà, archive piégée (« bombe de décompression »)
 CACHE = Path(tempfile.gettempdir()) / "voicebank_sources"
 RE_DATE_FR = re.compile(r"^\d{1,2}/\d{1,2}/\d{4}$")
 RE_DATE_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}")
@@ -49,9 +52,24 @@ def verifier(nom_fichier: str, contenu: bytes):
         raise FichierRefuse(f"{nom_fichier} : fichier trop volumineux ({config.CONNECTEUR_TAILLE_FICHIER_MO} Mo maximum)")
     if not contenu:
         raise FichierRefuse(f"{nom_fichier} : fichier vide")
-    if ext == "xlsx" and not contenu.startswith(b"PK"):
-        raise FichierRefuse(f"{nom_fichier} : ce n'est pas un vrai fichier Excel")
+    if ext == "xlsx":
+        if not contenu.startswith(b"PK"):
+            raise FichierRefuse(f"{nom_fichier} : ce n'est pas un vrai fichier Excel")
+        _verifier_archive(nom_fichier, contenu)
     return ext
+
+
+def _verifier_archive(nom_fichier: str, contenu: bytes):
+    """Refuse une archive qui exploserait en mémoire à l'ouverture (taille déclarée, avant toute lecture)."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(contenu)) as z:
+            total = sum(i.file_size for i in z.infolist())
+            nb = len(z.infolist())
+    except (zipfile.BadZipFile, ValueError):
+        raise FichierRefuse(f"{nom_fichier} : fichier Excel abîmé ou illisible")
+    if nb > 10_000 or total > MAX_DECOMPRESSE or total > MAX_RATIO * max(len(contenu), 1):
+        log.warning("Fichier refusé (archive anormale) : %s, %d octets décompressés", nom_fichier, total)
+        raise FichierRefuse(f"{nom_fichier} : fichier Excel anormal (contenu décompressé trop volumineux)")
 
 
 def _lire_csv(contenu: bytes) -> pd.DataFrame:

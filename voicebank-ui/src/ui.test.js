@@ -26,3 +26,15 @@ test("monnaie : conversions et affichage", () => {
   expect(libelleColonne("montant_fcfa", { devise: "EUR", colonnes_monetaires: ["montant_fcfa"] })).toBe("montant (€)");
   expect(libelleColonne("nb_clients", { devise: "EUR", colonnes_monetaires: ["montant_fcfa"] })).toBe("nb_clients");
 });
+
+test("export CSV : une formule venant des données n'est jamais exécutée par Excel", () => {
+  const csv = versCsv(["nom", "montant"], [
+    { nom: "=HYPERLINK(\"http://pirate.cm\",\"clic\")", montant: -1500 },
+    { nom: "+33 6 12", montant: 2 }, { nom: "@SUM(A1)", montant: 3 }, { nom: "Normal", montant: 4 }]);
+  const lignes = csv.split("\r\n");
+  expect(lignes[1].startsWith("\"'=HYPERLINK")).toBe(true);
+  expect(lignes[1].endsWith(";-1500")).toBe(true);          // un vrai nombre négatif reste un nombre
+  expect(lignes[2]).toBe("'+33 6 12;2");
+  expect(lignes[3]).toBe("'@SUM(A1);3");
+  expect(lignes[4]).toBe("Normal;4");
+});

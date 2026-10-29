@@ -22,7 +22,7 @@ const heure = v => {
 export function useMaintenance() {
   const [etat, setEtat] = useState({ active: false, annonce: null, message: null, fin_prevue: null });
   const verifier = useCallback(() => {
-    http.get("/maintenance", { timeout: 20000 }).then(r => setEtat(r.data)).catch(() => {});
+    http.get("/maintenance", { timeout: 20000, silencieux: true }).then(r => setEtat(r.data)).catch(() => {});
   }, []);
   useEffect(() => {
     verifier();
@@ -104,7 +104,7 @@ export function BandeauReconnexion() {
   }, []);
   useEffect(() => {
     if (!perdu) return;
-    const essayer = () => http.get("/health", { timeout: 15000 }).then(() => setPerdu(false)).catch(() => {});
+    const essayer = () => http.get("/health", { timeout: 15000, silencieux: true }).then(() => setPerdu(false)).catch(() => {});
     minuteur.current = setInterval(essayer, 8000);
     essayer();
     return () => clearInterval(minuteur.current);
@@ -116,6 +116,25 @@ export function BandeauReconnexion() {
       <WifiOff size={16} className="text-laiton-300 flex-shrink-0" />
       <span>{tx("Le serveur ne répond pas : mise à jour ou redémarrage en cours.")}{" "}<span className="text-gray-400">{tx("Reconnexion automatique…")}</span></span>
       <RefreshCw size={14} className="animate-spin text-gray-400 flex-shrink-0" />
+    </div>
+  );
+}
+
+// Calcul long en cours (analyse de risques, rapport…) : on le dit, pour que personne ne croie à une panne
+export function IndicateurCalcul() {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const surLent = e => setN(e.detail);
+    window.addEventListener("voicebank:lent", surLent);
+    return () => window.removeEventListener("voicebank:lent", surLent);
+  }, []);
+  if (!n) return null;
+  return (
+    <div role="status" aria-live="polite" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100%-2rem)] flex items-center gap-3 px-4 py-2.5 rounded-xl
+      bg-gray-900/95 border border-laiton-400/40 text-white text-sm shadow-2xl">
+      <RefreshCw size={14} className="animate-spin text-laiton-300 flex-shrink-0" />
+      <span>{tx("Calcul en cours sur le serveur…")}{" "}
+        <span className="text-gray-400">{tx("Les analyses peuvent prendre jusqu'à une minute ; les visites suivantes sont immédiates.")}</span></span>
     </div>
   );
 }

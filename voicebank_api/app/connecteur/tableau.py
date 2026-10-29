@@ -6,11 +6,10 @@ simples (COUNT, SUM, regroupement par mois ou par catégorie), traduites dans le
 Aucune donnée personnelle n'est regroupée ni affichée. Les résultats sont gardés 10 minutes en mémoire.
 """
 import logging
-import threading
-import time
 
 from sqlglot import exp
 
+from ..memoire import Memoire
 from . import garde
 from . import semantique as sem
 from .connexion import executer
@@ -23,9 +22,7 @@ ORDRE = ["clients", "comptes", "transactions", "ventes", "crédits", "contrats",
 # Tables « de faits » : leur évolution dans le temps a du sens
 FAITS = ["transactions", "ventes", "remboursements", "crédits", "sinistres", "alertes", "contrats", "épargne"]
 VRAI = {"1", "true", "t", "oui", "yes", "y", "o", "vrai", "fraude", "fraud", "suspect", "suspecte"}
-DUREE_CACHE = 600
-_cache: dict = {}
-_verrou = threading.Lock()
+_memoire = Memoire(frais=600, garde=24 * 3600)
 
 
 def _titre(t: dict) -> str:
@@ -186,14 +183,6 @@ def calculer(eng, type_source: str, profil: dict) -> dict:
 
 
 def tableau(cle: tuple, calcul) -> dict:
-    """Résultat mis en cache 10 minutes par (source, date d'analyse)."""
-    with _verrou:
-        trouve = _cache.get(cle)
-        if trouve and time.time() - trouve[0] < DUREE_CACHE:
-            return trouve[1]
-    res = calcul()
-    with _verrou:
-        for k in [k for k in _cache if k[0] == cle[0]]:
-            _cache.pop(k, None)
-        _cache[cle] = (time.time(), res)
-    return res
+    """Résultat gardé par (source, date d'analyse…) : frais 10 minutes, puis rendu tout de suite et recalculé en
+    arrière-plan. Une nouvelle analyse de la source remplace les anciens résultats."""
+    return _memoire.obtenir(cle, calcul, remplace=lambda k: k[0] == cle[0] and k[2:3] != cle[2:3])

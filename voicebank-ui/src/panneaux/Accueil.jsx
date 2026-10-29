@@ -385,7 +385,7 @@ export default function EcranAccueil({ onConnecte, annonce }) {
   useEffect(() => {
     let fini = false;
     const lent = setTimeout(() => !fini && setServeur("reveil"), 2500);
-    http.get("/health", { timeout: 90000 })
+    http.get("/health", { timeout: 90000, silencieux: true })
       .then(() => {
         setServeur("pret");
         http.get("/auth/options").then(r => { setOubliDisponible(!!r.data.oubli_par_email); setSso(r.data.sso || []); }).catch(() => {});

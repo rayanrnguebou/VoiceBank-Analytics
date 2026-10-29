@@ -5,6 +5,8 @@ Déclenchement :
 * chaque heure par GitHub Actions (POST /taches/executer avec la clé TACHES_CLE) : réveille aussi l'API sur
   l'offre gratuite de Render, qui s'endort après 15 minutes sans visite ;
 * en secours, par un fil d'exécution de l'API tant qu'elle est éveillée (TACHES_AUTO).
+Pour ne pas ralentir les utilisateurs (petit processeur de l'offre gratuite), les analyses attendent un moment
+calme : aucune requête d'utilisateur depuis TACHES_CALME_S secondes (attente bornée, puis elles passent quand même).
 Les deux peuvent se chevaucher sans dégât : un verrou PostgreSQL empêche deux exécutions simultanées, et chaque
 étape note sa dernière exécution (une base n'est analysée qu'une fois par heure, un résumé envoyé une fois par jour).
 """
@@ -21,6 +23,24 @@ log = logging.getLogger("voicebank")
 VERROU = 7_204_206                    # identifiant du verrou consultatif PostgreSQL
 FUSEAU = ZoneInfo("Africa/Douala")
 HEURE_MATIN = 7
+_activite = {"t": 0.0}
+
+
+def noter_activite():
+    """Appelé à chaque requête d'un utilisateur (pas les sondes de santé ni les tâches elles-mêmes)."""
+    _activite["t"] = time.time()
+
+
+def attendre_calme(max_s: float, calme_s: float | None = None) -> float:
+    """Attend qu'aucun utilisateur n'ait fait de requête depuis `calme_s` secondes (au plus `max_s`). Durée attendue."""
+    calme_s = config.TACHES_CALME_S if calme_s is None else calme_s
+    debut = time.time()
+    while calme_s > 0 and time.time() - debut < max_s:
+        reste = calme_s - (time.time() - _activite["t"])
+        if reste <= 0:
+            break
+        time.sleep(min(reste, max_s - (time.time() - debut), 5))
+    return time.time() - debut
 
 
 # ── Mémoire des exécutions ────────────────────────────────────────────
@@ -226,8 +246,9 @@ def executer(force: bool = False, maintenant: datetime | None = None) -> dict:
         if not conn.execute(text("SELECT pg_try_advisory_lock(:v)"), {"v": VERROU}).scalar():
             return {"deja_en_cours": True}
         try:
-            rapport = {"sources": {}}
+            rapport = {"sources": {}, "attente_calme_s": 0.0}
             for src in sources_surveillees():
+                rapport["attente_calme_s"] += attendre_calme(90)     # une base à la fois, entre deux visites
                 etapes = {}
                 for etape in (lambda: analyser_source(src, maintenant.replace(tzinfo=None), force),
                               lambda: resume_du_matin(src, local), lambda: rapports_periodiques(src, local),
@@ -238,6 +259,7 @@ def executer(force: bool = False, maintenant: datetime | None = None) -> dict:
                         log.exception("Tâche automatique en échec (source %s)", src.id_source)
                         etapes.setdefault("erreurs", []).append(str(e)[:200])
                 rapport["sources"][src.id_source] = etapes
+            rapport["attente_calme_s"] = round(rapport["attente_calme_s"], 1)
             rapport["duree_s"] = round(time.time() - debut, 1)
             _noter("execution", rapport)
             return rapport
@@ -255,6 +277,7 @@ def demarrer_en_arriere_plan():
         time.sleep(60)
         while True:
             try:
+                attendre_calme(10 * 60)
                 executer()
             except Exception:
                 log.exception("Tâches automatiques : échec de l'exécution")

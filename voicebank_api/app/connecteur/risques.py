@@ -12,8 +12,6 @@ Tout est calculé sur un échantillon (20 000 lignes au plus), en lecture seule,
 Les colonnes de données personnelles ne sont jamais utilisées.
 """
 import logging
-import threading
-import time
 from datetime import datetime
 
 import numpy as np
@@ -21,6 +19,7 @@ import pandas as pd
 from sqlglot import exp
 
 from . import semantique as sem
+from ..memoire import Memoire
 from .tableau import FAITS, _c, _col, _Executeur, _table, _titre
 
 log = logging.getLogger("voicebank")
@@ -31,23 +30,16 @@ MOTS_DEFAUT = {"defaut", "default", "defaulted", "retard", "late", "overdue", "a
                "true", "oui", "yes"}
 MOTS_EN_COURS = {"cours", "encours", "actif", "active", "open", "ouvert", "current", "vivant", "normal", "sain"}
 MOTS_CLOS = {"clos", "closed", "rembourse", "repaid", "solde", "settled", "termine", "paid", "paye"}
-_cache: dict = {}
-_verrou = threading.Lock()
+_memoire = Memoire(frais=600, garde=24 * 3600)
 
 
 class RisqueIndisponible(Exception):
     """Message affichable (la base ne s'y prête pas)."""
 
 
-def _memo(cle, calcul, duree=600):
-    with _verrou:
-        t = _cache.get(cle)
-        if t and time.time() - t[0] < duree:
-            return t[1]
-    res = calcul()
-    with _verrou:
-        _cache[cle] = (time.time(), res)
-    return res
+def _memo(cle, calcul):
+    """Frais 10 min ; ensuite, l'ancien résultat est rendu tout de suite et recalculé en arrière-plan."""
+    return _memoire.obtenir(cle, calcul)
 
 
 def _jetons_valeur(v) -> set[str]:

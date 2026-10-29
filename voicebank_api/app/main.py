@@ -71,6 +71,8 @@ def _role_du_jeton(request: Request) -> str | None:
 
 async def mode_maintenance(request: Request, call_next):
     # Avant CORS (donc à l'intérieur) : la réponse 503 garde les en-têtes CORS et l'interface l'affiche.
+    if not request.url.path.startswith(("/health", "/taches")):
+        taches.noter_activite()            # les tâches automatiques attendent un moment calme
     if request.method != "OPTIONS" and not request.url.path.startswith(maintenance.OUVERTES):
         etat = await run_in_threadpool(maintenance.etat)
         if etat["active"] and _role_du_jeton(request) != "admin":

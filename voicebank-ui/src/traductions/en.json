@@ -868,5 +868,8 @@
  "à traiter": "to review",
  "échouée": "failed",
  "— l'affichage suit la monnaie choisie en haut de l'écran.": "— amounts are shown in the currency selected at the top of the screen.",
- "… et {n} ligne(s) supplémentaire(s)": "… and {n} more row(s)"
+ "… et {n} ligne(s) supplémentaire(s)": "… and {n} more row(s)",
+ "Le serveur met trop de temps à répondre. Le calcul continue : réessaie dans une minute, le résultat sera prêt.": "The server is taking too long to respond. The calculation continues: try again in a minute, the result will be ready.",
+ "Calcul en cours sur le serveur…": "Calculation in progress on the server…",
+ "Les analyses peuvent prendre jusqu'à une minute ; les visites suivantes sont immédiates.": "Analyses can take up to a minute; the following visits are instant."
 }

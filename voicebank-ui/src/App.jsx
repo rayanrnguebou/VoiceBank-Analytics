@@ -15,7 +15,7 @@ import { PanelFiches, PanelNotifications } from "./panneaux/Surveillance";
 import ResultatRisque from "./panneaux/Explication";
 import { PanelOperationsSource, PanelAnalyseSource, PanelCreditSource } from "./panneaux/RisquesSource";
 import Demarrage from "./panneaux/Demarrage";
-import { useMaintenance, EcranMaintenance, BandeauAnnonce, BandeauReconnexion, PanelMaintenance } from "./maintenance";
+import { useMaintenance, EcranMaintenance, BandeauAnnonce, BandeauReconnexion, IndicateurCalcul, PanelMaintenance } from "./maintenance";
 import { FournisseurDevise, useDevise, SelecteurDevise, libelleColonne } from "./devise";
 import { useSessionActive } from "./session";
 import { useAPI } from "./useAPI";
@@ -1256,6 +1256,7 @@ export default function App() {
   return (
     <FournisseurDevise>
       <BandeauReconnexion />
+      <IndicateurCalcul />
       {bloque ? <EcranMaintenance etat={maintenance} onAccesAdmin={session ? undefined : () => setAccesAdmin(true)} />
         : !session ? <EcranAccueil onConnecte={setSession} annonce={maintenance.annonce} />
         : session.doitChangerMdp

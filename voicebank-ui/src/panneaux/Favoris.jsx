@@ -27,7 +27,11 @@ export function useFavoris(actif) {
       return agir(() => f ? http.post(`/favoris/${f.id}/supprimer`)
         : http.post("/favoris", { question, id_source: idSource || 0, devise: devise || "XAF" }));
     },
-    envoi: (f, envoiHebdo) => agir(() => http.post(`/favoris/${f.id}`, { envoi_hebdo: envoiHebdo })),
+    envoi: (f, envoiHebdo) => {
+      // Case cochée tout de suite ; l'état réel est relu après la réponse du serveur (ou en cas d'erreur)
+      setListe(l => l.map(x => (x.id === f.id ? { ...x, envoi_hebdo: envoiHebdo } : x)));
+      return agir(() => http.post(`/favoris/${f.id}`, { envoi_hebdo: envoiHebdo }));
+    },
     supprimer: f => agir(() => http.post(`/favoris/${f.id}/supprimer`)),
   };
 }

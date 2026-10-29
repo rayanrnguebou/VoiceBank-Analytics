@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   api:
-    name: API (pytest + PostgreSQL + MariaDB)
+    name: API (pytest + PostgreSQL + MariaDB + Oracle)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -29,6 +29,14 @@ jobs:
         options: >-
           --health-cmd "healthcheck.sh --connect --innodb_initialized"
           --health-interval 5s --health-timeout 5s --health-retries 20
+      oracle:             # base externe de test pour le connecteur Oracle
+        image: gvenzl/oracle-free:23-slim-faststart
+        env:
+          ORACLE_PASSWORD: Oracle-Test-2026
+        ports: ["1521:1521"]
+        options: >-
+          --health-cmd healthcheck.sh
+          --health-interval 10s --health-timeout 5s --health-retries 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -45,6 +53,7 @@ jobs:
         env:
           TEST_PG_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/postgres
           TEST_MYSQL_ROOT_URL: mysql://root:root@127.0.0.1:3306/
+          TEST_ORACLE_URL: oracle://system:Oracle-Test-2026@127.0.0.1:1521/FREEPDB1
           PYTHONFAULTHANDLER: "1"
         # En cas d'échec, la fin du journal est remontée en annotation (visible sans télécharger les logs)
         run: |

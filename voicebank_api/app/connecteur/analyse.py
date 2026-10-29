@@ -50,6 +50,10 @@ def _compter(conn, nom, schema, dialecte, type_source) -> int | None:
             estimation = conn.exec_driver_sql(
                 "SELECT TABLE_ROWS FROM information_schema.TABLES WHERE TABLE_NAME = %(t)s "
                 "AND TABLE_SCHEMA = DATABASE()", {"t": nom}).scalar()
+        elif type_source == "oracle":
+            estimation = conn.exec_driver_sql(
+                "SELECT num_rows FROM all_tables WHERE table_name = :t AND owner = NVL(:s, USER)",
+                {"t": conn.dialect.denormalize_name(nom), "s": conn.dialect.denormalize_name(schema)}).scalar()
         elif type_source == "sqlserver":
             estimation = conn.exec_driver_sql(
                 "SELECT SUM(p.rows) FROM sys.partitions p JOIN sys.tables t ON t.object_id = p.object_id "

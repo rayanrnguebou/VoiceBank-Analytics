@@ -101,6 +101,9 @@ export default function BarreLaterale({ page, allerA, estAdmin, voitAdmin, exter
                 <Lien id="organisation" libelle={acces.type_organisation === "particulier" ? "Mon compte" : "Membres"}
                   Icone={Building2} {...props} />
               )}
+              {acces?.organisation && acces.type_organisation !== "particulier" && ["admin", "auditeur"].includes(acces.role_org) && (
+                <Lien id="journal" libelle="Journal" Icone={ScrollText} {...props} />
+              )}
               <Lien id="abonnement" libelle="Abonnement" Icone={CreditCard} {...props} />
             </>
           )}
@@ -129,7 +132,7 @@ export default function BarreLaterale({ page, allerA, estAdmin, voitAdmin, exter
             <p className="text-sm font-medium truncate">{session.utilisateur}</p>
             <p className="text-xs text-foret-100/60 truncate" title={acces?.organisation || undefined}>
               {session.role === "client" && acces?.organisation
-                ? `${acces.role_org === "admin" ? "Admin" : "Analyste"} · ${acces.organisation}`
+                ? `${{ admin: "Admin", analyste: "Analyste", lecteur: "Lecteur", auditeur: "Auditeur" }[acces.role_org] || "Membre"} · ${acces.organisation}`
                 : { admin: "Administrateur", analyste: "Analyste", visiteur: "Essai gratuit", client: "Abonné" }[session.role] || session.role}
             </p>
           </div>

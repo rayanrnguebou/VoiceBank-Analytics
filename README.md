@@ -33,7 +33,7 @@ des corrections, mesure de la fiabilité et journal d'audit.
 | **Crédit** | Probabilité de défaut, facteurs explicatifs (SHAP), crédits en cours les plus à risque. |
 | **Données personnelles** | Noms, e-mails, téléphones masqués pour le rôle analyste ; jamais envoyés à Gemini pour les résumés. |
 | **Essai et abonnements** | Accueil « Visiteur ou Organisation », essai gratuit 3 jours en lecture seule, formules jour / semaine / mois / année payées en FCFA (MTN MoMo, Orange Money, carte). |
-| **Connecteur « Mes données »** | Branche une base PostgreSQL, MySQL/MariaDB, SQL Server ou des fichiers Excel/CSV : analyse de la structure et du sens métier, diagnostic de qualité, puis questions en français dans le dialecte de la base. |
+| **Connecteur « Mes données »** | Branche une base PostgreSQL, MySQL/MariaDB, SQL Server, Oracle ou des fichiers Excel/CSV : analyse de la structure et du sens métier, diagnostic de qualité, puis questions en français dans le dialecte de la base. |
 | **Monnaie d'affichage** | Sélecteur en haut de l'écran (FCFA CEMAC / UEMOA, euro, dollar, livre, dollar canadien, franc suisse, yuan, naira) : réponses, résumé parlé, graphiques, indicateurs, alertes, crédit et tarifs suivent la monnaie choisie. FCFA ↔ euro à la parité officielle (655,957), autres taux BCE mis à jour toutes les 12 h. Les abonnements restent débités en FCFA. Pour une base connectée, la monnaie de ses montants est détectée (colonne « currency ») ou choisie. |
 | **Comptes** | Créés par l'administrateur (pas d'inscription libre), mot de passe provisoire à changer à la 1re connexion, blocage après 5 échecs, désactivation sans suppression. |
 | **Audit** | Connexions, consultations de fiches, corrections, alertes traitées, gestion des comptes : journal en ajout seul. |
@@ -216,6 +216,7 @@ démonstration est explorable).
 | Source | Ce qu'il faut |
 |---|---|
 | PostgreSQL, MySQL / MariaDB, SQL Server | adresse, port, base, **compte en lecture seule** (le formulaire donne le SQL pour le créer), serveur joignable depuis Internet |
+| Oracle (12c et plus) | adresse, port (1521, ou 2484 en TCPS chiffré), **nom du service** (ex. `ORCLPDB1`), compte en lecture seule et **schéma** propriétaire des tables. Aucun client Oracle à installer. |
 | Excel (.xlsx) / CSV | jusqu'à 5 fichiers de 10 Mo ; chaque feuille ou fichier devient une table |
 
 **Ce que fait l'analyse, quel que soit le schéma** (noms en français ou en anglais, sans documentation) :
@@ -269,7 +270,9 @@ verdicts s'affiche dans la fiche du modèle et règle les e-mails immédiats (se
 trompe souvent, aussi le risque élevé s'il est fiable).
 
 **Surveillance automatique** (chaque heure) : nouvelles alertes enregistrées, e-mail immédiat pour les plus graves,
-résumé du matin à 7 h (heure de Douala), rapport PDF le lundi (hebdomadaire) et le 1er du mois (mensuel). Chacun
+résumé du matin à 7 h (heure de Douala), rapport PDF le lundi (hebdomadaire) et le 1er du mois (mensuel),
+**relecture de la structure** des bases le dimanche (nouvelles tables et colonnes prises en compte ; e-mail si une
+table ou une colonne a disparu ; une base injoignable garde son ancien profil et reste surveillée). Chacun
 choisit ce qu'il reçoit (menu **Notifications**). Pour l'activer en ligne : Render crée `TACHES_CLE` ; recopie sa
 valeur dans les secrets GitHub `TACHES_CLE`, avec `API_URL` (adresse de l'API) — le workflow « Tâches automatiques »
 l'appelle chaque heure et réveille l'API. Sans ces secrets, l'API exécute les tâches seule quand elle est éveillée.
@@ -328,17 +331,45 @@ L'accueil demande **« Tu es… » Visiteur ou Organisation** :
 
 - L'abonnement appartient à l'**organisation**. Celui qui paie le premier abonnement en devient
   l'**administrateur** ; il voit **Mon organisation → Membres**.
-- Il **invite** ses collègues (nom, e-mail, rôle *Analyste* ou *Administrateur*). Chacun reçoit un
+- Il **invite** ses collègues (nom, e-mail, rôle). Chacun reçoit un
   **e-mail d'invitation** avec un lien d'activation (72 h, usage unique) pour choisir son mot de passe.
   Sans service d'e-mail, un mot de passe provisoire s'affiche une fois, à transmettre.
 - **Comptes inclus** (administrateur compris) : Jour et Semaine 3, Mois 10, Année 25 (`COMPTES_JOUR`,
   `COMPTES_SEMAINE`, `COMPTES_MOIS`, `COMPTES_ANNEE`). Un **particulier** a un seul compte.
 - Tous les membres **partagent** l'abonnement : à son échéance, toute l'organisation est bloquée jusqu'au
   renouvellement par un administrateur. Les analystes ne voient ni l'abonnement ni les paiements.
-- Les **bases connectées** sont partagées dans l'organisation : l'administrateur les branche, tous les membres
-  les interrogent. Une organisation ne voit jamais les membres ni les données d'une autre.
+- **Rôles** :
+
+  | Rôle | Peut |
+  |---|---|
+  | Administrateur | tout : membres, abonnement, bases, alertes, journal |
+  | Analyste | interroger les bases, traiter les alertes (assigner, commenter, verdict) |
+  | Lecteur | consulter (questions, tableaux, alertes) sans rien traiter |
+  | Auditeur (contrôle interne) | consulter tout, lire le **journal** de l'organisation (alertes traitées, connexions, changements de droits), sans rien modifier |
+
+- Les **bases connectées** sont partagées dans l'organisation ; l'administrateur peut **limiter un membre à
+  certaines bases** (colonne « Bases » de la liste des membres). Une organisation ne voit jamais les membres ni
+  les données d'une autre.
+- **Connexion avec Google ou Microsoft** (comptes d'entreprise, facultatif) : voir ci-dessous.
 - Les membres ne voient **pas** l'administration de la plateforme (comptes, audit, apprentissage…), réservée
   au super-administrateur ; seuls les visiteurs en essai la découvrent, anonymisée et en lecture seule.
+
+#### Connexion avec un compte Google Workspace ou Microsoft 365
+
+Les membres déjà invités peuvent se connecter avec le compte de leur entreprise (aucun compte n'est créé par ce
+biais : l'adresse e-mail doit être celle d'un compte VoiceBank actif). Boutons affichés seulement si configurés :
+
+- **Google** : [console.cloud.google.com](https://console.cloud.google.com/apis/credentials) → *Créer des
+  identifiants* → *ID client OAuth* → *Application Web*. URI de redirection autorisée :
+  `https://voicebank-ui.onrender.com/connexion-sso`. Renseigne `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` (API).
+- **Microsoft** : [portail Entra ID](https://entra.microsoft.com) → *Inscriptions d'applications* → *Nouvelle
+  inscription* (comptes de n'importe quel annuaire d'organisation), plateforme **Web**, URI de redirection
+  `https://voicebank-ui.onrender.com/connexion-sso` ; puis *Certificats et secrets* → nouveau secret.
+  Renseigne `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` et, pour n'accepter qu'un seul annuaire,
+  `MICROSOFT_TENANT` (son identifiant ; par défaut `organizations`).
+
+Sécurité : code d'autorisation avec PKCE, état signé valable 10 minutes et à usage unique, jeton d'identité vérifié
+(signature, audience, émetteur, expiration, nonce, adresse vérifiée chez Google).
 
 **E-mails professionnels** (vouvoiement, en-tête, récapitulatif, bouton, signature) : bienvenue à l'essai,
 reçu de paiement, invitation, code de vérification, confirmation de changement de mot de passe. Signature

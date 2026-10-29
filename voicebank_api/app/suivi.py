@@ -106,12 +106,20 @@ def detail(id_source: int, id_suivi: int) -> dict:
             "historique": [_jsonable(l) for l in h.lignes]}
 
 
+# Membres actifs ayant accès à la base s (alias u : utilisateurs, s : sources_donnees) : membres de l'organisation
+# propriétaire (sauf accès limité à d'autres bases), ou le propriétaire d'une base hors organisation.
+MEMBRES_AVEC_ACCES = (
+    "u.actif AND ((s.id_org IS NOT NULL AND u.id_org = s.id_org AND (NOT EXISTS (SELECT 1 FROM voicebank.acces_sources a "
+    "WHERE a.utilisateur = u.nom) OR EXISTS (SELECT 1 FROM voicebank.acces_sources a WHERE a.utilisateur = u.nom "
+    "AND a.id_source = s.id_source))) OR (s.id_org IS NULL AND u.nom = s.proprietaire))")
+
+
 def personnes_assignables(id_source: int) -> list[dict]:
-    """Membres actifs de l'organisation propriétaire de la source (ou son propriétaire, hors organisation)."""
+    """Membres qui peuvent traiter les alertes de la base (rôles en lecture seule exclus)."""
     r = db.ecrire("SELECT u.nom, COALESCE(u.nom_complet, u.nom) AS nom_complet FROM voicebank.sources_donnees s "
-                  "JOIN voicebank.utilisateurs u ON u.actif AND ((s.id_org IS NOT NULL AND u.id_org = s.id_org) "
-                  " OR (s.id_org IS NULL AND u.nom = s.proprietaire)) "
-                  "WHERE s.id_source = :s ORDER BY u.nom_complet NULLS LAST, u.nom", {"s": id_source})
+                  f"JOIN voicebank.utilisateurs u ON {MEMBRES_AVEC_ACCES} "
+                  "WHERE s.id_source = :s AND COALESCE(u.role_org, 'admin') NOT IN ('lecteur', 'auditeur') "
+                  "ORDER BY u.nom_complet NULLS LAST, u.nom", {"s": id_source})
     return [{"nom": l.nom, "nom_complet": l.nom_complet} for l in r.lignes]
 
 

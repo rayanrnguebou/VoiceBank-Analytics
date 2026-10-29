@@ -70,6 +70,21 @@ export async function connexion(nom, motDePasse) {
   return appliquerJeton(data);
 }
 
+// Connexion avec un compte d'entreprise (Google, Microsoft) : le vérificateur PKCE reste dans l'onglet.
+export async function demarrerSSO(fournisseur) {
+  const { data } = await http.get(`/auth/sso/${fournisseur}/debut`, { timeout: 90000 });
+  try { sessionStorage.setItem("voicebank_sso", JSON.stringify({ f: fournisseur, v: data.verificateur })); } catch (e) { /* rien */ }
+  window.location.assign(data.url);
+}
+
+export async function terminerSSO(code, etat) {
+  let s = null;
+  try { s = JSON.parse(sessionStorage.getItem("voicebank_sso") || "null"); sessionStorage.removeItem("voicebank_sso"); } catch (e) { /* rien */ }
+  if (!s) throw new Error("Connexion commencée dans un autre onglet ou expirée : recommence.");
+  const { data } = await http.post(`/auth/sso/${s.f}/fin`, { code, etat, verificateur: s.v }, { timeout: 90000 });
+  return appliquerJeton(data);
+}
+
 export async function inscriptionEssai(corps) {
   const { data } = await http.post("/auth/essai", corps, { timeout: 90000 });
   return appliquerJeton(data);
@@ -101,6 +116,7 @@ export function messageErreur(e) {
   if (typeof d === "string") return d;
   if (Array.isArray(d)) return "Données invalides";
   if (e?.code === "ECONNABORTED") return "Le serveur met trop de temps à répondre";
+  if (!e?.response && !e?.isAxiosError && e?.message) return e.message;
   if (!e?.response) return "API injoignable. Vérifie qu'elle est démarrée.";
   return "Erreur inattendue";
 }

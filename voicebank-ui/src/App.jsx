@@ -8,7 +8,7 @@ import EcranAccueil from "./panneaux/Accueil";
 import { BandeauAcces, PanelAbonnement, PanelAbonnements } from "./panneaux/Abonnement";
 import { LectureSeule, useLectureSeule, TITRE_LECTURE_SEULE } from "./lectureSeule";
 import PanelSources from "./panneaux/Connecteur";
-import PanelOrganisation from "./panneaux/Organisation";
+import PanelOrganisation, { PanelJournal } from "./panneaux/Organisation";
 import { Choix } from "./ChampListe";
 import ChampsEtablissement, { PAYS_MODELE } from "./panneaux/ChampsEtablissement";
 import { PanelFiches, PanelNotifications } from "./panneaux/Surveillance";
@@ -1526,6 +1526,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
     credit:        { titre: "Score de crédit",         sousTitre: sourceActive ? `Portefeuille de crédits de « ${sourceActive.nom} »` : "Risque de défaut d'une demande ou d'un crédit en cours" },
     historique:    { titre: "Historique",              sousTitre: "Questions de la session et rapport PDF" },
     modeles:       { titre: "Fiche des modèles",       sousTitre: sourceActive ? `Modèles d'IA appris sur « ${sourceActive.nom} » : données, fiabilité, dérive` : "Modèles d'IA de la démonstration : données, fiabilité, limites" },
+    journal:       { titre: "Journal de l'organisation", sousTitre: "Traitement des alertes et activité des membres" },
     notifications: { titre: "Notifications",           sousTitre: "Alertes, résumé du matin et rapports PDF reçus par e-mail" },
     apprentissage: { titre: "Apprentissage",           sousTitre: "Réponses signalées et corrections enregistrées" },
     fiabilite:     { titre: "Fiabilité",               sousTitre: "Taux de bonnes réponses sur les questions de référence" },
@@ -1790,6 +1791,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
           {voitAdmin && page === "comptes"       && <PanelComptes dark={dark} session={session} />}
           {externe && page === "abonnement"      && <PanelAbonnement dark={dark} acces={acces} utilisateur={session.utilisateur} />}
           {externe && page === "organisation"    && <PanelOrganisation dark={dark} onAbonnement={() => allerA("abonnement")} />}
+          {externe && page === "journal"         && <PanelJournal dark={dark} />}
           {estAdmin && page === "abonnements"    && <PanelAbonnements dark={dark} />}
           {estAdmin && page === "maintenance"    && <PanelMaintenance dark={dark} />}
         </main>

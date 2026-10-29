@@ -24,8 +24,13 @@ class SourceRefusee(Exception):
 
 
 # Une source est visible par son créateur et par tous les membres de son organisation cliente.
+# Portée d'un compte : ses bases, et celles de son organisation — sauf si son accès est limité à certaines bases
+# (table acces_sources : aucune ligne pour lui = toutes les bases de l'organisation).
 _PORTEE = ("(proprietaire = :p OR (id_org IS NOT NULL AND "
-           "id_org = (SELECT u.id_org FROM voicebank.utilisateurs u WHERE u.nom = :p)))")
+           "id_org = (SELECT u.id_org FROM voicebank.utilisateurs u WHERE u.nom = :p) AND "
+           "(NOT EXISTS (SELECT 1 FROM voicebank.acces_sources a WHERE a.utilisateur = :p) OR "
+           " EXISTS (SELECT 1 FROM voicebank.acces_sources a WHERE a.utilisateur = :p "
+           "         AND a.id_source = voicebank.sources_donnees.id_source))))")
 _ORG = "(SELECT u.id_org FROM voicebank.utilisateurs u WHERE u.nom = :p)"
 
 
@@ -112,6 +117,14 @@ def _droits_ecriture(conn, type_source: str, schema: str | None) -> bool | None:
         if type_source == "mysql":
             droits = " ".join(r[0] for r in conn.exec_driver_sql("SHOW GRANTS").fetchall()).upper()
             return any(m in droits for m in ("ALL PRIVILEGES", "INSERT", "UPDATE", "DELETE", "DROP"))
+        if type_source == "oracle":
+            return bool(conn.exec_driver_sql(
+                "SELECT COUNT(*) FROM (SELECT privilege FROM session_privs WHERE privilege IN ('INSERT ANY TABLE', "
+                "'UPDATE ANY TABLE', 'DELETE ANY TABLE', 'DROP ANY TABLE', 'ALTER ANY TABLE') "
+                "UNION ALL SELECT privilege FROM user_tab_privs WHERE grantee = USER AND privilege IN ('INSERT', 'UPDATE', 'DELETE') "
+                "UNION ALL SELECT privilege FROM role_tab_privs WHERE role IN (SELECT role FROM session_roles) "
+                "AND privilege IN ('INSERT', 'UPDATE', 'DELETE') "
+                "UNION ALL SELECT 'PROPRIETAIRE' FROM user_tables)").scalar())
         if type_source == "sqlserver":
             return bool(conn.exec_driver_sql(
                 "SELECT CASE WHEN IS_ROLEMEMBER('db_datawriter') = 1 OR IS_ROLEMEMBER('db_owner') = 1 THEN 1 ELSE 0 END").scalar())
@@ -121,7 +134,7 @@ def _droits_ecriture(conn, type_source: str, schema: str | None) -> bool | None:
 
 
 def tester(type_source: str, cfg: dict) -> dict:
-    if type_source not in ("postgresql", "mysql", "sqlserver"):
+    if type_source not in ("postgresql", "mysql", "sqlserver", "oracle"):
         raise SourceRefusee("Type de base inconnu")
     try:
         eng = moteur(type_source, cfg)
@@ -198,6 +211,35 @@ def analyser(id_source: int, proprietaire: str):
         log.warning("Analyse de la source %s impossible : %s", id_source, e)
         db.ecrire("UPDATE voicebank.sources_donnees SET statut = 'erreur', erreur = :e WHERE id_source = :i",
                   {"i": id_source, "e": message_erreur(e)[:500]})
+
+
+def _structure(profil: dict | None) -> dict[str, set[str]]:
+    return {t["nom"]: {c["nom"] for c in t.get("colonnes", [])} for t in (profil or {}).get("tables", []) if not t.get("erreur")}
+
+
+def reanalyser(id_source: int, proprietaire: str) -> dict:
+    """Ré-analyse planifiée : met le profil à jour sans jamais retirer la base de la surveillance. Si la base est
+    injoignable, l'ancien profil est gardé. Retourne les changements de structure (tables, colonnes)."""
+    l = _ligne(id_source, proprietaire)
+    if l.type_source == "fichier":
+        return {"ignoree": "fichiers : structure fixe"}
+    cfg = dechiffrer(l.config_chiffree)
+    try:
+        profil = analyse.analyser(_moteur_source(l), l.type_source, TYPES[l.type_source]["dialecte"], _schema(l.type_source, cfg))
+    except Exception as e:
+        log.warning("Ré-analyse de la source %s impossible : %s", id_source, e)
+        return {"erreur": message_erreur(e)}
+    profil["devise_detectee"] = devises.detecter_devise(profil)
+    avant, apres = _structure(l.profil), _structure(profil)
+    communes = avant.keys() & apres.keys()
+    changements = {
+        "tables_ajoutees": sorted(apres.keys() - avant.keys()), "tables_supprimees": sorted(avant.keys() - apres.keys()),
+        "colonnes_ajoutees": sorted(f"{t}.{c}" for t in communes for c in apres[t] - avant[t]),
+        "colonnes_supprimees": sorted(f"{t}.{c}" for t in communes for c in avant[t] - apres[t]),
+    }
+    db.ecrire("UPDATE voicebank.sources_donnees SET profil = CAST(:p AS JSONB), date_analyse = NOW(), erreur = NULL "
+              "WHERE id_source = :i", {"i": id_source, "p": json.dumps(profil, ensure_ascii=False, default=str)})
+    return {k: v for k, v in changements.items() if v}
 
 
 def analyser_en_arriere_plan(id_source: int, proprietaire: str, synchrone: bool = False):

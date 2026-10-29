@@ -45,11 +45,11 @@ class ChangementMdp(BaseModel):
 class Invitation(BaseModel):
     email: str = Field(min_length=5, max_length=64)
     nom_complet: str = Field(min_length=2, max_length=120)
-    role_org: Literal["analyste", "admin"] = "analyste"
+    role_org: Literal["analyste", "admin", "lecteur", "auditeur"] = "analyste"
 
 
 class ModificationMembre(BaseModel):
-    role_org: Literal["analyste", "admin"] | None = None
+    role_org: Literal["analyste", "admin", "lecteur", "auditeur"] | None = None
     actif: bool | None = None
 
 
@@ -154,7 +154,7 @@ class Commande(BaseModel):
 
 
 class ConnexionBase(BaseModel):
-    type_source: Literal["postgresql", "mysql", "sqlserver"]
+    type_source: Literal["postgresql", "mysql", "sqlserver", "oracle"]
     hote: str = Field(min_length=1, max_length=253)
     port: int | None = Field(None, ge=1, le=65535)
     base: str = Field(min_length=1, max_length=128)
@@ -460,8 +460,10 @@ def _source_defaut(u: Utilisateur) -> dict | None:
     if u.id_org is None:
         return None
     r = db.ecrire("SELECT s.id_source, s.nom FROM voicebank.organisations o JOIN voicebank.sources_donnees s "
-                  "ON s.id_source = o.source_defaut AND s.id_org = o.id_org AND s.statut = 'pret' WHERE o.id_org = :o",
-                  {"o": u.id_org}).lignes
+                  "ON s.id_source = o.source_defaut AND s.id_org = o.id_org AND s.statut = 'pret' WHERE o.id_org = :o "
+                  "AND (NOT EXISTS (SELECT 1 FROM voicebank.acces_sources a WHERE a.utilisateur = :u) "
+                  " OR EXISTS (SELECT 1 FROM voicebank.acces_sources a WHERE a.utilisateur = :u AND a.id_source = s.id_source))",
+                  {"o": u.id_org, "u": u.nom}).lignes
     return {"id": r[0].id_source, "nom": r[0].nom} if r else None
 
 

@@ -1,4 +1,4 @@
-"""Garde SQL pour les bases des organisations, quel que soit le moteur (PostgreSQL, MySQL, SQL Server, SQLite).
+"""Garde SQL pour les bases des organisations, quel que soit le moteur (PostgreSQL, MySQL, SQL Server, Oracle, SQLite).
 
 N'accepte qu'UNE requête de lecture (SELECT / UNION / WITH … SELECT) portant uniquement sur les tables
 découvertes lors de l'analyse, sans fonction dangereuse (fichiers, réseau, temporisation, administration),
@@ -6,6 +6,8 @@ puis plafonne le nombre de lignes dans le dialecte du moteur (LIMIT ou TOP).
 """
 import sqlglot
 from sqlglot import exp
+
+from . import oracle
 
 INTERDITS = (exp.Insert, exp.Update, exp.Delete, exp.Drop, exp.Create, exp.Alter, exp.Command, exp.Merge,
              exp.Into, exp.Lock, exp.Grant, exp.TruncateTable, exp.Set, exp.Use, exp.Transaction, exp.Commit,
@@ -71,6 +73,8 @@ def valider(sql: str, dialecte: str, tables_autorisees: set[str], max_lignes: in
                 if (nom in FONCTIONS_INTERDITES or nom.startswith(PREFIXES_INTERDITS)
                         or nom.startswith(PREFIXES_SYSTEME)):
                     raise SQLRefuse(f"Fonction interdite : {nom}")
+    if dialecte == oracle.DIALECTE and (motif := oracle.controler(arbre)):
+        raise SQLRefuse(motif)
     ctes = {c.alias_or_name.lower() for c in arbre.find_all(exp.CTE)}
     for table in arbre.find_all(exp.Table):
         nom = table.name.lower()
@@ -89,7 +93,9 @@ def valider(sql: str, dialecte: str, tables_autorisees: set[str], max_lignes: in
     if isinstance(arbre, exp.Select):
         limite = arbre.args.get("limit")
         try:
-            existant = int(limite.expression.name) if limite is not None else None
+            # LIMIT n, TOP n ou FETCH FIRST n ROWS ONLY (Oracle)
+            borne = (limite.args.get("count") if isinstance(limite, exp.Fetch) else limite.expression) if limite is not None else None
+            existant = int(borne.name) if borne is not None else None
         except (AttributeError, ValueError):
             existant = None
         if existant is None or existant > max_lignes:

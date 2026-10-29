@@ -14,6 +14,7 @@ import json
 import logging
 import socket
 import sqlite3
+import ssl as ssl_mod
 from contextlib import contextmanager
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -26,6 +27,7 @@ from sqlalchemy.engine import URL
 from sqlalchemy.pool import NullPool
 
 from .. import config
+from . import oracle  # noqa: F401  (enregistre le dialecte SQL « oraclevb »)
 
 log = logging.getLogger("voicebank")
 
@@ -33,6 +35,7 @@ TYPES = {
     "postgresql": {"libelle": "PostgreSQL", "port": 5432, "dialecte": "postgres", "schema": "public"},
     "mysql":      {"libelle": "MySQL / MariaDB", "port": 3306, "dialecte": "mysql", "schema": None},
     "sqlserver":  {"libelle": "SQL Server", "port": 1433, "dialecte": "tsql", "schema": "dbo"},
+    "oracle":     {"libelle": "Oracle", "port": 1521, "dialecte": "oraclevb", "schema": None},   # schéma : celui du compte
     "fichier":    {"libelle": "Excel / CSV", "port": None, "dialecte": "sqlite", "schema": None},
     "demo":       {"libelle": "Démonstration VoiceBank", "port": None, "dialecte": "postgres", "schema": "voicebank"},
 }
@@ -164,6 +167,20 @@ def moteur(type_source: str, cfg: dict, chemin_fichier: Path | None = None):
     elif type_source == "sqlserver":
         url = URL.create("mssql+pymssql", host=ip, **commun)
         args = {"login_timeout": 10, "timeout": t + 5, "appname": "VoiceBank Analytics"}
+    elif type_source == "oracle":
+        # « base » = nom du service (ex. ORCLPDB1, XEPDB1, FREEPDB1). Chiffrement TLS (TCPS) en « exigé » / « vérifié » :
+        # le port est alors souvent 2484. « Préféré » se connecte en clair (le pilote ne négocie pas le chiffrement).
+        commun.pop("database")
+        verifie = ssl == "verifie"
+        url = URL.create("oracle+oracledb", host=cfg["hote"] if verifie else ip, query={"service_name": cfg.get("base")},
+                         **commun)
+        args = {"tcp_connect_timeout": 10, "retry_count": 0}
+        if ssl in ("exige", "verifie"):
+            ctx = ssl_mod.create_default_context(cafile=certifi.where())
+            if not verifie:
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl_mod.CERT_NONE
+            args.update(protocol="tcps", ssl_context=ctx, ssl_server_dn_match=verifie)
     else:
         raise ConnexionRefusee("Type de source inconnu")
     return create_engine(url, poolclass=NullPool, connect_args=args)
@@ -179,6 +196,9 @@ def _preparer_session(conn, type_source: str):
                 conn.exec_driver_sql(instruction)
             except Exception:
                 pass                                   # MySQL et MariaDB n'ont pas les mêmes variables
+    elif type_source == "oracle":
+        conn.connection.driver_connection.call_timeout = (t + 5) * 1000   # coupe toute requête trop longue
+        conn.exec_driver_sql("SET TRANSACTION READ ONLY")
     elif type_source == "sqlserver":
         conn.exec_driver_sql("SET LOCK_TIMEOUT 5000")
         conn.exec_driver_sql("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
@@ -211,11 +231,14 @@ def message_erreur(e: Exception) -> str:
     if isinstance(e, ConnexionRefusee):
         return str(e)
     t = str(e).lower()
-    if "password" in t or "authentication" in t or "access denied" in t or "login failed" in t or "18456" in t:
+    if "ora-12514" in t or "ora-12505" in t or "dpy-6001" in t or "dpy-6003" in t:
+        return "Service Oracle introuvable : vérifie le nom du service (ex. ORCLPDB1, XEPDB1)."
+    if ("password" in t or "authentication" in t or "access denied" in t or "login failed" in t or "18456" in t
+            or "ora-01017" in t or "ora-28000" in t):
         return "Identifiant ou mot de passe refusé par la base."
     if "timeout" in t or "timed out" in t:
         return "Le serveur ne répond pas (délai dépassé) : vérifie l'adresse, le port et le pare-feu."
-    if "refused" in t or "could not connect" in t or "can't connect" in t or "unable to connect" in t or "20009" in t:
+    if "refused" in t or "dpy-6005" in t or "could not connect" in t or "can't connect" in t or "unable to connect" in t or "20009" in t:
         return "Connexion refusée : vérifie l'adresse, le port et que le serveur accepte les connexions externes."
     if "does not exist" in t or "unknown database" in t or "cannot open database" in t or "4060" in t:
         return "Base de données introuvable : vérifie son nom."

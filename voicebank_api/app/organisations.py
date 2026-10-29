@@ -21,7 +21,8 @@ from .securite import (EMAIL_VALIDE, CompteRefuse, Utilisateur, hacher, mdp_prov
 
 log = logging.getLogger("voicebank")
 
-ROLES_ORG = {"admin": "Administrateur", "analyste": "Analyste"}
+ROLES_ORG = {"admin": "Administrateur", "analyste": "Analyste", "lecteur": "Lecteur (consultation)",
+             "auditeur": "Auditeur (contrôle interne)"}
 FORMULES_LIBELLES = {k: v[0] for k, v in config.FORMULES.items()}
 
 
@@ -55,6 +56,12 @@ def infos(u: Utilisateur) -> dict:
         "COALESCE(doit_changer_mdp AND mdp_provisoire_expire < LOCALTIMESTAMP, FALSE) AS invitation_expiree "
         "FROM voicebank.utilisateurs WHERE id_org = :o ORDER BY actif DESC, role_org, nom", {"o": u.id_org}).lignes
     actifs = sum(1 for m in membres if m.actif)
+    acces = {}
+    for l in db.ecrire("SELECT a.utilisateur, a.id_source FROM voicebank.acces_sources a JOIN voicebank.utilisateurs u "
+                       "ON u.nom = a.utilisateur WHERE u.id_org = :o", {"o": u.id_org}).lignes:
+        acces.setdefault(l.utilisateur, []).append(l.id_source)
+    bases = db.ecrire("SELECT id_source, nom FROM voicebank.sources_donnees WHERE id_org = :o ORDER BY nom",
+                      {"o": u.id_org}).lignes
     return {
         "id": o.id_org, "nom": o.nom, "type": o.type_org, "formule": o.formule,
         "formule_libelle": FORMULES_LIBELLES.get(o.formule or "", None),
@@ -67,7 +74,10 @@ def infos(u: Utilisateur) -> dict:
             "statut": ("desactive" if not m.actif else "invitation_expiree" if m.invitation_expiree
                        else "invitation_en_attente" if m.doit_changer_mdp else "actif"),
             "derniere_connexion": m.derniere_connexion.isoformat() if m.derniere_connexion else None,
+            "bases": sorted(acces[m.nom]) if m.nom in acces else None,       # None : toutes les bases
             "moi": m.nom == u.nom} for m in membres],
+        "bases": [{"id": b.id_source, "nom": b.nom} for b in bases] if u.admin_org else [],
+        "roles": ROLES_ORG, "peut_voir_journal": u.admin_org or u.auditeur,
     }
 
 
@@ -251,7 +261,52 @@ def modifier_membre(par: Utilisateur, nom: str, role_org: str | None, actif: boo
         db.ecrire("UPDATE voicebank.utilisateurs SET role_org = COALESCE(:r, role_org), actif = COALESCE(:a, actif), "
                   "version_jeton = version_jeton + 1 WHERE nom = :n AND id_org = :o",
                   {"r": changements.get("role_org"), "a": changements.get("actif"), "n": nom, "o": par.id_org})
+        if changements.get("role_org") == "admin":          # un administrateur voit toutes les bases
+            db.ecrire("DELETE FROM voicebank.acces_sources WHERE utilisateur = :n", {"n": nom})
     return changements
+
+
+def definir_bases(par: Utilisateur, nom: str, ids: list[int] | None) -> list[int] | None:
+    """Limite l'accès d'un membre à certaines bases de l'organisation (None : toutes). Un administrateur voit
+    toujours tout : il gère les bases et les membres."""
+    m = _membre(par, nom)
+    if m.role_org == "admin" and ids is not None:
+        raise CompteRefuse("Un administrateur a accès à toutes les bases de l'organisation")
+    if ids is not None:
+        ids = sorted(set(ids))
+        if not ids:
+            raise CompteRefuse("Choisis au moins une base (ou « toutes les bases »)")
+        connues = {l.id_source for l in db.ecrire("SELECT id_source FROM voicebank.sources_donnees WHERE id_org = :o "
+                                                   "AND id_source = ANY(:i)", {"o": par.id_org, "i": ids}).lignes}
+        if connues != set(ids):
+            raise CompteRefuse("Base introuvable dans ton organisation")
+    with db.moteur_app.begin() as conn:
+        conn.execute(text("DELETE FROM voicebank.acces_sources WHERE utilisateur = :n"), {"n": nom})
+        for i in ids or []:
+            conn.execute(text("INSERT INTO voicebank.acces_sources (utilisateur, id_source) VALUES (:n, :i)"),
+                         {"n": nom, "i": i})
+    return ids
+
+
+def journal(u: Utilisateur, limite: int = 300) -> dict:
+    """Activité de l'organisation (connexions, alertes traitées, bases, membres, rapports) : pour son
+    administrateur et son auditeur. Jamais l'activité d'une autre organisation."""
+    if not (u.admin_org or u.auditeur):
+        raise CompteRefuse("Réservé à l'administrateur et à l'auditeur de l'organisation")
+    ev = db.ecrire("SELECT j.date_evenement, j.utilisateur, j.action, j.detail, j.adresse_ip "
+                   "FROM voicebank.journal_audit j JOIN voicebank.utilisateurs m ON m.nom = j.utilisateur "
+                   "WHERE m.id_org = :o ORDER BY j.date_evenement DESC LIMIT :l", {"o": u.id_org, "l": limite}).lignes
+    traitements = db.ecrire(
+        "SELECT c.date_commentaire, c.auteur, c.nature, c.texte, a.niveau, a.ref_operation, s.nom AS base "
+        "FROM voicebank.commentaires_alerte c JOIN voicebank.suivi_alertes a ON a.id_suivi = c.id_suivi "
+        "JOIN voicebank.sources_donnees s ON s.id_source = a.id_source WHERE s.id_org = :o "
+        "ORDER BY c.date_commentaire DESC LIMIT :l", {"o": u.id_org, "l": limite}).lignes
+    iso = lambda v: v.isoformat() if v else None  # noqa: E731
+    return {"evenements": [{"date": iso(e.date_evenement), "utilisateur": e.utilisateur, "action": e.action,
+                            "detail": e.detail, "adresse_ip": e.adresse_ip} for e in ev],
+            "traitements_alertes": [{"date": iso(t.date_commentaire), "auteur": t.auteur, "nature": t.nature,
+                                     "texte": t.texte, "niveau": t.niveau, "operation": t.ref_operation, "base": t.base}
+                                    for t in traitements]}
 
 
 def renommer(par: Utilisateur, nom: str):

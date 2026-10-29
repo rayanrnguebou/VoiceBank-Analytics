@@ -102,6 +102,13 @@ RATE_LIMIT_ACTIF = _env("RATE_LIMIT_ACTIF", "true").lower() == "true"
 # Anti-robot Cloudflare Turnstile (gratuit) : clé secrète côté API ; la clé de site va dans l'interface
 # (REACT_APP_TURNSTILE_SITE_KEY). Vide : vérification désactivée.
 TURNSTILE_SECRET = _env("TURNSTILE_SECRET")
+# Connexion avec un compte d'entreprise (OpenID Connect). Vide : bouton masqué. Adresse de retour à déclarer
+# chez le fournisseur : <URL_INTERFACE>/connexion-sso
+GOOGLE_CLIENT_ID = _env("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = _env("GOOGLE_CLIENT_SECRET")
+MICROSOFT_CLIENT_ID = _env("MICROSOFT_CLIENT_ID")
+MICROSOFT_CLIENT_SECRET = _env("MICROSOFT_CLIENT_SECRET")
+MICROSOFT_TENANT = _env("MICROSOFT_TENANT", "organizations")   # ou l'identifiant d'un seul locataire
 
 # ── Offre publique : essai gratuit et abonnements ─────────────
 INSCRIPTION_ESSAI = _env("INSCRIPTION_ESSAI", "true").lower() == "true"

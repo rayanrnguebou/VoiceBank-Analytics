@@ -332,7 +332,8 @@ CREATE TABLE IF NOT EXISTS voicebank.organisations (
 ALTER TABLE voicebank.utilisateurs ADD COLUMN IF NOT EXISTS id_org   INTEGER REFERENCES voicebank.organisations(id_org);
 ALTER TABLE voicebank.utilisateurs ADD COLUMN IF NOT EXISTS role_org VARCHAR(20);
 ALTER TABLE voicebank.utilisateurs DROP CONSTRAINT IF EXISTS utilisateurs_role_org_check;
-ALTER TABLE voicebank.utilisateurs ADD CONSTRAINT utilisateurs_role_org_check CHECK (role_org IN ('admin', 'analyste'));
+ALTER TABLE voicebank.utilisateurs ADD CONSTRAINT utilisateurs_role_org_check
+    CHECK (role_org IN ('admin', 'analyste', 'lecteur', 'auditeur'));
 CREATE INDEX IF NOT EXISTS idx_utilisateurs_org ON voicebank.utilisateurs (id_org);
 
 -- ══════════════════════════════════════════════════════════
@@ -409,6 +410,10 @@ CREATE TABLE IF NOT EXISTS voicebank.sources_donnees (
 CREATE INDEX IF NOT EXISTS idx_sources_proprietaire ON voicebank.sources_donnees (proprietaire);
 -- Monnaie des montants de la base (NULL : détectée automatiquement, sinon FCFA)
 ALTER TABLE voicebank.sources_donnees ADD COLUMN IF NOT EXISTS devise CHAR(3);
+-- Oracle ajouté aux moteurs pris en charge
+ALTER TABLE voicebank.sources_donnees DROP CONSTRAINT IF EXISTS sources_donnees_type_source_check;
+ALTER TABLE voicebank.sources_donnees ADD CONSTRAINT sources_donnees_type_source_check
+    CHECK (type_source IN ('postgresql', 'mysql', 'sqlserver', 'oracle', 'fichier'));
 
 CREATE TABLE IF NOT EXISTS voicebank.sources_fichiers (
     id_fichier          SERIAL       PRIMARY KEY,
@@ -547,6 +552,13 @@ CREATE TABLE IF NOT EXISTS voicebank.commentaires_alerte (
     date_commentaire TIMESTAMP   NOT NULL DEFAULT LOCALTIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_commentaires_alerte ON voicebank.commentaires_alerte (id_suivi);
+
+-- Accès d'un membre limité à certaines bases de son organisation (aucune ligne : toutes les bases)
+CREATE TABLE IF NOT EXISTS voicebank.acces_sources (
+    utilisateur VARCHAR(64) NOT NULL REFERENCES voicebank.utilisateurs(nom) ON DELETE CASCADE,
+    id_source   INTEGER     NOT NULL REFERENCES voicebank.sources_donnees(id_source) ON DELETE CASCADE,
+    PRIMARY KEY (utilisateur, id_source)
+);
 
 -- Ce que chacun veut recevoir par e-mail
 CREATE TABLE IF NOT EXISTS voicebank.preferences_notifications (

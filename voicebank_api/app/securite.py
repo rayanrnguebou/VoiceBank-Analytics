@@ -33,6 +33,9 @@ log = logging.getLogger("voicebank")
 
 ROLES = {"analyste", "admin"}                 # comptes internes (créés par l'administrateur)
 ROLES_EXTERNES = {"visiteur", "client"}       # essai gratuit / abonnés : lecture seule sur la démo
+# Rôles dans une organisation cliente : admin (gère tout), analyste (traite les alertes),
+# lecteur (consulte et interroge), auditeur (consulte + journal d'activité de l'organisation)
+ROLES_ORG_LECTURE = {"lecteur", "auditeur"}
 EMAIL_VALIDE = re.compile(r"[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,24}")
 _HASH_BCRYPT = re.compile(r"\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}")
 NOM_VALIDE = re.compile(r"[a-z0-9][a-z0-9._-]{2,31}")
@@ -61,6 +64,15 @@ class Utilisateur:
     @property
     def admin_org(self) -> bool:
         return self.role == "client" and self.id_org is not None and self.role_org == "admin"
+
+    @property
+    def peut_agir(self) -> bool:
+        """Traiter les alertes (statut, assignation, commentaires) : pas les rôles en lecture seule."""
+        return not (self.role == "client" and self.role_org in ROLES_ORG_LECTURE)
+
+    @property
+    def auditeur(self) -> bool:
+        return self.role == "client" and self.id_org is not None and self.role_org == "auditeur"
 
 
 class CompteRefuse(Exception):

@@ -1,7 +1,9 @@
 """Connexion, sessions, mot de passe, essai gratuit."""
 from fastapi import APIRouter
 
-from .. import antirobot
+from pydantic import BaseModel, Field
+
+from .. import antirobot, sso
 
 from .commun import (  # noqa: F401
     ChangementMdp,
@@ -84,7 +86,8 @@ def changer_mon_mot_de_passe(request: Request, body: ChangementMdp,
 @router.get("/auth/options")
 def options_connexion():
     """Ce que l'écran de connexion peut proposer."""
-    return {"oubli_par_email": recuperation.disponible(), "anti_robot": antirobot.actif()}
+    return {"oubli_par_email": recuperation.disponible(), "anti_robot": antirobot.actif(),
+            "sso": sso.disponibles()}
 
 
 def _anti_robot(jeton: str | None, ip: str | None):
@@ -158,3 +161,35 @@ def inscription_essai(request: Request, body: InscriptionEssai):
         courriel.envoyer_en_arriere_plan(u.nom, organisations.message_bienvenue_essai(body.nom_complet.strip(),
                                                                                       config.ESSAI_JOURS))
     return _reponse_jeton(u, securite.version_jeton(u.nom))
+
+
+class RetourSSO(BaseModel):
+    code: str = Field(min_length=1, max_length=4096)
+    etat: str = Field(min_length=1, max_length=2048)
+    verificateur: str = Field(min_length=43, max_length=128)
+
+
+@router.get("/auth/sso/{fournisseur}/debut")
+@limiter.limit("20/minute")
+def sso_debut(request: Request, fournisseur: str):
+    try:
+        return sso.debut(fournisseur)
+    except sso.SSORefuse as e:
+        raise HTTPException(404, str(e))
+
+
+@router.post("/auth/sso/{fournisseur}/fin")
+@limiter.limit("10/minute")
+def sso_fin(request: Request, fournisseur: str, body: RetourSSO):
+    ip = ip_client(request)
+    try:
+        nom = sso.fin(fournisseur, body.code, body.etat, body.verificateur)
+    except sso.SSORefuse as e:
+        audit.journaliser("sso", "connexion_refusee", {"fournisseur": fournisseur[:20], "motif": str(e)[:200]}, ip)
+        raise HTTPException(401, str(e))
+    u, version = sso.utilisateur(nom)
+    etat = maintenance.etat()
+    if etat["active"] and u.role != "admin":
+        return reponse_maintenance(etat)
+    audit.journaliser(u.nom, "connexion", {"role": u.role, "sso": fournisseur}, ip)
+    return _reponse_jeton(u, version)

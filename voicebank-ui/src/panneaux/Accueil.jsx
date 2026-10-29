@@ -12,7 +12,7 @@ import { Prix } from "./Abonnement";
 import { SelecteurDevise } from "../devise";
 import { BandeauAnnonce } from "../maintenance";
 import { SaisieCodeConnexion } from "./DoubleAuth";
-import { tx } from "../i18n";
+import { LANGUE, tx } from "../i18n";
 import SelecteurLangue from "../SelecteurLangue";
 
 const CHAMP = "w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white text-sm outline-none focus:border-foret-500";
@@ -478,6 +478,9 @@ export default function EcranAccueil({ onConnecte, annonce }) {
               {tx("Déjà un compte ? Se connecter")}
             </button>
           )}
+          <p className="mt-6 text-[11px] text-gray-500">
+            <a href={`/confidentialite/${LANGUE === "en" ? "#en" : ""}`} className="hover:underline">{tx("Politique de confidentialité")}</a>
+          </p>
         </section>
       </div>
     </div>

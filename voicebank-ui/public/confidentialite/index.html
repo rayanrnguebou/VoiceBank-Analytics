@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Confidentialité · Privacy — VoiceBank Analytics</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  :root { --fond: #0b1f17; --carte: #12291f; --texte: #e8efe9; --discret: #a7b8ae; --laiton: #d4b25f; --lien: #8fd3b0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.65 "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 32px 18px 64px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+  .logo { width: 36px; height: 36px; border-radius: 9px; background: var(--laiton); color: var(--fond); font-weight: 800; display: grid; place-items: center; }
+  h1 { font-size: 26px; margin: 18px 0 4px; }
+  h2 { font-size: 18px; margin: 30px 0 8px; color: var(--laiton); }
+  h3 { font-size: 15px; margin: 18px 0 4px; }
+  p, li { color: var(--texte); }
+  .discret { color: var(--discret); font-size: 13px; }
+  section { background: var(--carte); border: 1px solid #1f3a2d; border-radius: 14px; padding: 6px 24px 22px; margin-top: 22px; }
+  a { color: var(--lien); }
+  nav a { margin-right: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td, th { text-align: left; padding: 7px 8px; border-bottom: 1px solid #1f3a2d; vertical-align: top; }
+  th { color: var(--discret); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="logo">V</div><strong>VoiceBank Analytics</strong>
+    <span style="margin-left:auto"><a href="/">Retour à l'application · Back to the app</a></span>
+  </header>
+  <nav class="discret"><a href="#fr">Français</a><a href="#en">English</a></nav>
+
+  <section id="fr" lang="fr">
+    <h1>Politique de confidentialité</h1>
+    <p class="discret">Dernière mise à jour : 29 octobre 2026</p>
+
+    <h2>1. Qui sommes-nous ?</h2>
+    <p>VoiceBank Analytics (« VoiceBank ») est un service en ligne d'analyse vocale des données bancaires, édité par
+      Rayan Nguebou Temgoua, responsable du traitement des données décrites ici. Pour toute question, écrivez à
+      l'adresse de contact indiquée en bas de nos e-mails.</p>
+
+    <h2>2. Données que nous traitons</h2>
+    <table>
+      <tr><th>Données</th><th>Pourquoi</th></tr>
+      <tr><td>Nom, adresse e-mail, mot de passe (stocké uniquement sous forme chiffrée irréversible), rôle, organisation</td><td>Créer et sécuriser votre compte</td></tr>
+      <tr><td>Informations de facturation (raison sociale, responsable, téléphone, NIU, RCCM) et historique des paiements</td><td>Gérer l'abonnement et les reçus</td></tr>
+      <tr><td>Journal d'activité : connexions, adresse IP, actions (alertes traitées, comptes modifiés)</td><td>Sécurité, prévention des abus, piste d'audit</td></tr>
+      <tr><td>Questions posées (texte ou voix), préférences (langue, monnaie, e-mails)</td><td>Fournir les réponses et adapter le service</td></tr>
+      <tr><td>Données des bases ou fichiers que votre organisation connecte</td><td>Les analyser à votre demande, en lecture seule</td></tr>
+      <tr><td>Connexion avec Google ou Microsoft : nom et adresse e-mail transmis par le fournisseur</td><td>Vous identifier ; aucun autre accès à votre compte Google ou Microsoft</td></tr>
+    </table>
+
+    <h2>3. Comment nous protégeons les données</h2>
+    <ul>
+      <li>Accès aux bases des organisations <strong>en lecture seule</strong> ; identifiants de connexion chiffrés.</li>
+      <li>Les données personnelles des clients (noms, e-mails, téléphones, numéros de compte) sont <strong>masquées et ne sont jamais envoyées à l'IA</strong>.</li>
+      <li>Double authentification pour les administrateurs, protection contre les attaques par mot de passe, sessions limitées dans le temps.</li>
+      <li>Chaque organisation ne voit que ses propres membres et données.</li>
+    </ul>
+
+    <h2>4. Prestataires</h2>
+    <p>Nous faisons appel à des prestataires qui ne traitent les données que pour nous fournir leur service :</p>
+    <ul>
+      <li><strong>Render</strong> : hébergement de l'application et de sa base de données ;</li>
+      <li><strong>Google Gemini</strong> : rédaction des requêtes et des analyses (reçoit la question et la structure des tables, jamais de données personnelles) ;</li>
+      <li><strong>Groq</strong> : transcription de la voix en texte (l'enregistrement n'est pas conservé par VoiceBank) ;</li>
+      <li><strong>Brevo</strong> : envoi des e-mails (codes, invitations, alertes, reçus) ;</li>
+      <li><strong>NotchPay</strong> : paiements (MTN MoMo, Orange Money, carte) — nous ne voyons jamais vos données de carte ;</li>
+      <li><strong>Sentry</strong> : signalement des erreurs techniques, sans mot de passe, contenu de requête ni adresse IP ;</li>
+      <li><strong>Google, Microsoft</strong> : connexion avec votre compte professionnel, si vous la choisissez ;</li>
+      <li><strong>Cloudflare Turnstile</strong> : protection anti-robot de certains formulaires.</li>
+    </ul>
+    <p>Nous ne vendons ni ne louons aucune donnée, et nous n'en faisons aucun usage publicitaire.</p>
+
+    <h2>5. Durée de conservation</h2>
+    <p>Les données du compte sont conservées tant que le compte existe. Un compte désactivé conserve son historique
+      d'audit pour la traçabilité exigée dans le secteur financier. Les sauvegardes sont conservées 30 jours. Les
+      données d'une base connectée sont lues au moment de l'analyse ; seul un résumé (structure, indicateurs, alertes)
+      est conservé, et il est supprimé avec la source.</p>
+
+    <h2>6. Vos droits</h2>
+    <p>Vous pouvez demander l'accès, la rectification ou la suppression de vos données, ou vous opposer à leur
+      traitement, en écrivant à l'adresse de contact indiquée en bas de nos e-mails ou à l'administrateur de votre
+      organisation. Vous pouvez aussi saisir l'autorité de protection des données de votre pays.</p>
+
+    <h2>7. Cookies</h2>
+    <p>VoiceBank n'utilise pas de cookies publicitaires ni de suivi. Le navigateur garde uniquement votre session
+      (effacée à la fermeture de l'onglet) et vos préférences d'affichage (langue, monnaie, thème).</p>
+  </section>
+
+  <section id="en" lang="en">
+    <h1>Privacy policy</h1>
+    <p class="discret">Last updated: 29 October 2026</p>
+
+    <h2>1. Who we are</h2>
+    <p>VoiceBank Analytics (“VoiceBank”) is an online service for voice analytics on banking data, published by
+      Rayan Nguebou Temgoua, the data controller for the processing described here. For any question, write to the
+      contact address shown at the bottom of our emails.</p>
+
+    <h2>2. Data we process</h2>
+    <table>
+      <tr><th>Data</th><th>Why</th></tr>
+      <tr><td>Name, email address, password (stored only as an irreversible hash), role, organisation</td><td>Create and secure your account</td></tr>
+      <tr><td>Billing information (company name, contact person, phone, tax and registration numbers) and payment history</td><td>Manage the subscription and receipts</td></tr>
+      <tr><td>Activity log: sign-ins, IP address, actions (alerts handled, accounts changed)</td><td>Security, abuse prevention, audit trail</td></tr>
+      <tr><td>Questions asked (text or voice), preferences (language, currency, emails)</td><td>Provide answers and tailor the service</td></tr>
+      <tr><td>Data from the databases or files your organisation connects</td><td>Analyse it at your request, read-only</td></tr>
+      <tr><td>Sign-in with Google or Microsoft: name and email address provided by the identity provider</td><td>Identify you; no other access to your Google or Microsoft account</td></tr>
+    </table>
+
+    <h2>3. How we protect data</h2>
+    <ul>
+      <li><strong>Read-only</strong> access to organisations' databases; connection credentials are encrypted.</li>
+      <li>Customers' personal data (names, emails, phone and account numbers) is <strong>masked and never sent to the AI</strong>.</li>
+      <li>Two-factor authentication for administrators, protection against password attacks, time-limited sessions.</li>
+      <li>Each organisation only sees its own members and data.</li>
+    </ul>
+
+    <h2>4. Service providers</h2>
+    <p>We rely on providers that process data only to deliver their service to us:</p>
+    <ul>
+      <li><strong>Render</strong>: hosting of the application and its database;</li>
+      <li><strong>Google Gemini</strong>: writing queries and analyses (receives the question and the table structure, never personal data);</li>
+      <li><strong>Groq</strong>: speech-to-text (the recording is not kept by VoiceBank);</li>
+      <li><strong>Brevo</strong>: sending emails (codes, invitations, alerts, receipts);</li>
+      <li><strong>NotchPay</strong>: payments (MTN MoMo, Orange Money, card) — we never see your card details;</li>
+      <li><strong>Sentry</strong>: technical error reporting, without passwords, request content or IP addresses;</li>
+      <li><strong>Google, Microsoft</strong>: sign-in with your work account, if you choose it;</li>
+      <li><strong>Cloudflare Turnstile</strong>: anti-robot protection on some forms.</li>
+    </ul>
+    <p>We never sell or rent any data, and we make no advertising use of it.</p>
+
+    <h2>5. Retention</h2>
+    <p>Account data is kept as long as the account exists. A deactivated account keeps its audit history for the
+      traceability required in the financial sector. Backups are kept for 30 days. Data from a connected database is
+      read at analysis time; only a summary (structure, indicators, alerts) is kept, and it is deleted with the source.</p>
+
+    <h2>6. Your rights</h2>
+    <p>You can request access to, correction or deletion of your data, or object to its processing, by writing to the
+      contact address shown at the bottom of our emails or to your organisation's administrator. You may also contact
+      the data protection authority of your country.</p>
+
+    <h2>7. Cookies</h2>
+    <p>VoiceBank uses no advertising or tracking cookies. The browser only keeps your session (cleared when the tab is
+      closed) and your display preferences (language, currency, theme).</p>
+  </section>
+</main>
+</body>
+</html>

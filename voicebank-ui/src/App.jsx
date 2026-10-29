@@ -1804,7 +1804,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
 
         <footer className={`px-4 sm:px-8 py-4 text-xs ${dark ? "text-gray-600" : "text-gray-400"}`}>
           {tx("© {x} VoiceBank Analytics — Rayan Nguebou Temgoua", { x: new Date().getFullYear() })}
-          {" · "}<a href={`/confidentialite/${LANGUE === "en" ? "#en" : ""}`} target="_blank" rel="noopener" className="hover:underline">{tx("Politique de confidentialité")}</a>
+          {" · "}<a href={`/confidentialite/${LANGUE === "en" ? "#en" : ""}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{tx("Politique de confidentialité")}</a>
         </footer>
       </div>
     </div>

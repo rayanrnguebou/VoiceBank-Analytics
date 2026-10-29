@@ -235,3 +235,90 @@ def test_base_par_defaut_de_l_organisation(client, boite):
     assert client.post("/organisation/source-defaut", headers=h2, json={"id_source": sid}).status_code == 404
     client.post(f"/sources/{sid}/supprimer", headers=h)
     assert client.get("/auth/moi", headers=ha).json()["acces"]["source_defaut"] is None
+
+
+def _membre(client, h, boite, role, nom):
+    m = f"{nom}{_n[0]}@exemple.cm"
+    r = client.post("/organisation/membres", headers=h, json={"email": m, "nom_complet": nom.title(), "role_org": role})
+    assert r.status_code == 200, r.text
+    jeton, _ = _lien(boite, m)
+    return m, _h(client.post("/auth/invitation", json={"identifiant": m, "jeton": jeton, "nouveau": NOUVEAU}))
+
+
+def _base(client, h, nom):
+    csv = ("Date;Ville;Montant\n" + "\n".join(f"0{1 + i % 9}/01/2025;Douala;{i * 100}" for i in range(1, 30))).encode()
+    r = client.post("/sources/fichiers?synchrone=true", headers=h, data={"nom": nom},
+                    files=[("fichiers", ("ventes.csv", csv, "text/csv"))])
+    assert r.status_code == 200, r.text
+    return r.json()["id"]
+
+
+def test_roles_lecteur_et_auditeur(client, boite):
+    from app import db
+    email, h = _abonne(client)
+    lecteur, hl = _membre(client, h, boite, "lecteur", "lecteur")
+    auditeur, ha = _membre(client, h, boite, "auditeur", "auditeur")
+    analyste, han = _membre(client, h, boite, "analyste", "analyste")
+    inv = next(e for e in boite if e["a"] == lecteur and "invitation=" in (e["bouton"] or ("", ""))[1])
+    assert inv["details"]["Rôle"] == "Lecteur (consultation)"
+    sid = _base(client, h, "Ventes")
+    # Tous consultent et interrogent la base de l'organisation
+    for hh in (hl, ha, han):
+        assert client.post(f"/sources/{sid}/question", headers=hh, json={"texte": "Montant total par ville"}).status_code == 200
+    # Une alerte suivie sur la base : l'analyste la traite, le lecteur et l'auditeur la consultent seulement
+    db.ecrire("INSERT INTO voicebank.suivi_alertes (id_source, ref_operation, niveau, score) VALUES (:s, 'op-1', 'Critique', 0.999)",
+              {"s": sid})
+    i = db.ecrire("SELECT id_suivi FROM voicebank.suivi_alertes WHERE id_source = :s", {"s": sid}).scalar()
+    d = client.get(f"/sources/{sid}/alertes/{i}", headers=hl).json()
+    assert d["peut_traiter"] is False and {p["nom"] for p in d["assignables"]} == {email, analyste}
+    assert client.post(f"/sources/{sid}/alertes/{i}", headers=hl, json={"commentaire": "x"}).status_code == 403
+    assert client.post(f"/sources/{sid}/alertes/{i}", headers=ha, json={"statut": "resolue"}).status_code == 403
+    assert client.post(f"/sources/{sid}/alertes/{i}", headers=han, json={"assigne_a": lecteur}).status_code == 400
+    assert client.post(f"/sources/{sid}/alertes/{i}", headers=han, json={"commentaire": "Je vérifie."}).status_code == 200
+    # Journal de l'organisation : administrateur et auditeur, pas le lecteur ni l'analyste
+    j = client.get("/organisation/journal", headers=ha)
+    assert j.status_code == 200
+    assert any(t["texte"] == "Je vérifie." for t in j.json()["traitements_alertes"])
+    assert {e["utilisateur"] for e in j.json()["evenements"]} <= {email, lecteur, auditeur, analyste}
+    assert client.get("/organisation/journal", headers=h).status_code == 200
+    assert client.get("/organisation/journal", headers=hl).status_code == 403
+    assert client.get("/organisation/journal", headers=han).status_code == 403
+    # Pas de gestion des membres ni des bases pour l'auditeur
+    assert client.post("/organisation/membres", headers=ha, json={"email": "y@exemple.cm", "nom_complet": "Y Z"}).status_code == 403
+    assert client.post(f"/sources/{sid}/supprimer", headers=ha).status_code == 403
+
+
+def test_acces_limite_a_certaines_bases(client, boite):
+    from app import db
+    email, h = _abonne(client)
+    analyste, han = _membre(client, h, boite, "analyste", "restreint")
+    b1, b2 = _base(client, h, "Agence Douala"), _base(client, h, "Agence Yaoundé")
+    org = client.get("/organisation", headers=h).json()["data"]
+    assert {b["nom"] for b in org["bases"]} == {"Agence Douala", "Agence Yaoundé"}
+    assert next(m for m in org["membres"] if m["nom"] == analyste)["bases"] is None        # toutes, par défaut
+    # Limité à Douala : Yaoundé disparaît partout
+    r = client.post(f"/organisation/membres/{analyste}/bases", headers=h, json={"bases": [b1]})
+    assert r.status_code == 200 and r.json()["bases"] == [b1]
+    assert [s["id"] for s in client.get("/sources", headers=han).json()["data"] if s["id"]] == [b1]
+    assert client.get(f"/sources/{b2}", headers=han).status_code == 404
+    assert client.post(f"/sources/{b2}/question", headers=han, json={"texte": "Montant total"}).status_code in (404, 422)
+    # La base par défaut inaccessible n'est pas imposée à ce membre
+    client.post("/organisation/source-defaut", headers=h, json={"id_source": b2})
+    assert client.get("/auth/moi", headers=han).json()["acces"]["source_defaut"] is None
+    # Ni assignable ni destinataire pour la base qu'il ne voit pas
+    from app import suivi, taches
+    assert analyste not in {p["nom"] for p in suivi.personnes_assignables(b2)}
+    assert analyste in {p["nom"] for p in suivi.personnes_assignables(b1)}
+    assert analyste not in {d[0] for d in taches.destinataires(b2, "resume_quotidien")}
+    # Règles : un administrateur voit tout ; une base d'une autre organisation est refusée ; retour à « toutes »
+    assert client.post(f"/organisation/membres/{email}/bases", headers=h, json={"bases": [b1]}).status_code == 400
+    _, h2 = _abonne(client, raison="Autre")
+    b_autre = _base(client, h2, "Autre base")
+    assert client.post(f"/organisation/membres/{analyste}/bases", headers=h, json={"bases": [b_autre]}).status_code == 400
+    assert client.post(f"/organisation/membres/{analyste}/bases", headers=han, json={"bases": None}).status_code == 403
+    client.post(f"/organisation/membres/{analyste}/bases", headers=h, json={"bases": None})
+    assert {s["id"] for s in client.get("/sources", headers=han).json()["data"] if s["id"]} == {b1, b2}
+    # Devenir administrateur efface la restriction
+    client.post(f"/organisation/membres/{analyste}/bases", headers=h, json={"bases": [b1]})
+    client.post(f"/organisation/membres/{analyste}/modifier", headers=h, json={"role_org": "admin"})
+    assert not db.ecrire("SELECT 1 FROM voicebank.acces_sources WHERE utilisateur = :n", {"n": analyste}).lignes

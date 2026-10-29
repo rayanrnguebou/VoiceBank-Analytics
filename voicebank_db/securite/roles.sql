@@ -73,6 +73,8 @@ GRANT USAGE ON SEQUENCE voicebank.logs_vocaux_id_log_seq, voicebank.logs_correct
 GRANT SELECT, INSERT, UPDATE ON voicebank.suivi_alertes, voicebank.preferences_notifications,
                                 voicebank.taches_planifiees TO voicebank_app;
 GRANT SELECT, INSERT ON voicebank.commentaires_alerte TO voicebank_app;      -- historique : ajout seul
+GRANT SELECT, INSERT, DELETE ON voicebank.acces_sources TO voicebank_app;
+REVOKE ALL ON voicebank.acces_sources FROM voicebank_reader;
 GRANT USAGE ON SEQUENCE voicebank.suivi_alertes_id_suivi_seq,
                         voicebank.commentaires_alerte_id_commentaire_seq TO voicebank_app;
 REVOKE ALL ON voicebank.suivi_alertes, voicebank.commentaires_alerte, voicebank.preferences_notifications,

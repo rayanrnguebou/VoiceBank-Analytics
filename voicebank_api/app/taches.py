@@ -1,4 +1,5 @@
-"""Tâches automatiques : surveillance des bases des organisations, e-mails d'alerte, résumé du matin, rapports PDF.
+"""Tâches automatiques : surveillance des bases des organisations, e-mails d'alerte, résumé du matin, rapports PDF,
+relecture hebdomadaire de la structure des bases.
 
 Déclenchement :
 * chaque heure par GitHub Actions (POST /taches/executer avec la clé TACHES_CLE) : réveille aussi l'API sur
@@ -56,8 +57,7 @@ def destinataires(id_source: int, preference: str) -> list[tuple[str, str, str |
     r = db.ecrire(
         f"SELECT u.nom, COALESCE(u.email, CASE WHEN u.nom LIKE '%@%' THEN u.nom END) AS email, u.nom_complet, "
         f"COALESCE(p.{preference}, :d) AS veut FROM voicebank.sources_donnees s "
-        "JOIN voicebank.utilisateurs u ON u.actif AND ((s.id_org IS NOT NULL AND u.id_org = s.id_org) "
-        " OR (s.id_org IS NULL AND u.nom = s.proprietaire)) "
+        f"JOIN voicebank.utilisateurs u ON {suivi.MEMBRES_AVEC_ACCES} "
         "LEFT JOIN voicebank.preferences_notifications p ON p.utilisateur = u.nom WHERE s.id_source = :s",
         {"s": id_source, "d": defaut[preference]})
     return [(l.nom, l.email, l.nom_complet) for l in r.lignes if l.veut and l.email]
@@ -148,6 +148,32 @@ def resume_du_matin(src, maintenant_local: datetime) -> dict:
     return {"resume_emails": envoyes}
 
 
+def reanalyse_hebdomadaire(src, maintenant_local: datetime) -> dict:
+    """Le dimanche (heure de Douala), la structure des bases est relue : nouvelles tables ou colonnes prises en compte
+    par l'assistant et les modèles. Les administrateurs sont prévenus si une table ou une colonne a disparu."""
+    if maintenant_local.weekday() != 6 or maintenant_local.hour < 2:
+        return {}
+    nom_tache = f"reanalyse:{src.id_source}:{maintenant_local:%G-W%V}"
+    if _derniere(nom_tache):
+        return {}
+    res = sources.reanalyser(src.id_source, src.proprietaire)
+    _noter(nom_tache, res)
+    disparus = res.get("tables_supprimees", []) + res.get("colonnes_supprimees", [])
+    if disparus:
+        for _, email, nom in destinataires(src.id_source, "alertes_critiques"):
+            courriel.envoyer_en_arriere_plan(email, courriel.Message(
+                sujet=f"Structure modifiée · {src.nom}",
+                titre="La structure de votre base a changé",
+                salutation=_salut(nom),
+                paragraphes=[f"La relecture hebdomadaire de « {src.nom} » montre que des éléments ont disparu. Les questions "
+                             "et alertes qui les utilisaient peuvent ne plus fonctionner : vérifiez avec votre équipe "
+                             "informatique (renommage, droits du compte de lecture)."],
+                details=[("Disparu", x) for x in disparus[:15]] + [("Nouveau", x) for x in
+                                                                     (res.get("tables_ajoutees", []) + res.get("colonnes_ajoutees", []))[:10]],
+                bouton=("Ouvrir VoiceBank", config.URL_INTERFACE)))
+    return {"reanalyse": res or "aucun changement"}
+
+
 def rapports_periodiques(src, maintenant_local: datetime) -> dict:
     """Le lundi (rapport hebdomadaire) et le 1er du mois (rapport mensuel), après 7 h : PDF joint par e-mail."""
     res = {}
@@ -199,7 +225,8 @@ def executer(force: bool = False, maintenant: datetime | None = None) -> dict:
             for src in sources_surveillees():
                 etapes = {}
                 for etape in (lambda: analyser_source(src, maintenant.replace(tzinfo=None), force),
-                              lambda: resume_du_matin(src, local), lambda: rapports_periodiques(src, local)):
+                              lambda: resume_du_matin(src, local), lambda: rapports_periodiques(src, local),
+                              lambda: reanalyse_hebdomadaire(src, local)):
                     try:
                         etapes.update(etape() or {})
                     except Exception as e:

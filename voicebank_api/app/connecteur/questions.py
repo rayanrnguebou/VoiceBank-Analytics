@@ -17,7 +17,7 @@ from . import semantique as sem
 
 log = logging.getLogger("voicebank")
 
-NOMS_DIALECTES = {"postgres": "PostgreSQL", "mysql": "MySQL / MariaDB", "tsql": "SQL Server (T-SQL)",
+NOMS_DIALECTES = {"postgres": "PostgreSQL", "mysql": "MySQL / MariaDB", "tsql": "SQL Server (T-SQL)", "oraclevb": "Oracle",
                   "sqlite": "SQLite"}
 VRAI = {"1", "true", "t", "oui", "yes", "y", "vrai", "o"}
 MOTS_TEMPS = {"mois": "mois", "month": "mois", "mensuel": "mois", "annee": "annee", "an": "annee", "year": "annee",
@@ -278,7 +278,7 @@ def sql_gemini(question: str, profil: dict, dialecte: str) -> str | None:
     if client is None:
         return None
     schema = profil.get("schema")
-    prefixe = f"Les tables sont dans le schéma « {schema} » : préfixe-les ({schema}.table).\n" if schema and dialecte in ("postgres", "tsql") else ""
+    prefixe = f"Les tables sont dans le schéma « {schema} » : préfixe-les ({schema}.table).\n" if schema and dialecte in ("postgres", "tsql", "oraclevb") else ""
     prompt = (
         f"Tu traduis des questions en français en UNE requête SQL {NOMS_DIALECTES.get(dialecte, dialecte)}.\n"
         "Règles : une seule requête SELECT, uniquement les tables et colonnes listées, alias de colonnes "

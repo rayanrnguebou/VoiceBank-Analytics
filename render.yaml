@@ -37,6 +37,14 @@ services:
         generateValue: true
       - key: TURNSTILE_SECRET           # anti-robot (Cloudflare Turnstile) : clé secrète
         sync: false
+      - key: GOOGLE_CLIENT_ID           # connexion Google Workspace (facultatif, voir README)
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: MICROSOFT_CLIENT_ID        # connexion Microsoft 365 / Entra ID (facultatif, voir README)
+        sync: false
+      - key: MICROSOFT_CLIENT_SECRET
+        sync: false
       - key: NOTCHPAY_PUBLIC_KEY        # paiement : business.notchpay.co → Settings → API Keys
         sync: false
       - key: NOTCHPAY_HASH_KEY          # signature des webhooks (même page)

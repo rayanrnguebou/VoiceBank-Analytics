@@ -11,7 +11,7 @@ import { http } from "../api";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate } from "../ui";
 import { useDevise } from "../devise";
 
-const ICONES = { postgresql: Database, mysql: Database, sqlserver: Server, fichier: FileSpreadsheet, demo: Sparkles };
+const ICONES = { postgresql: Database, mysql: Database, sqlserver: Server, oracle: Server, fichier: FileSpreadsheet, demo: Sparkles };
 const LIB_ROLES = {
   identifiant: "Identifiant", montant: "Montant", quantite: "Quantité", taux: "Taux", score: "Score", date: "Date",
   statut: "Statut", categorie: "Catégorie", geographie: "Lieu", drapeau_fraude: "Fraude", texte: "Texte",
@@ -30,6 +30,11 @@ GRANT SELECT ON ma_base.* TO 'voicebank_lecture'@'%';`,
 USE ma_base;
 CREATE USER voicebank_lecture FOR LOGIN voicebank_lecture;
 ALTER ROLE db_datareader ADD MEMBER voicebank_lecture;`,
+  oracle: `CREATE USER voicebank_lecture IDENTIFIED BY "mot-de-passe-long";
+GRANT CREATE SESSION TO voicebank_lecture;
+-- pour chaque table du schéma à analyser (ex. BANQUE) :
+GRANT SELECT ON BANQUE.CLIENTS TO voicebank_lecture;
+-- puis indique BANQUE dans « Schéma ».`,
 };
 
 function Jauge({ score, dark }) {
@@ -97,10 +102,11 @@ function NouvelleSource({ dark, types, onCree, onAnnuler }) {
           <h2 className={titre(dark)}>Connecter tes données</h2>
           <button onClick={onAnnuler} className={boutonSecondaire(dark)}>Annuler</button>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {[["postgresql", "PostgreSQL", "Base PostgreSQL accessible sur Internet"],
             ["mysql", "MySQL / MariaDB", "Très courant dans les logiciels de gestion"],
             ["sqlserver", "SQL Server", "Fréquent dans les banques et grandes structures"],
+            ["oracle", "Oracle", "Systèmes bancaires centraux (12c et plus)"],
             ["fichier", "Excel / CSV", "Dépose tes fichiers, sans accès serveur"]].map(([code, lib, desc]) => {
             const Icone = ICONES[code];
             return (
@@ -158,8 +164,8 @@ function NouvelleSource({ dark, types, onCree, onAnnuler }) {
               <input value={f.hote} onChange={maj("hote")} required maxLength={253} placeholder="ex. db.mabanque.cm" className={champ(dark)} /></label>
             <label><span className={etiquette(dark)}>Port</span>
               <input type="number" min={1} max={65535} value={f.port} onChange={maj("port")} placeholder={String(portDefaut || "")} className={champ(dark)} /></label>
-            <label><span className={etiquette(dark)}>Base de données</span>
-              <input value={f.base} onChange={maj("base")} required maxLength={128} className={champ(dark)} /></label>
+            <label><span className={etiquette(dark)}>{type === "oracle" ? "Nom du service" : "Base de données"}</span>
+              <input value={f.base} onChange={maj("base")} required maxLength={128} placeholder={type === "oracle" ? "ex. ORCLPDB1" : undefined} className={champ(dark)} /></label>
             <label><span className={etiquette(dark)}>Utilisateur (lecture seule)</span>
               <input value={f.utilisateur} onChange={maj("utilisateur")} required maxLength={128} autoComplete="off" className={champ(dark)} /></label>
             <label><span className={etiquette(dark)}>Mot de passe</span>
@@ -171,11 +177,12 @@ function NouvelleSource({ dark, types, onCree, onAnnuler }) {
                 {type !== "sqlserver" && <option value="verifie">Vérifié (certificat contrôlé)</option>}
                 <option value="desactive">Désactivé</option>
               </select>
+              {type === "oracle" && (f.ssl === "prefere" || f.ssl === "desactive") && <span className={`${texteDiscret(dark)} block mt-1`}>Oracle : connexion non chiffrée. Choisis « Exigé » si ton serveur accepte TCPS (souvent le port 2484).</span>}
               {f.ssl === "verifie" && <span className={`${texteDiscret(dark)} block mt-1`}>Saisis le nom exact du serveur (pas son adresse IP) : il doit figurer sur son certificat.</span>}
             </label>
             {type !== "mysql" && (
               <label><span className={etiquette(dark)}>Schéma (facultatif)</span>
-                <input value={f.schema} onChange={maj("schema")} maxLength={128} pattern="[A-Za-z0-9_]+" placeholder={type === "sqlserver" ? "dbo" : "public"} className={champ(dark)} /></label>
+                <input value={f.schema} onChange={maj("schema")} maxLength={128} pattern="[A-Za-z0-9_]+" placeholder={type === "sqlserver" ? "dbo" : type === "oracle" ? "propriétaire des tables, ex. BANQUE" : "public"} className={champ(dark)} /></label>
             )}
           </div>
           <button type="button" onClick={() => setAide(!aide)} className={`text-xs flex items-center gap-1 ${dark ? "text-foret-300" : "text-foret-700"}`}>

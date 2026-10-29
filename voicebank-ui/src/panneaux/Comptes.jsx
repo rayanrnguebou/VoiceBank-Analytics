@@ -332,7 +332,7 @@ export function PanelComptes({ dark, session }) {
                     <td className="p-2">
                       {c.role === "visiteur" ? <span>Essai gratuit</span>
                         : c.role === "client" ? (
-                          <span>{c.role_org === "admin" ? "Admin" : "Analyste"} client
+                          <span>{{ admin: "Admin", analyste: "Analyste", lecteur: "Lecteur", auditeur: "Auditeur" }[c.role_org] || "Membre"} client
                             {c.organisation && <span className={`block ${texteDiscret(dark)}`}>{c.organisation}</span>}</span>
                         ) : gestion && !moi && c.actif ? (
                         <select value={c.role} aria-label={`Rôle de ${c.nom}`} className={`${champ(dark)} w-auto py-1`}

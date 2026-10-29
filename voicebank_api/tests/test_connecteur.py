@@ -594,3 +594,47 @@ def _taches_automatiques(client, admin, source_pg, monkeypatch, envois):
     assert client.post("/taches/executer", headers={"X-Cle-Taches": "mauvaise"}).status_code == 404
     r = client.post("/taches/executer", headers={"X-Cle-Taches": "cle-des-taches-de-test-2026"})
     assert r.status_code == 200 and "sources" in r.json()
+
+
+def test_reanalyse_hebdomadaire(client, admin, source_pg, base_pg, monkeypatch):
+    """Le dimanche, la structure est relue ; une table disparue est signalée ; une base injoignable reste surveillée."""
+    import json
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app import courriel, db, taches
+    from app.connecteur import service
+    envois = []
+    monkeypatch.setattr(courriel, "envoyer_en_arriere_plan", lambda dest, m: envois.append((dest, m)))
+    monkeypatch.setattr(taches, "destinataires", lambda i, p: [("rayan", "rayan@voicebank.test", "Rayan")])
+    with psycopg2.connect(_url_pg("banque_externe")) as b:
+        b.cursor().execute("CREATE TABLE agents (agent_id INTEGER PRIMARY KEY, agent_name VARCHAR(40)); "
+                           "ALTER TABLE payments ADD COLUMN agent_id INTEGER; GRANT SELECT ON agents TO lecteur_ext")
+    # Une table que la base n'a plus (renommée par l'équipe informatique)
+    p = db.ecrire("SELECT profil FROM voicebank.sources_donnees WHERE id_source = :i", {"i": source_pg}).scalar()
+    p["tables"].append({"nom": "old_cards", "colonnes": [{"nom": "card_id"}]})
+    db.ecrire("UPDATE voicebank.sources_donnees SET profil = CAST(:p AS JSONB) WHERE id_source = :i",
+              {"i": source_pg, "p": json.dumps(p)})
+    try:
+        dimanche = datetime(2026, 6, 7, 3, 0, tzinfo=ZoneInfo("Africa/Douala"))
+        res = taches.reanalyse_hebdomadaire(db.ecrire("SELECT id_source, nom, proprietaire FROM voicebank.sources_donnees "
+                                                      "WHERE id_source = :i", {"i": source_pg}).lignes[0], dimanche)
+        r = res["reanalyse"]
+        assert r["tables_ajoutees"] == ["agents"] and r["tables_supprimees"] == ["old_cards"], r
+        assert r["colonnes_ajoutees"] == ["payments.agent_id"], r
+        assert envois and envois[0][1].sujet.startswith("Structure modifiée") and ("Disparu", "old_cards") in envois[0][1].details
+        noms = {t["nom"] for t in client.get(f"/sources/{source_pg}", headers=admin).json()["data"]["profil"]["tables"]}
+        assert "agents" in noms and "old_cards" not in noms
+        # Une seule fois par semaine
+        src = db.ecrire("SELECT id_source, nom, proprietaire FROM voicebank.sources_donnees WHERE id_source = :i",
+                        {"i": source_pg}).lignes[0]
+        assert taches.reanalyse_hebdomadaire(src, dimanche) == {}
+        # Base injoignable : profil et statut gardés (la surveillance continue)
+        monkeypatch.setattr(service, "_moteur_source", lambda l: (_ for _ in ()).throw(OSError("connection refused")))
+        assert "erreur" in service.reanalyser(source_pg, "rayan")
+        assert db.ecrire("SELECT statut FROM voicebank.sources_donnees WHERE id_source = :i", {"i": source_pg}).scalar() == "pret"
+    finally:
+        monkeypatch.undo()
+        with psycopg2.connect(_url_pg("banque_externe")) as b:
+            b.cursor().execute("DROP TABLE agents; ALTER TABLE payments DROP COLUMN agent_id")
+        service.reanalyser(source_pg, "rayan")

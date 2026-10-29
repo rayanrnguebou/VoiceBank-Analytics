@@ -1,6 +1,8 @@
 """Organisations clientes : membres, invitations, base par défaut."""
 from fastapi import APIRouter
+from pydantic import BaseModel, Field
 
+from ..securite import CompteRefuse, utilisateur_courant
 from .commun import (  # noqa: F401
     ActivationInvitation,
     Depends,
@@ -57,6 +59,28 @@ def modifier_membre(request: Request, body: ModificationMembre, nom: str = Path(
     if changements:
         audit.journaliser(u.nom, "membre_modifie", {"compte": nom, "org": u.id_org, **changements}, ip_client(request))
     return {"status": "ok", "changements": changements}
+
+
+class BasesMembre(BaseModel):
+    bases: list[int] | None = Field(None, max_length=200)      # None : toutes les bases de l'organisation
+
+
+@router.post("/organisation/membres/{nom}/bases")
+def bases_membre(request: Request, body: BasesMembre, nom: str = Path(max_length=64),
+                 u: Utilisateur = Depends(admin_organisation)):
+    """Limite l'accès d'un membre à certaines bases (ou le rend à toutes)."""
+    ids = _compte(lambda: organisations.definir_bases(u, nom, body.bases))
+    audit.journaliser(u.nom, "acces_bases", {"compte": nom, "org": u.id_org, "bases": ids}, ip_client(request))
+    return {"status": "ok", "bases": ids}
+
+
+@router.get("/organisation/journal")
+def journal_organisation(u: Utilisateur = Depends(utilisateur_courant)):
+    """Activité de l'organisation : administrateur et auditeur uniquement."""
+    try:
+        return {"status": "ok", **organisations.journal(u)}
+    except CompteRefuse as e:
+        raise HTTPException(403, str(e))
 
 
 @router.post("/organisation/nom")

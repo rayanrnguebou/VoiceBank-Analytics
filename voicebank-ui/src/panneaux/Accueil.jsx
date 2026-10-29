@@ -5,7 +5,7 @@ import {
   Mail, KeyRound, ArrowLeft,
 } from "lucide-react";
 import AntiRobot, { CLE_SITE } from "../AntiRobot";
-import { http, connexion, inscriptionEssai, messageErreur, lireMotifDeconnexion, appliquerJeton } from "../api";
+import { http, connexion, inscriptionEssai, messageErreur, lireMotifDeconnexion, appliquerJeton, demarrerSSO, terminerSSO } from "../api";
 import { Logo } from "./BarreLaterale";
 import { reglesMotDePasse } from "./Comptes";
 import { Prix } from "./Abonnement";
@@ -159,7 +159,74 @@ function ActivationInvitation({ jeton, compte, onConnecte, onAnnuler }) {
   );
 }
 
-function Connexion({ onConnecte, oubliDisponible }) {
+const NOMS_SSO = { google: "Google", microsoft: "Microsoft" };
+
+function LogoSSO({ f }) {
+  if (f === "microsoft") {
+    return (
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+        <rect x="0" y="0" width="7.5" height="7.5" fill="#f25022" /><rect x="8.5" y="0" width="7.5" height="7.5" fill="#7fba00" />
+        <rect x="0" y="8.5" width="7.5" height="7.5" fill="#00a4ef" /><rect x="8.5" y="8.5" width="7.5" height="7.5" fill="#ffb900" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.8-2.1 5.1-4.4 6.7v5.5h7.1c4.2-3.8 6.6-9.5 6.6-16.2z" />
+      <path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-7.1-5.5c-2 1.3-4.5 2.1-7.4 2.1-5.7 0-10.5-3.8-12.2-9H4.5v5.7C8.1 41.1 15.5 46 24 46z" />
+      <path fill="#FBBC05" d="M11.8 28.3c-.4-1.3-.7-2.7-.7-4.3s.3-3 .7-4.3V14H4.5C3 17 2 20.4 2 24s1 7 2.5 10l7.3-5.7z" />
+      <path fill="#EA4335" d="M24 10.7c3.2 0 6.1 1.1 8.4 3.3l6.3-6.3C34.9 4.1 29.9 2 24 2 15.5 2 8.1 6.9 4.5 14l7.3 5.7c1.7-5.2 6.5-9 12.2-9z" />
+    </svg>
+  );
+}
+
+function BoutonsSSO({ fournisseurs }) {
+  const [envoi, setEnvoi] = useState(null);
+  const [erreur, setErreur] = useState(null);
+  if (!fournisseurs?.length) return null;
+  const aller = async f => {
+    setEnvoi(f); setErreur(null);
+    try { await demarrerSSO(f); } catch (err) { setErreur(messageErreur(err)); setEnvoi(null); }
+  };
+  return (
+    <div className="space-y-2">
+      {fournisseurs.map(f => (
+        <button key={f} type="button" onClick={() => aller(f)} disabled={!!envoi}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-white text-gray-900 text-sm font-medium hover:bg-gray-100 disabled:opacity-60">
+          <LogoSSO f={f} /> {envoi === f ? "Redirection…" : `Continuer avec ${NOMS_SSO[f] || f}`}
+        </button>
+      ))}
+      {erreur && <p role="alert" className="text-sm text-red-400">{erreur}</p>}
+      <p className="flex items-center gap-3 text-xs text-gray-500 pt-1">
+        <span className="h-px flex-1 bg-gray-700" /> ou avec ton mot de passe <span className="h-px flex-1 bg-gray-700" />
+      </p>
+    </div>
+  );
+}
+
+function RetourSSO({ onConnecte, onEchec }) {
+  const [erreur, setErreur] = useState(null);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    window.history.replaceState(null, "", "/");
+    if (q.get("error") || !q.get("code") || !q.get("state")) {
+      setErreur(q.get("error") === "access_denied" ? "Connexion annulée." : "Connexion interrompue : recommence.");
+      return;
+    }
+    terminerSSO(q.get("code"), q.get("state")).then(onConnecte).catch(err => setErreur(messageErreur(err)));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!erreur) {
+    return <p role="status" className="flex items-center gap-2 text-sm text-gray-300"><RefreshCw size={14} className="animate-spin" /> Connexion en cours…</p>;
+  }
+  return (
+    <div className="space-y-3">
+      <p role="alert" className="text-sm text-red-400">{erreur}</p>
+      <button type="button" onClick={onEchec} className="text-xs text-foret-300 hover:underline">Retour à la connexion</button>
+    </div>
+  );
+}
+
+function Connexion({ onConnecte, oubliDisponible, sso }) {
   const [oubli, setOubli] = useState(false);
   const [succes, setSucces] = useState(null);
   const [nom, setNom] = useState("");
@@ -183,6 +250,7 @@ function Connexion({ onConnecte, oubliDisponible }) {
   return (
     <form onSubmit={valider} className="space-y-4">
       {succes && <p role="status" className="text-sm text-emerald-400">{succes}</p>}
+      <BoutonsSSO fournisseurs={sso} />
       <label className="block">
         <span className={LIB}>Identifiant ou e-mail</span>
         <input value={nom} onChange={e => setNom(e.target.value)} autoComplete="username" required maxLength={64} className={CHAMP} />
@@ -281,10 +349,12 @@ function Essai({ onConnecte, formules }) {
 
 export default function EcranAccueil({ onConnecte, annonce }) {
   const [motif] = useState(() => lireMotifDeconnexion());
-  const [profil, setProfil] = useState(() => (motif || new URLSearchParams(window.location.search).get("paiement")) ? "organisation" : null);
+  const [profil, setProfil] = useState(() => (motif || window.location.pathname === "/connexion-sso" || new URLSearchParams(window.location.search).get("paiement")) ? "organisation" : null);
   const [serveur, setServeur] = useState("verification");
   const [formules, setFormules] = useState(null);
   const [oubliDisponible, setOubliDisponible] = useState(false);
+  const [sso, setSso] = useState([]);
+  const [retourSso, setRetourSso] = useState(() => window.location.pathname === "/connexion-sso");
   const [invitation, setInvitation] = useState(() => {
     const q = new URLSearchParams(window.location.search);
     return q.get("invitation") && q.get("compte") ? { jeton: q.get("invitation"), compte: q.get("compte") } : null;
@@ -297,7 +367,7 @@ export default function EcranAccueil({ onConnecte, annonce }) {
     http.get("/health", { timeout: 90000 })
       .then(() => {
         setServeur("pret");
-        http.get("/auth/options").then(r => setOubliDisponible(!!r.data.oubli_par_email)).catch(() => {});
+        http.get("/auth/options").then(r => { setOubliDisponible(!!r.data.oubli_par_email); setSso(r.data.sso || []); }).catch(() => {});
         return http.get("/abonnement/formules");
       })
       .then(r => r && setFormules(r.data))
@@ -349,7 +419,7 @@ export default function EcranAccueil({ onConnecte, annonce }) {
 
         <section className="bg-gray-900 border border-foret-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
           <BandeauAnnonce annonce={annonce} />
-          {!invitation && (
+          {!invitation && !retourSso && (
             <>
               <h2 className="font-semibold mb-3">Tu es…</h2>
               <div className="grid grid-cols-2 gap-3 mb-6">
@@ -369,12 +439,13 @@ export default function EcranAccueil({ onConnecte, annonce }) {
               Le serveur ne répond pas pour le moment : une mise à jour est sans doute en cours. Réessaie dans une minute.
             </p>
           )}
+          {retourSso && <RetourSSO onConnecte={onConnecte} onEchec={() => setRetourSso(false)} />}
           {invitation && (
             <ActivationInvitation jeton={invitation.jeton} compte={invitation.compte} onConnecte={onConnecte}
               onAnnuler={() => { setInvitation(null); setProfil("organisation"); window.history.replaceState(null, "", window.location.pathname); }} />
           )}
           {!invitation && profil === "visiteur" && <Essai onConnecte={onConnecte} formules={formules} />}
-          {!invitation && profil === "organisation" && <Connexion onConnecte={onConnecte} oubliDisponible={oubliDisponible} />}
+          {!invitation && !retourSso && profil === "organisation" && <Connexion onConnecte={onConnecte} oubliDisponible={oubliDisponible} sso={sso} />}
           {!invitation && !profil && (
             <p className="text-sm text-gray-400 flex items-center gap-2">
               <ArrowRight size={14} /> Choisis ton profil pour continuer.

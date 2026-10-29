@@ -22,6 +22,7 @@ av==15.1.0            # PyAV >= 16 incompatible avec faster-whisper 1.2.1 (test�
 # Connecteur : bases et fichiers des organisations
 pymysql==1.2.3        # MySQL / MariaDB
 pymssql==2.3.7        # SQL Server (FreeTDS inclus)
+oracledb==3.4.2       # Oracle (mode « thin » : sans client Oracle)
 openpyxl==3.1.5       # Excel .xlsx
 cryptography==50.0.2  # chiffrement des identifiants de connexion
 httpx==0.28.1           # paiement, e-mails (Brevo), anti-robot

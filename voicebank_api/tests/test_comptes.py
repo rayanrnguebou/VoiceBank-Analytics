@@ -87,15 +87,29 @@ def test_identifiants_invalides_ou_existants(client, admin):
                        json={"nom": "x.y.z", "role": "superadmin"}).status_code == 422
 
 
-def test_verrouillage_apres_5_echecs_puis_reinitialisation(client, admin):
+def test_echecs_bloquent_l_adresse_pas_le_compte(client, admin):
+    """5 échecs bloquent l'adresse de l'attaquant ; le titulaire, depuis la sienne, se connecte toujours."""
     _activer(client, admin, "marie.ndi")
+    pirate = {"X-Forwarded-For": "198.51.100.66"}
     for _ in range(5):
-        assert _login(client, "marie.ndi", "mauvais").status_code == 401
-    # Verrouillé : même le bon mot de passe est refusé, avec le même message
-    r = _login(client, "marie.ndi", BON_MDP)
-    assert r.status_code == 401 and r.json()["detail"] == _login(client, "inconnu", "x").json()["detail"]
-    liste = {c["nom"]: c for c in client.get("/admin/utilisateurs", headers=admin).json()["data"]}
-    assert liste["marie.ndi"]["verrouille"] is True
+        assert client.post("/auth/login", headers=pirate, json={"nom": "marie.ndi", "mot_de_passe": "mauvais"}).status_code == 401
+    r = client.post("/auth/login", headers=pirate, json={"nom": "marie.ndi", "mot_de_passe": BON_MDP})
+    assert r.status_code == 429 and "1 minute" in r.json()["detail"]
+    # Même réponse pour un identifiant inexistant : rien n'est révélé
+    for _ in range(5):
+        client.post("/auth/login", headers=pirate, json={"nom": "personne.ici", "mot_de_passe": "x"})
+    assert client.post("/auth/login", headers=pirate, json={"nom": "personne.ici", "mot_de_passe": "x"}).status_code == 429
+    r = client.post("/auth/login", headers={"X-Forwarded-For": "203.0.113.5"}, json={"nom": "marie.ndi", "mot_de_passe": BON_MDP})
+    assert r.status_code == 200
+    # Délai croissant : 2e blocage de 5 minutes
+    _admin_sql("UPDATE voicebank.echecs_connexion SET bloque_jusqua = NULL WHERE ip = '198.51.100.66'")
+    for _ in range(5):
+        client.post("/auth/login", headers=pirate, json={"nom": "marie.ndi", "mot_de_passe": "mauvais"})
+    r = client.post("/auth/login", headers=pirate, json={"nom": "marie.ndi", "mot_de_passe": BON_MDP})
+    assert r.status_code == 429 and "5 minutes" in r.json()["detail"]
+    # L'administrateur efface les blocages
+    assert client.post("/admin/utilisateurs/marie.ndi/debloquer", headers=admin).status_code == 200
+    assert client.post("/auth/login", headers=pirate, json={"nom": "marie.ndi", "mot_de_passe": BON_MDP}).status_code == 200
     nouveau = client.post("/admin/utilisateurs/marie.ndi/reinitialiser", headers=admin).json()["mot_de_passe_provisoire"]
     r = _login(client, "marie.ndi", nouveau)
     assert r.status_code == 200 and r.json()["doit_changer_mot_de_passe"] is True

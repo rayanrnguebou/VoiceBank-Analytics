@@ -1,0 +1,45 @@
+# Envoie un e-mail d'alerte (Brevo) quand un workflow échoue.
+# Secrets : BREVO_API_KEY (la même que l'API), ALERTE_EMAIL (destinataire), EMAIL_EXPEDITEUR (adresse validée chez Brevo)
+name: Alerte par e-mail
+description: Prévient l'équipe par e-mail de l'échec d'un workflow
+inputs:
+  sujet:
+    required: true
+  message:
+    required: true
+  brevo_api_key:
+    required: false
+  destinataire:
+    required: false
+  expediteur:
+    required: false
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        CLE: ${{ inputs.brevo_api_key }}
+        A: ${{ inputs.destinataire }}
+        DE: ${{ inputs.expediteur }}
+        SUJET: ${{ inputs.sujet }}
+        MESSAGE: ${{ inputs.message }}
+        LIEN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        if [ -z "$CLE" ] || [ -z "$A" ] || [ -z "$DE" ]; then
+          echo "::warning::Secrets BREVO_API_KEY / ALERTE_EMAIL / EMAIL_EXPEDITEUR absents : pas d'e-mail (GitHub prévient quand même par sa notification d'échec)."
+          exit 0
+        fi
+        python3 - <<'PY' > corps.json
+        import html, json, os
+        texte = f"{os.environ['MESSAGE']}\n\nDétails : {os.environ['LIEN']}"
+        print(json.dumps({"sender": {"name": "VoiceBank Analytics", "email": os.environ["DE"]},
+                          "to": [{"email": a.strip()} for a in os.environ["A"].split(",") if a.strip()],
+                          "subject": os.environ["SUJET"], "textContent": texte,
+                          "htmlContent": "<p>" + html.escape(os.environ["MESSAGE"]) + "</p><p><a href=\"" + os.environ["LIEN"]
+                                         + "\">Voir le journal de l'exécution</a></p>"}))
+        PY
+        code=$(curl -s -o reponse.txt -w "%{http_code}" -X POST https://api.brevo.com/v3/smtp/email \
+               -H "api-key: $CLE" -H "content-type: application/json" --data @corps.json)
+        echo "Brevo : HTTP $code"
+        rm -f corps.json
+        [ "$code" -lt 300 ] || { cat reponse.txt; exit 1; }

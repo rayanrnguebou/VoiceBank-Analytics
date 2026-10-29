@@ -1,5 +1,6 @@
 """Accueil, santé du service et maintenance."""
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from .commun import (  # noqa: F401
     Depends,
@@ -27,7 +28,15 @@ def accueil():
     return {"message": "VoiceBank Analytics API", "version": VERSION_API, "status": "OK"}
 
 
-@router.get("/health")
+@router.api_route("/health/pret", methods=["GET", "HEAD"])
+def pret():
+    """Pour la surveillance externe (UptimeRobot) : 200 si l'API ET la base répondent, 503 sinon."""
+    if not db.base_ok():
+        return JSONResponse({"status": "degraded", "database": "deconnectee"}, status_code=503)
+    return {"status": "ok"}
+
+
+@router.api_route("/health", methods=["GET", "HEAD"])
 def health():
     ok = db.base_ok()
     return {"status": "ok" if ok else "degraded",

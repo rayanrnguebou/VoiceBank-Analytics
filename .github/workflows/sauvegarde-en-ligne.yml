@@ -2,6 +2,8 @@
 # Secrets à créer (GitHub → Settings → Secrets and variables → Actions) :
 #   RENDER_DATABASE_URL     : External Database URL de voicebank-db (Render → Connect)
 #   SAUVEGARDE_MOT_DE_PASSE : phrase secrète longue, pour chiffrer (à garder hors de GitHub)
+# En cas d'échec, un e-mail part si ces secrets existent :
+#   BREVO_API_KEY, ALERTE_EMAIL (destinataire(s), séparés par des virgules), EMAIL_EXPEDITEUR
 # Restaurer : télécharger l'artefact, puis voir README « Sauvegarder la base ».
 name: Sauvegarde en ligne
 
@@ -18,6 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@v7       # pour l'action d'alerte par e-mail
+        with:
+          sparse-checkout: .github/actions
+
       - name: Vérifier la configuration
         id: config
         env:
@@ -43,7 +49,12 @@ jobs:
           docker run --rm -e URL postgres:18-alpine sh -c 'pg_dump "$URL" -Fc --no-owner' > "$FICHIER"
           test -s "$FICHIER"
           openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:MDP -in "$FICHIER" -out "$FICHIER.enc"
-          shred -u "$FICHIER"
+          # Contrôle : la sauvegarde chiffrée se relit et contient bien les tables de VoiceBank
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:MDP -in "$FICHIER.enc" -out controle.dump
+          docker run --rm -v "$PWD:/d" postgres:18-alpine pg_restore -l /d/controle.dump > contenu.txt
+          grep -q "TABLE voicebank utilisateurs" contenu.txt
+          echo "Contrôle : $(grep -c ' TABLE [a-z]' contenu.txt) tables"
+          shred -u "$FICHIER" controle.dump
           ls -l "$FICHIER.enc"
           echo "FICHIER=$FICHIER.enc" >> "$GITHUB_ENV"
 
@@ -55,3 +66,16 @@ jobs:
           path: ${{ env.FICHIER }}
           retention-days: 30
           if-no-files-found: error
+
+      - name: Prévenir par e-mail en cas d'échec
+        if: failure()
+        uses: ./.github/actions/alerte-email
+        with:
+          sujet: "⚠ Sauvegarde de la nuit en échec — VoiceBank"
+          message: >-
+            La sauvegarde automatique de la base en ligne a échoué cette nuit. Les sauvegardes précédentes restent
+            disponibles 30 jours. Vérifiez le secret RENDER_DATABASE_URL et l'état de la base sur Render, puis relancez
+            le workflow « Sauvegarde en ligne ».
+          brevo_api_key: ${{ secrets.BREVO_API_KEY }}
+          destinataire: ${{ secrets.ALERTE_EMAIL }}
+          expediteur: ${{ secrets.EMAIL_EXPEDITEUR }}

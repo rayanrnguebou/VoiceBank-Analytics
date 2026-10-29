@@ -116,3 +116,18 @@ def test_sso_compte_desactive(client, google):
         assert r.status_code == 401 and "Aucun compte" in r.json()["detail"]
     finally:
         db.ecrire("UPDATE voicebank.utilisateurs SET actif = TRUE WHERE nom = :n", {"n": EMAIL})
+
+
+def test_sso_puis_code_a_6_chiffres(client, google):
+    """Google / Microsoft ne dispensent pas du code de l'application si la double authentification est active."""
+    from app import double_auth
+    prep = double_auth.preparer(EMAIL)
+    double_auth.activer(EMAIL, double_auth.code_totp(prep["secret"].replace(" ", ""), int(time.time() // 30)))
+    try:
+        r, *_ = _parcours(client, google)
+        assert r.status_code == 200 and r.json()["double_auth"] and "access_token" not in r.json()
+        code = double_auth.code_totp(prep["secret"].replace(" ", ""), int(time.time() // 30) + 1)
+        r = client.post("/auth/2fa/connexion", json={"jeton_2fa": r.json()["jeton_2fa"], "code": code})
+        assert r.status_code == 200 and r.json()["utilisateur"] == EMAIL
+    finally:
+        double_auth.desactiver(EMAIL)

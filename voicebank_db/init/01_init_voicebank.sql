@@ -606,3 +606,35 @@ BEGIN
     RAISE NOTICE '   Tables créées : clients, transactions, credits, alertes_fraude, logs_vocaux';
     RAISE NOTICE '   Vues créées   : v_clients_par_banque, v_transactions_mensuelles, v_portefeuille_credit, v_dashboard_global';
 END $$;
+
+-- ══════════════════════════════════════════════════════════
+-- DOUBLE AUTHENTIFICATION ET PROTECTION DES CONNEXIONS
+-- ══════════════════════════════════════════════════════════
+-- Code à 6 chiffres d'une application (Google Authenticator, Microsoft Authenticator…) ; le secret est chiffré.
+CREATE TABLE IF NOT EXISTS voicebank.double_authentification (
+    utilisateur         VARCHAR(64)  PRIMARY KEY REFERENCES voicebank.utilisateurs(nom),
+    secret_chiffre      TEXT         NOT NULL,
+    active              BOOLEAN      NOT NULL DEFAULT FALSE,
+    dernier_pas         BIGINT       NOT NULL DEFAULT 0,          -- un code déjà utilisé est refusé
+    codes_secours       JSONB        NOT NULL DEFAULT '[]',       -- empreintes des codes de secours restants
+    date_activation     TIMESTAMP
+);
+-- Échecs par (identifiant, adresse IP) : un pirate bloque sa propre adresse, pas le compte de sa victime.
+CREATE TABLE IF NOT EXISTS voicebank.echecs_connexion (
+    identifiant         VARCHAR(254) NOT NULL,
+    ip                  VARCHAR(64)  NOT NULL,
+    echecs              INTEGER      NOT NULL DEFAULT 0,
+    palier              INTEGER      NOT NULL DEFAULT 0,          -- blocages successifs (délai croissant)
+    bloque_jusqua       TIMESTAMP,
+    dernier_echec       TIMESTAMP    NOT NULL DEFAULT LOCALTIMESTAMP,
+    PRIMARY KEY (identifiant, ip)
+);
+-- Adresses depuis lesquelles le titulaire s'est déjà connecté : restent autorisées si le compte est attaqué.
+CREATE TABLE IF NOT EXISTS voicebank.appareils_connus (
+    utilisateur         VARCHAR(64)  NOT NULL REFERENCES voicebank.utilisateurs(nom),
+    ip                  VARCHAR(64)  NOT NULL,
+    derniere_connexion  TIMESTAMP    NOT NULL DEFAULT LOCALTIMESTAMP,
+    PRIMARY KEY (utilisateur, ip)
+);
+-- verrouille_jusqua sert désormais de « mode protégé » (compte attaqué depuis de nombreuses adresses)
+ALTER TABLE voicebank.utilisateurs ADD COLUMN IF NOT EXISTS jeton_deblocage VARCHAR(64);

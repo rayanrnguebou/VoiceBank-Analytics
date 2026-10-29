@@ -2,6 +2,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from .. import double_auth
 from ..securite import CompteRefuse, utilisateur_courant
 from .commun import (  # noqa: F401
     ActivationInvitation,
@@ -59,6 +60,23 @@ def modifier_membre(request: Request, body: ModificationMembre, nom: str = Path(
     if changements:
         audit.journaliser(u.nom, "membre_modifie", {"compte": nom, "org": u.id_org, **changements}, ip_client(request))
     return {"status": "ok", "changements": changements}
+
+
+@router.post("/organisation/membres/{nom}/double-auth/reinitialiser")
+@limiter.limit("20/hour")
+def reinitialiser_double_auth_membre(request: Request, nom: str = Path(max_length=64),
+                                     u: Utilisateur = Depends(admin_organisation)):
+    """Membre qui a perdu son téléphone et ses codes de secours : il réactivera la double authentification."""
+    if nom == u.nom:
+        raise HTTPException(400, "Utilise un code de secours, ou demande à un autre administrateur de l'organisation.")
+    membre = db.ecrire("SELECT 1 FROM voicebank.utilisateurs WHERE nom = :n AND id_org = :o",
+                       {"n": nom, "o": u.id_org}).lignes
+    if not membre or not double_auth.active(nom):
+        raise HTTPException(404, "Membre introuvable ou double authentification non activée.")
+    double_auth.desactiver(nom)
+    db.ecrire("UPDATE voicebank.utilisateurs SET version_jeton = version_jeton + 1 WHERE nom = :n", {"n": nom})
+    audit.journaliser(u.nom, "double_auth_reinitialisee", {"compte": nom, "org": u.id_org}, ip_client(request))
+    return {"status": "ok"}
 
 
 class BasesMembre(BaseModel):

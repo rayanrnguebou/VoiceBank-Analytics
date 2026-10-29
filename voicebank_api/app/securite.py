@@ -10,7 +10,7 @@ Où vivent les comptes :
 * Si la table n'existe pas encore (ancienne base pas encore migrée), l'API fonctionne comme
   avant, uniquement avec VOICEBANK_USERS.
 
-Protections : verrouillage 15 min après 5 échecs, politique de mot de passe, révocation
+Protections : échecs comptés par adresse (protection.py), double authentification (double_auth.py), politique de mot de passe, révocation
 immédiate des sessions (version du jeton) en cas de changement de mot de passe, de rôle ou de
 désactivation, aucun compte supprimé (traçabilité), dernier administrateur protégé.
 """
@@ -40,8 +40,6 @@ EMAIL_VALIDE = re.compile(r"[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,24}")
 _HASH_BCRYPT = re.compile(r"\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}")
 NOM_VALIDE = re.compile(r"[a-z0-9][a-z0-9._-]{2,31}")
 ALGO = "HS256"
-MAX_ECHECS = 5
-DUREE_VERROU = timedelta(minutes=15)
 DUREE_MDP_PROVISOIRE = timedelta(hours=72)
 MDP_MIN = 12
 _MDP_COURANTS = {"motdepasse123", "password1234", "azerty123456", "voicebank2026", "123456789012",
@@ -56,6 +54,7 @@ class Utilisateur:
     acces_expire: bool = False       # essai terminé ou abonnement échu
     id_org: int | None = None        # organisation cliente (abonnement partagé)
     role_org: str | None = None      # « admin » (gère l'organisation) ou « analyste »
+    doit_configurer_2fa: bool = False  # administrateur sans double authentification : à activer d'abord
 
     @property
     def externe(self) -> bool:
@@ -206,27 +205,21 @@ def authentifier(nom: str, mot_de_passe: str) -> tuple[Utilisateur, int] | None:
         return (Utilisateur(nom, role), 0) if ok and role else None
 
     l = _ligne(nom)
-    if l is None:
+    if l is None or not l.actif:
         bcrypt.checkpw(mdp, _HASH_FACTICE)
         return None
-    if not l.actif or l.verrouille:
-        bcrypt.checkpw(mdp, _HASH_FACTICE)
-        return None
+    # Les échecs sont comptés par adresse IP (protection.py) : plus de blocage du compte entier ici.
     if not bcrypt.checkpw(mdp, l.hash_mdp.encode()):
-        echecs = l.echecs_connexion + 1
-        if echecs >= MAX_ECHECS:
-            db.ecrire("UPDATE voicebank.utilisateurs SET echecs_connexion = 0, "
-                      "verrouille_jusqua = LOCALTIMESTAMP + :v WHERE nom = :n", {"n": nom, "v": DUREE_VERROU})
-            log.warning("Compte '%s' verrouillé %s après %d échecs", nom, DUREE_VERROU, MAX_ECHECS)
-        else:
-            db.ecrire("UPDATE voicebank.utilisateurs SET echecs_connexion = :e WHERE nom = :n",
-                      {"n": nom, "e": echecs})
         return None
     if l.expire:
         return None     # mot de passe provisoire expiré : l'administrateur doit le réinitialiser
-    db.ecrire("UPDATE voicebank.utilisateurs SET echecs_connexion = 0, verrouille_jusqua = NULL, "
-              "derniere_connexion = LOCALTIMESTAMP WHERE nom = :n", {"n": nom})
     return Utilisateur(l.nom, l.role, l.doit_changer_mdp, l.acces_expire, l.id_org, l.role_org), l.version_jeton
+
+
+def noter_connexion(nom: str):
+    if mode_base():
+        db.ecrire("UPDATE voicebank.utilisateurs SET echecs_connexion = 0, derniere_connexion = LOCALTIMESTAMP "
+                  "WHERE nom = :n", {"n": nom})
 
 
 def creer_jeton(u: Utilisateur, version: int = 0, debut: int | None = None) -> str:
@@ -267,7 +260,8 @@ def _depuis_jeton(cred: HTTPAuthorizationCredentials | None) -> Utilisateur:
             raise erreur
         return Utilisateur(data["sub"], data["role"])
     r = db.ecrire("SELECT role, actif, doit_changer_mdp, version_jeton, id_org, role_org, "
-                  f"{_SQL_ACCES_EXPIRE} AS acces_expire FROM voicebank.utilisateurs "
+                  f"{_SQL_ACCES_EXPIRE} AS acces_expire, EXISTS (SELECT 1 FROM voicebank.double_authentification d "
+                  "WHERE d.utilisateur = utilisateurs.nom AND d.active) AS a_2fa FROM voicebank.utilisateurs "
                   "WHERE nom = :n", {"n": data["sub"]})
     l = r.lignes[0] if r.lignes else None
     # Compte supprimé, désactivé, rôle changé ou mot de passe changé : la session est révoquée.
@@ -275,7 +269,9 @@ def _depuis_jeton(cred: HTTPAuthorizationCredentials | None) -> Utilisateur:
     meme_role = l is not None and (l.role == data["role"] or {l.role, data["role"]} <= ROLES_EXTERNES)
     if l is None or not l.actif or not meme_role or l.version_jeton != data.get("ver"):
         raise erreur
-    return Utilisateur(data["sub"], l.role, l.doit_changer_mdp, l.acces_expire, l.id_org, l.role_org)
+    from .double_auth import requise
+    return Utilisateur(data["sub"], l.role, l.doit_changer_mdp, l.acces_expire, l.id_org, l.role_org,
+                       requise(l.role, l.role_org) and not l.a_2fa)
 
 
 def version_jeton(nom: str) -> int:
@@ -293,6 +289,8 @@ def utilisateur_valide(u: Utilisateur = Depends(utilisateur_authentifie)) -> Uti
     """Connecté, mot de passe définitif (mais l'essai ou l'abonnement peut être échu)."""
     if u.doit_changer:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Change ton mot de passe provisoire pour continuer")
+    if u.doit_configurer_2fa:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Active la double authentification pour continuer")
     return u
 
 
@@ -396,6 +394,8 @@ def lister_comptes() -> list[dict]:
                   "u.essai_fin, COALESCE(o.abonnement_fin, u.abonnement_fin) AS abonnement_fin, "
                   "COALESCE(o.formule, u.formule) AS formule, u.id_org, u.role_org, o.nom AS organisation, "
                   "COALESCE(u.verrouille_jusqua > LOCALTIMESTAMP, FALSE) AS verrouille, "
+                  "EXISTS (SELECT 1 FROM voicebank.double_authentification d WHERE d.utilisateur = u.nom AND d.active) "
+                  "AS double_auth, "
                   "COALESCE(u.doit_changer_mdp AND u.mdp_provisoire_expire < LOCALTIMESTAMP, FALSE) AS provisoire_expire "
                   "FROM voicebank.utilisateurs u LEFT JOIN voicebank.organisations o ON o.id_org = u.id_org "
                   "ORDER BY u.actif DESC, o.nom NULLS FIRST, u.nom")

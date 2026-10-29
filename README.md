@@ -35,7 +35,7 @@ des corrections, mesure de la fiabilité et journal d'audit.
 | **Essai et abonnements** | Accueil « Visiteur ou Organisation », essai gratuit 3 jours en lecture seule, formules jour / semaine / mois / année payées en FCFA (MTN MoMo, Orange Money, carte). |
 | **Connecteur « Mes données »** | Branche une base PostgreSQL, MySQL/MariaDB, SQL Server, Oracle ou des fichiers Excel/CSV : analyse de la structure et du sens métier, diagnostic de qualité, puis questions en français dans le dialecte de la base. |
 | **Monnaie d'affichage** | Sélecteur en haut de l'écran (FCFA CEMAC / UEMOA, euro, dollar, livre, dollar canadien, franc suisse, yuan, naira) : réponses, résumé parlé, graphiques, indicateurs, alertes, crédit et tarifs suivent la monnaie choisie. FCFA ↔ euro à la parité officielle (655,957), autres taux BCE mis à jour toutes les 12 h. Les abonnements restent débités en FCFA. Pour une base connectée, la monnaie de ses montants est détectée (colonne « currency ») ou choisie. |
-| **Comptes** | Créés par l'administrateur (pas d'inscription libre), mot de passe provisoire à changer à la 1re connexion, blocage après 5 échecs, désactivation sans suppression. |
+| **Comptes** | Créés par l'administrateur (pas d'inscription libre), mot de passe provisoire à changer à la 1re connexion, **double authentification** (obligatoire pour les administrateurs), protection contre le devinage de mots de passe sans blocage possible par un tiers, désactivation sans suppression. |
 | **Audit** | Connexions, consultations de fiches, corrections, alertes traitées, gestion des comptes : journal en ajout seul. |
 
 ## Fonctionnement
@@ -108,11 +108,32 @@ ADMIN_DATABASE_URL=postgresql://voicebank_admin:MOT_DE_PASSE@localhost:5432/voic
 | `analyste` | Questions, tableaux de bord, alertes, scores. Noms et coordonnées des clients masqués. |
 | `admin` | Tout, plus : comptes, corrections (apprentissage), SQL manuel, fiabilité, audit. |
 
-**Protections** : 5 mots de passe faux → compte bloqué 15 min (même message d'erreur que pour un
-compte inconnu) ; **Réinitialiser** donne un nouveau mot de passe provisoire et débloque ; changer
-de mot de passe, de rôle ou désactiver un compte **déconnecte immédiatement** ses sessions ; aucun
-compte n'est supprimé (l'audit reste lisible) ; on ne peut ni se désactiver soi-même ni retirer le
-dernier administrateur. Chacun peut changer son mot de passe (icône 🔑 en bas de la barre latérale).
+**Protections** : changer de mot de passe, de rôle ou désactiver un compte **déconnecte immédiatement** ses
+sessions ; aucun compte n'est supprimé (l'audit reste lisible) ; on ne peut ni se désactiver soi-même ni retirer le
+dernier administrateur. Chacun gère la sécurité de son compte (icône 🔑 en bas de la barre latérale) : mot de passe,
+double authentification, e-mail de récupération.
+
+#### Double authentification (code à 6 chiffres)
+
+En plus du mot de passe, un code à 6 chiffres affiché par une application du téléphone (Google Authenticator,
+Microsoft Authenticator, Authy…). **Obligatoire pour les administrateurs** (plateforme et organisations) : à leur
+prochaine connexion, ils scannent un QR code avant de pouvoir continuer ; facultative pour les autres
+(`DOUBLE_AUTH_ADMINS=facultative` la rend facultative pour tous). Aussi demandée après une connexion Google / Microsoft.
+- 10 **codes de secours** à usage unique, affichés une fois (téléphone perdu) ; régénérables.
+- Téléphone et codes perdus : un autre administrateur clique **Réinit. 2FA** (Comptes, ou Mon organisation → Membres).
+- Un code déjà utilisé est refusé ; 5 codes faux bloquent l'adresse de l'essayeur.
+
+#### Mots de passe faux : l'attaquant se bloque lui-même, pas sa victime
+
+Avant, 5 essais faux bloquaient le compte 15 minutes : n'importe qui pouvait empêcher un administrateur de travailler.
+- Les échecs sont comptés **par adresse** : au 5e, seule l'adresse de l'essayeur est bloquée pour ce compte
+  (1 min, puis 5, 15, 60 min). Le titulaire, depuis la sienne, se connecte normalement.
+- Attaque depuis de nombreuses adresses (20 échecs en une heure) : le compte passe 24 h en **mode protégé**. Les
+  adresses d'où le titulaire s'est déjà connecté restent acceptées ; depuis un nouvel appareil, le mot de passe ne
+  suffit plus.
+- **Déblocage que le pirate ne peut pas déclencher** : un lien à usage unique part à l'adresse e-mail *du compte* ;
+  il n'autorise que l'appareil qui l'ouvre. Se connecter avec Google / Microsoft, réinitialiser son mot de passe par
+  e-mail, ou un administrateur (**Débloquer** dans Comptes) lèvent aussi la protection.
 
 #### Mot de passe oublié (code par e-mail)
 
@@ -191,6 +212,9 @@ La base gratuite de Render n'a pas de sauvegarde : un workflow GitHub en fait un
    - `SAUVEGARDE_MOT_DE_PASSE` : une longue phrase secrète, notée en lieu sûr (sans elle, les
      sauvegardes sont illisibles).
 2. Onglet **Actions → Sauvegarde en ligne → Run workflow** pour tester tout de suite.
+3. **E-mail si la sauvegarde échoue** : ajoute aussi `BREVO_API_KEY` (la même que sur Render), `EMAIL_EXPEDITEUR`
+   (adresse validée chez Brevo) et `ALERTE_EMAIL` (destinataire(s), séparés par des virgules). Chaque sauvegarde est
+   aussi **relue** (déchiffrement et lecture du contenu) : une sauvegarde illisible compte comme un échec.
 
 Restaurer une sauvegarde en ligne (Git Bash ou macOS / Linux) :
 
@@ -207,6 +231,15 @@ Pour que le site public montre les mêmes données que ta base locale :
 Database URL* de Render. Le script sauvegarde d'abord ta base locale, puis remplace en ligne les
 clients, crédits, transactions, alertes et corrections apprises. **Les comptes, mots de passe,
 paiements et journaux d'audit ne sont jamais copiés.** À relancer quand tes données changent.
+
+## Surveillance : être prévenu avant les utilisateurs
+
+| Quoi | Outil (gratuit) | Mise en place |
+|---|---|---|
+| Erreurs de l'API et de l'interface | [Sentry](https://sentry.io) | Crée 2 projets (*Python / FastAPI* et *Browser JavaScript*). Copie leur **DSN** dans Render : `SENTRY_DSN` (API) et `REACT_APP_SENTRY_DSN` (interface). Sentry envoie un e-mail à chaque nouvelle erreur. Ni mots de passe, ni données des bases, ni adresses IP ne sont transmis. |
+| Site hors ligne | [UptimeRobot](https://uptimerobot.com) | *New monitor* → HTTP(s), toutes les 5 min : `https://voicebank-api.onrender.com/health/pret` (répond 503 si la base est inaccessible) et `https://voicebank-ui.onrender.com`. Ajoute ton e-mail (et l'application mobile) comme contact d'alerte. Effet bonus : l'API reste éveillée. |
+| Sauvegarde de la nuit | GitHub Actions + Brevo | Voir « Sauvegarder la base → En ligne » (e-mail en cas d'échec). |
+| Tâches automatiques | GitHub Actions | GitHub prévient par e-mail quand le workflow « Tâches automatiques » échoue (réglage par défaut des notifications). |
 
 ## Connecteur : brancher les données d'une organisation
 
@@ -510,7 +543,8 @@ audio dangereux, CORS, limitation des tentatives de connexion.
 
 - Authentification JWT (mots de passe hachés en bcrypt), rôles `analyste` / `admin`.
 - Comptes créés par l'administrateur uniquement ; mot de passe provisoire à usage unique (72 h),
-  politique de mot de passe, blocage après 5 échecs, révocation immédiate des sessions.
+  politique de mot de passe, double authentification (TOTP) des administrateurs, échecs bloqués par adresse
+  (jamais le compte), mode protégé avec déblocage par lien e-mail, révocation immédiate des sessions.
 - La table des comptes est invisible pour le compte lecture seule et pour le SQL généré par l'IA.
 - Déconnexion automatique après 15 min d'inactivité (avertissement 1 min avant) ; le jeton est
   renouvelé tant que l'utilisateur est actif, donc pas de coupure en pleine analyse.

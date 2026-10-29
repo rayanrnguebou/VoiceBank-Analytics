@@ -37,6 +37,8 @@ services:
         generateValue: true
       - key: TURNSTILE_SECRET           # anti-robot (Cloudflare Turnstile) : clé secrète
         sync: false
+      - key: SENTRY_DSN                 # alertes d'erreurs de l'API (sentry.io, gratuit ; voir README)
+        sync: false
       - key: GOOGLE_CLIENT_ID           # connexion Google Workspace (facultatif, voir README)
         sync: false
       - key: GOOGLE_CLIENT_SECRET
@@ -89,11 +91,13 @@ services:
       # Si l'API change d'adresse (domaine personnalisé), mets-la aussi dans connect-src.
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://voicebank-api.onrender.com https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; media-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        value: "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://voicebank-api.onrender.com https://challenges.cloudflare.com https://*.ingest.sentry.io https://*.ingest.de.sentry.io https://*.ingest.us.sentry.io; frame-src https://challenges.cloudflare.com; media-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     envVars:
       - key: REACT_APP_API_URL         # ex. https://voicebank-api.onrender.com
         sync: false
       - key: REACT_APP_POWER_BI_URL
+        sync: false
+      - key: REACT_APP_SENTRY_DSN       # alertes d'erreurs de l'interface (projet Sentry « navigateur »)
         sync: false
       - key: REACT_APP_TURNSTILE_SITE_KEY   # anti-robot (Cloudflare Turnstile) : clé de site, publique
         sync: false

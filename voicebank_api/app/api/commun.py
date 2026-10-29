@@ -344,7 +344,7 @@ def _question_vers_resultat(texte: str, u: Utilisateur, contexte: ContexteQuesti
 def _reponse_jeton(u: Utilisateur, version: int, debut: int | None = None) -> dict:
     return {"access_token": creer_jeton(u, version, debut), "token_type": "bearer",
             "utilisateur": u.nom, "role": u.role, "doit_changer_mot_de_passe": u.doit_changer,
-            "expire_dans_min": config.JWT_DUREE_MIN}
+            "expire_dans_min": config.JWT_DUREE_MIN, "doit_configurer_2fa": u.doit_configurer_2fa}
 
 
 MESSAGE_CODE = ("Si un compte avec une adresse e-mail correspond, un code à 6 chiffres vient d'y être envoyé. "

@@ -25,6 +25,7 @@ import PanelCredit from "./panneaux/Credit";
 import BarreLaterale from "./panneaux/BarreLaterale";
 import { FormulaireSignalement, EditeurCorrection, PanelApprentissage, PanelFiabilite, PanelAudit } from "./panneaux/Admin";
 import { EcranMotDePasseProvisoire, FenetreMotDePasse, PanelComptes } from "./panneaux/Comptes";
+import { EcranDoubleAuthObligatoire } from "./panneaux/DoubleAuth";
 import { lireAVoixHaute, arreterLecture, telechargerCsv, nomFichier } from "./ui";
 import { ecouterReponse, interpreterReponse } from "./conversation";
 import {
@@ -1257,6 +1258,8 @@ export default function App() {
         : !session ? <EcranAccueil onConnecte={setSession} annonce={maintenance.annonce} />
         : session.doitChangerMdp
           ? <EcranMotDePasseProvisoire session={session} onTermine={setSession} onDeconnexion={seDeconnecter} />
+        : session.doitConfigurer2fa
+          ? <EcranDoubleAuthObligatoire session={session} onTermine={setSession} onDeconnexion={seDeconnecter} />
           : <Tableau key={session.utilisateur} session={session} onDeconnexion={seDeconnecter} onSession={setSession}
               maintenance={maintenance} />}
     </FournisseurDevise>

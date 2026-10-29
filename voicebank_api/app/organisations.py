@@ -53,8 +53,9 @@ def infos(u: Utilisateur) -> dict:
     o = _org(u.id_org)
     membres = db.ecrire(
         "SELECT nom, nom_complet, email, role_org, actif, doit_changer_mdp, derniere_connexion, date_creation, "
-        "COALESCE(doit_changer_mdp AND mdp_provisoire_expire < LOCALTIMESTAMP, FALSE) AS invitation_expiree "
-        "FROM voicebank.utilisateurs WHERE id_org = :o ORDER BY actif DESC, role_org, nom", {"o": u.id_org}).lignes
+        "COALESCE(doit_changer_mdp AND mdp_provisoire_expire < LOCALTIMESTAMP, FALSE) AS invitation_expiree, "
+        "EXISTS (SELECT 1 FROM voicebank.double_authentification d WHERE d.utilisateur = utilisateurs.nom AND d.active) "
+        "AS double_auth FROM voicebank.utilisateurs WHERE id_org = :o ORDER BY actif DESC, role_org, nom", {"o": u.id_org}).lignes
     actifs = sum(1 for m in membres if m.actif)
     acces = {}
     for l in db.ecrire("SELECT a.utilisateur, a.id_source FROM voicebank.acces_sources a JOIN voicebank.utilisateurs u "
@@ -75,6 +76,7 @@ def infos(u: Utilisateur) -> dict:
                        else "invitation_en_attente" if m.doit_changer_mdp else "actif"),
             "derniere_connexion": m.derniere_connexion.isoformat() if m.derniere_connexion else None,
             "bases": sorted(acces[m.nom]) if m.nom in acces else None,       # None : toutes les bases
+            "double_auth": m.double_auth,
             "moi": m.nom == u.nom} for m in membres],
         "bases": [{"id": b.id_source, "nom": b.nom} for b in bases] if u.admin_org else [],
         "roles": ROLES_ORG, "peut_voir_journal": u.admin_org or u.auditeur,

@@ -12,13 +12,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
-from . import config, credit, fraude, maintenance, securite, taches, transcription
+from . import alertes_erreurs, config, credit, fraude, maintenance, securite, taches, transcription
 from .api import abonnement, admin, assistant, auth, demo, organisation, sources, surveillance, systeme
 from .api.commun import VERSION_API, _lire, _SQL_CREDIT, reponse_maintenance  # noqa: F401  (utilisés par les tests)
 from .limites import limiter
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("voicebank")
+alertes_erreurs.demarrer(VERSION_API)           # Sentry (si SENTRY_DSN) : avant la création de l'application
 
 app = FastAPI(
     title="VoiceBank Analytics API",

@@ -3,11 +3,12 @@
 // provisoire (affiché une seule fois, valable 72 h) que la personne change à sa première connexion.
 import { useState, useEffect, useCallback } from "react";
 import {
-  KeyRound, UserPlus, Copy, Check, RotateCcw, Lock, ShieldCheck, UserX, UserCheck, X, Circle, CircleCheck, Mail,
+  KeyRound, UserPlus, Copy, Check, RotateCcw, Lock, ShieldCheck, UserX, UserCheck, X, Circle, CircleCheck, Mail, Smartphone,
 } from "lucide-react";
 import { useAPI } from "../useAPI";
 import { appliquerJeton, http } from "../api";
 import { Logo } from "./BarreLaterale";
+import { SectionDoubleAuth } from "./DoubleAuth";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate } from "../ui";
 
 // Même règles que l'API (app/securite.py) : affichées en direct pour guider la saisie.
@@ -113,11 +114,12 @@ export function FenetreMotDePasse({ dark, session, onTermine, onFermer }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center px-4" onClick={onFermer}>
       <div role="dialog" aria-modal="true" aria-labelledby="titre-mdp" onClick={e => e.stopPropagation()}
-        className={`w-full max-w-md ${carte(dark)}`}>
+        className={`w-full max-w-md max-h-[92vh] overflow-y-auto ${carte(dark)}`}>
         <div className="flex items-center justify-between mb-4">
-          <h2 id="titre-mdp" className={`${titre(dark)} flex items-center gap-2`}><KeyRound size={18} /> Changer mon mot de passe</h2>
+          <h2 id="titre-mdp" className={`${titre(dark)} flex items-center gap-2`}><KeyRound size={18} /> Sécurité de mon compte</h2>
           <button onClick={onFermer} aria-label="Fermer" className={boutonSecondaire(dark)}><X size={14} /></button>
         </div>
+        <SectionDoubleAuth dark={dark} onSession={onTermine} />
         <EmailRecuperation dark={dark} session={session} />
         {fait ? (
           <div className="space-y-3">
@@ -222,7 +224,7 @@ const BADGE = "text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowra
 
 function Statut({ c }) {
   if (!c.actif) return <span className={`${BADGE} bg-gray-500/15 text-gray-500`}>Désactivé</span>;
-  if (c.verrouille) return <span className={`${BADGE} bg-red-500/15 text-red-500`}>Bloqué 15 min</span>;
+  if (c.verrouille) return <span className={`${BADGE} bg-red-500/15 text-red-500`} title="Nombreux mots de passe erronés depuis plusieurs adresses : seules ses adresses habituelles sont acceptées">Protégé (attaque)</span>;
   if (c.provisoire_expire) return <span className={`${BADGE} bg-amber-500/15 text-amber-600`}>Mot de passe provisoire expiré</span>;
   if (c.doit_changer_mdp) return <span className={`${BADGE} bg-amber-500/15 text-amber-600`}>Première connexion en attente</span>;
   return <span className={`${BADGE} bg-emerald-500/15 text-emerald-600`}>Actif</span>;
@@ -342,7 +344,10 @@ export function PanelComptes({ dark, session }) {
                         </select>
                       ) : (c.role === "admin" ? "Administrateur" : "Analyste")}
                     </td>
-                    <td className="p-2"><Statut c={c} /></td>
+                    <td className="p-2">
+                      <div className="flex flex-wrap gap-1"><Statut c={c} />
+                        {c.double_auth && <span className={`${BADGE} bg-foret-500/15 text-foret-500`} title="Double authentification active">2FA</span>}</div>
+                    </td>
                     <td className={`p-2 ${texteDiscret(dark)}`}>{c.derniere_connexion ? formaterDate(c.derniere_connexion) : "Jamais"}</td>
                     {gestion && (
                       <td className="p-2">
@@ -352,6 +357,17 @@ export function PanelComptes({ dark, session }) {
                               className={`${boutonSecondaire(dark)} flex items-center gap-1`}>
                               {c.verrouille ? <Lock size={13} /> : <RotateCcw size={13} />} Réinitialiser
                             </button>
+                          )}
+                          {c.verrouille && (
+                            <button onClick={() => action.appeler("post", `/admin/utilisateurs/${encodeURIComponent(c.nom)}/debloquer`).then(r => r && charger())}
+                              disabled={action.chargement} title="Lever la protection et effacer les blocages d'adresses"
+                              className={`${boutonSecondaire(dark)} flex items-center gap-1`}><Lock size={13} /> Débloquer</button>
+                          )}
+                          {c.double_auth && !moi && (
+                            <button onClick={() => window.confirm(`Réinitialiser la double authentification de ${c.nom} (téléphone perdu) ? Il devra la réactiver à sa prochaine connexion.`)
+                              && action.appeler("post", `/admin/utilisateurs/${encodeURIComponent(c.nom)}/double-auth/reinitialiser`).then(r => r && charger())}
+                              disabled={action.chargement} className={`${boutonSecondaire(dark)} flex items-center gap-1`}>
+                              <Smartphone size={13} /> Réinit. 2FA</button>
                           )}
                           {!moi && (c.actif ? (
                             <button onClick={() => modifier(c, { actif: false }, `Désactiver ${c.nom} ? Il est déconnecté immédiatement ; son historique est conservé.`)}

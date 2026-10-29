@@ -11,6 +11,7 @@ import { reglesMotDePasse } from "./Comptes";
 import { Prix } from "./Abonnement";
 import { SelecteurDevise } from "../devise";
 import { BandeauAnnonce } from "../maintenance";
+import { SaisieCodeConnexion } from "./DoubleAuth";
 
 const CHAMP = "w-full px-4 py-3 rounded-xl bg-gray-800 border border-gray-700 text-white text-sm outline-none focus:border-foret-500";
 const LIB = "block text-xs text-gray-400 mb-1";
@@ -206,6 +207,7 @@ function BoutonsSSO({ fournisseurs }) {
 
 function RetourSSO({ onConnecte, onEchec }) {
   const [erreur, setErreur] = useState(null);
+  const [etape, setEtape] = useState(null);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     window.history.replaceState(null, "", "/");
@@ -213,8 +215,10 @@ function RetourSSO({ onConnecte, onEchec }) {
       setErreur(q.get("error") === "access_denied" ? "Connexion annulée." : "Connexion interrompue : recommence.");
       return;
     }
-    terminerSSO(q.get("code"), q.get("state")).then(onConnecte).catch(err => setErreur(messageErreur(err)));
+    terminerSSO(q.get("code"), q.get("state")).then(r => (r.etape2fa ? setEtape(r.etape2fa) : onConnecte(r)))
+      .catch(err => setErreur(messageErreur(err)));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (etape) return <SaisieCodeConnexion etape={etape} onConnecte={onConnecte} onAnnuler={onEchec} />;
   if (!erreur) {
     return <p role="status" className="flex items-center gap-2 text-sm text-gray-300"><RefreshCw size={14} className="animate-spin" /> Connexion en cours…</p>;
   }
@@ -226,8 +230,9 @@ function RetourSSO({ onConnecte, onEchec }) {
   );
 }
 
-function Connexion({ onConnecte, oubliDisponible, sso }) {
+function Connexion({ onConnecte, oubliDisponible, sso, message }) {
   const [oubli, setOubli] = useState(false);
+  const [etape, setEtape] = useState(null);
   const [succes, setSucces] = useState(null);
   const [nom, setNom] = useState("");
   const [mdp, setMdp] = useState("");
@@ -237,11 +242,15 @@ function Connexion({ onConnecte, oubliDisponible, sso }) {
   const valider = async (e) => {
     e.preventDefault();
     setErreur(null); setEnvoi(true);
-    try { onConnecte(await connexion(nom.trim(), mdp)); }
+    try {
+      const r = await connexion(nom.trim(), mdp);
+      if (r.etape2fa) { setEtape(r.etape2fa); setMdp(""); } else onConnecte(r);
+    }
     catch (err) { setErreur(messageErreur(err)); setMdp(""); }
     finally { setEnvoi(false); }
   };
 
+  if (etape) return <SaisieCodeConnexion etape={etape} onConnecte={onConnecte} onAnnuler={() => setEtape(null)} />;
   if (oubli) {
     return <MotDePasseOublie identifiantInitial={nom} onRetour={(message, identifiant) => {
       setOubli(false); setSucces(message); if (identifiant) setNom(identifiant); setMdp(""); setErreur(null);
@@ -249,7 +258,7 @@ function Connexion({ onConnecte, oubliDisponible, sso }) {
   }
   return (
     <form onSubmit={valider} className="space-y-4">
-      {succes && <p role="status" className="text-sm text-emerald-400">{succes}</p>}
+      {(succes || message) && <p role="status" className="text-sm text-emerald-400">{succes || message}</p>}
       <BoutonsSSO fournisseurs={sso} />
       <label className="block">
         <span className={LIB}>Identifiant ou e-mail</span>
@@ -355,6 +364,18 @@ export default function EcranAccueil({ onConnecte, annonce }) {
   const [oubliDisponible, setOubliDisponible] = useState(false);
   const [sso, setSso] = useState([]);
   const [retourSso, setRetourSso] = useState(() => window.location.pathname === "/connexion-sso");
+  const [deblocage, setDeblocage] = useState(null);
+
+  // Lien « Autoriser cet appareil » reçu par e-mail (compte protégé après une attaque)
+  useEffect(() => {
+    const jeton = new URLSearchParams(window.location.search).get("deblocage");
+    if (!jeton) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    setProfil("organisation");
+    http.post("/auth/deblocage", { jeton }, { timeout: 90000 })
+      .then(r => setDeblocage({ ok: true, texte: r.data.message }))
+      .catch(err => setDeblocage({ ok: false, texte: messageErreur(err) }));
+  }, []);
   const [invitation, setInvitation] = useState(() => {
     const q = new URLSearchParams(window.location.search);
     return q.get("invitation") && q.get("compte") ? { jeton: q.get("invitation"), compte: q.get("compte") } : null;
@@ -429,6 +450,7 @@ export default function EcranAccueil({ onConnecte, annonce }) {
             </>
           )}
           {motif && <p className="text-sm text-amber-400 mb-4">{motif}</p>}
+          {deblocage && !deblocage.ok && <p role="alert" className="text-sm text-red-400 mb-4">{deblocage.texte}</p>}
           {serveur === "reveil" && (
             <p className="flex items-center gap-2 text-xs text-laiton-300 mb-4" role="status">
               <RefreshCw size={12} className="animate-spin" /> Démarrage du serveur… jusqu'à une minute après une période sans visite.
@@ -445,7 +467,7 @@ export default function EcranAccueil({ onConnecte, annonce }) {
               onAnnuler={() => { setInvitation(null); setProfil("organisation"); window.history.replaceState(null, "", window.location.pathname); }} />
           )}
           {!invitation && profil === "visiteur" && <Essai onConnecte={onConnecte} formules={formules} />}
-          {!invitation && !retourSso && profil === "organisation" && <Connexion onConnecte={onConnecte} oubliDisponible={oubliDisponible} sso={sso} />}
+          {!invitation && !retourSso && profil === "organisation" && <Connexion onConnecte={onConnecte} oubliDisponible={oubliDisponible} sso={sso} message={deblocage?.ok ? deblocage.texte : null} />}
           {!invitation && !profil && (
             <p className="text-sm text-gray-400 flex items-center gap-2">
               <ArrowRight size={14} /> Choisis ton profil pour continuer.

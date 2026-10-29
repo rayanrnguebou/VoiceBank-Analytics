@@ -1,5 +1,6 @@
 """Administration de la plateforme : audit, comptes, e-mail de test."""
 from fastapi import APIRouter
+from .. import double_auth, protection
 
 from .commun import (  # noqa: F401
     Depends,
@@ -84,6 +85,29 @@ def reinitialiser_utilisateur(request: Request, nom: str = Path(max_length=64),
     audit.journaliser(u.nom, "compte_reinitialise", {"compte": nom}, ip_client(request))
     return {"status": "ok", "nom": nom, "mot_de_passe_provisoire": mdp,
             "valable_heures": int(securite.DUREE_MDP_PROVISOIRE.total_seconds() // 3600)}
+
+
+@router.post("/admin/utilisateurs/{nom}/double-auth/reinitialiser")
+@limiter.limit("20/hour")
+def reinitialiser_double_auth(request: Request, nom: str = Path(max_length=64), u: Utilisateur = Depends(admin_requis)):
+    """Téléphone perdu sans code de secours : le titulaire devra réactiver la double authentification."""
+    if nom == u.nom:
+        raise HTTPException(400, "Utilise un code de secours, ou demande à un autre administrateur.")
+    if not double_auth.active(nom):
+        raise HTTPException(404, "Double authentification non activée pour ce compte.")
+    double_auth.desactiver(nom)
+    db.ecrire("UPDATE voicebank.utilisateurs SET version_jeton = version_jeton + 1 WHERE nom = :n", {"n": nom})
+    audit.journaliser(u.nom, "double_auth_reinitialisee", {"compte": nom}, ip_client(request))
+    return {"status": "ok"}
+
+
+@router.post("/admin/utilisateurs/{nom}/debloquer")
+@limiter.limit("20/hour")
+def debloquer_utilisateur(request: Request, nom: str = Path(max_length=64), u: Utilisateur = Depends(admin_requis)):
+    """Lève la protection d'un compte attaqué et efface les blocages d'adresses."""
+    protection.lever(nom)
+    audit.journaliser(u.nom, "compte_debloque", {"compte": nom}, ip_client(request))
+    return {"status": "ok"}
 
 
 @router.post("/admin/utilisateurs/{nom}/modifier")

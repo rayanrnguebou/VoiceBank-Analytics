@@ -58,6 +58,7 @@ export function appliquerJeton(data) {
   const session = {
     token: data.access_token, utilisateur: data.utilisateur, role: data.role,
     doitChangerMdp: !!data.doit_changer_mot_de_passe,
+    doitConfigurer2fa: !!data.doit_configurer_2fa,
     expire: Date.now() + data.expire_dans_min * 60 * 1000,
   };
   ecrireSession(session);
@@ -67,6 +68,12 @@ export function appliquerJeton(data) {
 export async function connexion(nom, motDePasse) {
   // Délai long : sur l'offre gratuite de Render, l'API peut mettre ~1 min à se réveiller.
   const { data } = await http.post("/auth/login", { nom, mot_de_passe: motDePasse }, { timeout: 90000 });
+  return suiteConnexion(data);
+}
+
+// Double authentification active : pas encore de session, il faut le code à 6 chiffres
+function suiteConnexion(data) {
+  if (data.double_auth) return { etape2fa: { jeton: data.jeton_2fa, utilisateur: data.utilisateur } };
   return appliquerJeton(data);
 }
 
@@ -82,7 +89,7 @@ export async function terminerSSO(code, etat) {
   try { s = JSON.parse(sessionStorage.getItem("voicebank_sso") || "null"); sessionStorage.removeItem("voicebank_sso"); } catch (e) { /* rien */ }
   if (!s) throw new Error("Connexion commencée dans un autre onglet ou expirée : recommence.");
   const { data } = await http.post(`/auth/sso/${s.f}/fin`, { code, etat, verificateur: s.v }, { timeout: 90000 });
-  return appliquerJeton(data);
+  return suiteConnexion(data);
 }
 
 export async function inscriptionEssai(corps) {

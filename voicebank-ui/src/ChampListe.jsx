@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useId, useMemo } from "react";
 import { ChevronDown, ChevronUp, Check } from "lucide-react";
 import { champ } from "./ui";
+import { tx } from "./i18n";
 
 export const normaliser = t => String(t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 
@@ -118,11 +119,11 @@ export default function ChampListe({ valeur, onChange, options, dark, libre = fa
             <li role="option" aria-selected={false} id={`${idListe}-${resultats.length}`}
               onMouseDown={e => { e.preventDefault(); setOuvert(false); setTape(false); onChange(texte.trim()); }} onClick={e => e.preventDefault()}
               className={`px-3 py-1.5 cursor-pointer italic ${actif === resultats.length ? (dark ? "bg-gray-700" : "bg-foret-50") : ""} ${dark ? "text-gray-300" : "text-gray-600"}`}>
-              Utiliser « {texte.trim()} »
+              {tx("Utiliser « {x} »", { x: texte.trim() })}
             </li>
           )}
           {!resultats.length && !proposerLibre && (
-            <li className={`px-3 py-1.5 ${dark ? "text-gray-400" : "text-gray-500"}`}>Aucun résultat</li>
+            <li className={`px-3 py-1.5 ${dark ? "text-gray-400" : "text-gray-500"}`}>{tx("Aucun résultat")}</li>
           )}
         </ul>
       )}
@@ -150,5 +151,5 @@ export function Choix({ valeur, onChange, options, dark, seuil = 6, ...props }) 
       </select>
     );
   }
-  return <ChampListe valeur={valeur} onChange={onChange} options={opts} dark={dark} placeholder="Tape les premières lettres…" {...props} />;
+  return <ChampListe valeur={valeur} onChange={onChange} options={opts} dark={dark} placeholder={tx("Tape les premières lettres…")} {...props} />;
 }

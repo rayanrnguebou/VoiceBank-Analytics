@@ -3,16 +3,17 @@ Auteur : Nguebou Temgoua Rayan
 
 Ce fichier assemble l'application : sécurité (en-têtes, CORS, maintenance, erreurs), chargement des
 modèles, puis les routeurs de app/api/ (un par domaine)."""
+import json
 import logging
 
 import jwt
 from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from slowapi.errors import RateLimitExceeded
 
-from . import alertes_erreurs, config, credit, fraude, maintenance, securite, taches, transcription
+from . import alertes_erreurs, config, i18n, credit, fraude, maintenance, securite, taches, transcription
 from .api import abonnement, admin, assistant, auth, demo, organisation, sources, surveillance, systeme
 from .api.commun import VERSION_API, _lire, _SQL_CREDIT, reponse_maintenance  # noqa: F401  (utilisés par les tests)
 from .limites import limiter
@@ -77,12 +78,35 @@ async def mode_maintenance(request: Request, call_next):
     return await call_next(request)
 
 
+@app.middleware("http")
+
+
+async def langue_des_reponses(request: Request, call_next):
+    """Langue de l'interface (Accept-Language) : messages, erreurs et textes des réponses JSON traduits."""
+    code = i18n.depuis_entete(request.headers.get("accept-language"))
+    jeton = i18n.definir(code)
+    try:
+        rep = await call_next(request)
+    finally:
+        i18n._langue.reset(jeton)
+    if code == "fr" or not rep.headers.get("content-type", "").startswith("application/json"):
+        return rep
+    corps = b"".join([morceau async for morceau in rep.body_iterator])
+    try:
+        donnees = i18n.traduire_objet(json.loads(corps), code)
+        corps = json.dumps(donnees, ensure_ascii=False, separators=(",", ":")).encode()
+    except ValueError:
+        pass
+    entetes = {k: v for k, v in rep.headers.items() if k.lower() not in ("content-length",)}
+    return Response(corps, status_code=rep.status_code, headers=entetes, media_type="application/json")
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["GET", "POST"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "Accept-Language"],
     expose_headers=["Content-Disposition"],      # nom des fichiers téléchargés (rapports PDF)
 )
 

@@ -52,6 +52,7 @@ def _fin_connexion(u: Utilisateur, version: int, ip: str, identifiant: str, meth
     """Identité prouvée (et double authentification passée si active) : ouvre la session."""
     protection.succes(u.nom, ip, identifiant)
     securite.noter_connexion(u.nom)
+    securite.noter_langue(u.nom)
     if securite.mode_base():
         u = replace(u, doit_configurer_2fa=double_auth.requise(u.role, u.role_org) and not double_auth.active(u.nom))
     audit.journaliser(u.nom, "connexion", {"role": u.role, "methode": methode}, ip)
@@ -294,6 +295,7 @@ def email_recuperation(request: Request, body: EmailRecuperation, u: Utilisateur
 
 @router.get("/auth/moi")
 def moi(u: Utilisateur = Depends(utilisateur_authentifie)):
+    securite.noter_langue(u.nom)          # l'interface l'appelle au chargement : suit le choix de langue
     email = (db.ecrire("SELECT email FROM voicebank.utilisateurs WHERE nom = :n", {"n": u.nom}).scalar()
              if securite.mode_base() else None)
     return {"utilisateur": u.nom, "role": u.role, "doit_changer_mot_de_passe": u.doit_changer,

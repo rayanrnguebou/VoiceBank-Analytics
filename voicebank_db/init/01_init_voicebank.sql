@@ -638,3 +638,12 @@ CREATE TABLE IF NOT EXISTS voicebank.appareils_connus (
 );
 -- verrouille_jusqua sert désormais de « mode protégé » (compte attaqué depuis de nombreuses adresses)
 ALTER TABLE voicebank.utilisateurs ADD COLUMN IF NOT EXISTS jeton_deblocage VARCHAR(64);
+-- Langue de l'interface (fr / en) : e-mails et rapports envoyés dans cette langue
+ALTER TABLE voicebank.utilisateurs ADD COLUMN IF NOT EXISTS langue VARCHAR(2);
+-- Données de sécurité rattachées au compte : supprimées avec lui (comptes de test, purge RGPD)
+ALTER TABLE voicebank.appareils_connus DROP CONSTRAINT IF EXISTS appareils_connus_utilisateur_fkey;
+ALTER TABLE voicebank.appareils_connus ADD CONSTRAINT appareils_connus_utilisateur_fkey
+    FOREIGN KEY (utilisateur) REFERENCES voicebank.utilisateurs(nom) ON DELETE CASCADE;
+ALTER TABLE voicebank.double_authentification DROP CONSTRAINT IF EXISTS double_authentification_utilisateur_fkey;
+ALTER TABLE voicebank.double_authentification ADD CONSTRAINT double_authentification_utilisateur_fkey
+    FOREIGN KEY (utilisateur) REFERENCES voicebank.utilisateurs(nom) ON DELETE CASCADE;

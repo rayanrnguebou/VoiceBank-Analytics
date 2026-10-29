@@ -53,6 +53,45 @@ class Message:
     pieces: list[tuple[str, bytes, str]] = field(default_factory=list)   # pièces jointes : (nom, contenu, type MIME)
 
 
+def langue_destinataire(adresse: str) -> str:
+    """Langue choisie par le destinataire (dernière utilisée dans l'interface), sinon celle de la requête en cours."""
+    from . import db, i18n
+    try:
+        code = db.ecrire("SELECT langue FROM voicebank.utilisateurs WHERE LOWER(email) = LOWER(:a) OR nom = LOWER(:a) "
+                         "ORDER BY langue IS NULL LIMIT 1", {"a": adresse}).scalar()
+    except Exception:
+        code = None
+    return code if code in i18n.LANGUES else i18n.langue()
+
+
+def traduire_message(m: "Message", code: str) -> "Message":
+    from dataclasses import replace
+    from .i18n import traduire as t
+    if code != "en" or getattr(m, "_langue", None) == code:
+        return m
+    traduit = replace(m, sujet=t(m.sujet, code), titre=t(m.titre, code), salutation=t(m.salutation, code),
+                      paragraphes=[t(x, code) for x in m.paragraphes], apres=[t(x, code) for x in m.apres],
+                      details=[(t(k, code), t(v, code)) for k, v in m.details],
+                      bouton=(t(m.bouton[0], code), m.bouton[1]) if m.bouton else None,
+                      apercu=t(m.apercu, code), note=t(m.note, code) if m.note else None)
+    object.__setattr__(traduit, "_langue", code)
+    return traduit
+
+
+TEXTES_FIXES = {
+    "fr": {"bouton": "Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :", "cordialement": "Cordialement,",
+           "pied": "Message automatique envoyé par VoiceBank Analytics, merci de ne pas y répondre directement.",
+           "slogan": "Interrogez vos données bancaires à la voix : fraude, crédit, clients.", "sep": " : "},
+    "en": {"bouton": "If the button does not work, copy this link into your browser:", "cordialement": "Kind regards,",
+           "pied": "Automatic message sent by VoiceBank Analytics, please do not reply to it directly.",
+           "slogan": "Query your banking data by voice: fraud, credit, clients.", "sep": ": "},
+}
+
+
+def _fixes(m) -> dict:
+    return TEXTES_FIXES.get(getattr(m, "_langue", "fr"), TEXTES_FIXES["fr"])
+
+
 def _e(t) -> str:
     return html.escape(str(t))
 
@@ -63,6 +102,7 @@ def _paragraphes(lignes: list[str]) -> str:
 
 def rendre_html(m: Message) -> str:
     site = config.URL_INTERFACE
+    fx = _fixes(m)
     code = (f'<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 22px"><tr>'
             f'<td style="background:{FOND};border:1px solid #D9E2DD;border-radius:10px;padding:14px 26px;'
             f'font-family:Consolas,Menlo,monospace;font-size:30px;font-weight:700;letter-spacing:8px;color:{FORET_FONCE}">'
@@ -71,8 +111,8 @@ def rendre_html(m: Message) -> str:
               f'<td style="border-radius:8px;background:{FORET}">'
               f'<a href="{_e(m.bouton[1])}" style="display:inline-block;padding:13px 26px;font-size:15px;font-weight:700;'
               f'color:#FFFFFF;text-decoration:none;border-radius:8px">{_e(m.bouton[0])}</a></td></tr></table>'
-              f'<p style="margin:0 0 18px;font-size:12px;line-height:1.5;color:{DISCRET}">Si le bouton ne fonctionne pas, '
-              f'copiez ce lien dans votre navigateur :<br><a href="{_e(m.bouton[1])}" style="color:{FORET};word-break:break-all">'
+              f'<p style="margin:0 0 18px;font-size:12px;line-height:1.5;color:{DISCRET}">{_e(fx["bouton"])}'
+              f'<br><a href="{_e(m.bouton[1])}" style="color:{FORET};word-break:break-all">'
               f'{_e(m.bouton[1])}</a></p>') if m.bouton else ""
     details = ""
     if m.details:
@@ -86,14 +126,14 @@ def rendre_html(m: Message) -> str:
                f'{_e(config.EMAIL_CONTACT)}</a>') if config.EMAIL_CONTACT else ""
     signature = (f'<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:26px;border-top:1px solid #E5E7EB;'
                  f'padding-top:18px;width:100%"><tr><td style="padding-top:18px">'
-                 f'<p style="margin:0 0 2px;font-size:14px;color:{TEXTE}">Cordialement,</p>'
+                 f'<p style="margin:0 0 2px;font-size:14px;color:{TEXTE}">{_e(fx["cordialement"])}</p>'
                  f'<p style="margin:10px 0 0;font-size:15px;font-weight:700;color:{FORET_FONCE}">{_e(config.EMAIL_SIGNATURE_NOM)}</p>'
                  f'<p style="margin:2px 0 0;font-size:13px;color:{DISCRET}">{_e(config.EMAIL_SIGNATURE_FONCTION)}</p>'
                  f'<p style="margin:6px 0 0;font-size:13px;color:{DISCRET}">'
                  f'<a href="{_e(site)}" style="color:{FORET};text-decoration:none">{_e(site.replace("https://", "").replace("http://", ""))}</a>'
                  f'{contact}</p></td></tr></table>')
     note = (f'<p style="margin:18px 0 0;font-size:12px;line-height:1.5;color:{DISCRET}">{_e(m.note)}</p>') if m.note else ""
-    return f'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+    return f'''<!doctype html><html lang="{getattr(m, "_langue", "fr")}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>{_e(m.sujet)}</title></head>
 <body style="margin:0;padding:0;background:{FOND};font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif">
 <span style="display:none;max-height:0;overflow:hidden;opacity:0">{_e(m.apercu or m.titre)}</span>
@@ -110,28 +150,30 @@ def rendre_html(m: Message) -> str:
 {_paragraphes(m.paragraphes)}{code}{details}{bouton}{_paragraphes(m.apres)}{signature}{note}
 </td></tr></table>
 <p style="max-width:580px;margin:16px auto 0;font-size:11px;line-height:1.5;color:#9CA3AF;text-align:center">
-Message automatique envoyé par VoiceBank Analytics, merci de ne pas y répondre directement.<br>
-Interrogez vos données bancaires à la voix : fraude, crédit, clients.</p>
+{_e(fx["pied"])}<br>
+{_e(fx["slogan"])}</p>
 </td></tr></table></body></html>'''
 
 
 def rendre_texte(m: Message) -> str:
+    fx = _fixes(m)
     parties = [m.titre, "", m.salutation, ""] + m.paragraphes
     if m.code:
         parties += ["", f"    {m.code}", ""]
     if m.details:
-        parties += [""] + [f"{k} : {v}" for k, v in m.details] + [""]
+        parties += [""] + [f"{k}{fx['sep']}{v}" for k, v in m.details] + [""]
     if m.bouton:
-        parties += ["", f"{m.bouton[0]} : {m.bouton[1]}", ""]
-    parties += m.apres + ["", "Cordialement,", config.EMAIL_SIGNATURE_NOM, config.EMAIL_SIGNATURE_FONCTION,
+        parties += ["", f"{m.bouton[0]}{fx['sep']}{m.bouton[1]}", ""]
+    parties += m.apres + ["", fx["cordialement"], config.EMAIL_SIGNATURE_NOM, config.EMAIL_SIGNATURE_FONCTION,
                           config.URL_INTERFACE + (f" · {config.EMAIL_CONTACT}" if config.EMAIL_CONTACT else "")]
     if m.note:
         parties += ["", m.note]
     return "\n".join(parties)
 
 
-def envoyer_message(destinataire: str, m: Message):
-    """Envoie le message ; lève EnvoiImpossible avec une raison lisible en cas d'échec."""
+def envoyer_message(destinataire: str, m: Message, langue: str | None = None):
+    """Envoie le message (dans la langue du destinataire) ; lève EnvoiImpossible avec une raison lisible."""
+    m = traduire_message(m, langue or langue_destinataire(destinataire))
     if not disponible():
         raise EnvoiImpossible("Aucun service d'e-mail configuré (BREVO_API_KEY ou SMTP_HOTE, et EMAIL_EXPEDITEUR)")
     texte, contenu_html = rendre_texte(m), rendre_html(m)
@@ -189,10 +231,11 @@ def envoyer(destinataire: str, sujet: str, titre: str, paragraphes: list[str], c
 def envoyer_en_arriere_plan(destinataire: str, m: Message):
     """N'attend pas l'envoi (pas de différence de temps de réponse, pas de blocage de l'API)."""
     import threading
+    langue = langue_destinataire(destinataire)          # avant le fil : il ne voit pas la langue de la requête
 
     def tache():
         try:
-            envoyer_message(destinataire, m)
+            envoyer_message(destinataire, m, langue)
             log.info("E-mail « %s » envoyé", m.sujet)
         except Exception as e:
             log.warning("E-mail non envoyé (%s) : %s", m.sujet, e)

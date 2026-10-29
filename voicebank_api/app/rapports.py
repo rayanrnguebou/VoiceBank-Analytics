@@ -16,7 +16,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from . import db, suivi
+from . import db, i18n, suivi
 from .connecteur import service as sources
 
 FORET, LAITON, GRIS, CLAIR = colors.HexColor("#0E332D"), colors.HexColor("#B8892F"), colors.HexColor("#5B6B66"), \
@@ -26,9 +26,14 @@ COULEURS = {"Critique": colors.HexColor("#DC2626"), "Élevé": colors.HexColor("
 PERIODES = {"semaine": ("hebdomadaire", 7), "mois": ("mensuel", 30)}
 
 
+def _v(valeur) -> str:
+    """Valeur codée (niveau, statut…) dans la langue du rapport."""
+    return i18n.mot(valeur)
+
+
 def _t(texte) -> str:
-    """Texte sûr pour les polices PDF standard (pas de caractères hors Latin-1) et pour le balisage Paragraph."""
-    s = str("" if texte is None else texte)
+    """Texte (traduit) sûr pour les polices PDF standard (pas de caractères hors Latin-1) et pour le balisage Paragraph."""
+    s = i18n.traduire(str("" if texte is None else texte))
     for a, b in (("≥", ">="), ("≤", "<="), ("→", "->"), ("–", "-"), ("—", "-"), ("…", "..."), ("’", "'"),
                  (" ", " "), (" ", " "), ("×", "x"), ("²", "2")):
         s = s.replace(a, b)
@@ -39,6 +44,8 @@ def _t(texte) -> str:
 def _nombre(v, dec: int = 0) -> str:
     if v is None:
         return "-"
+    if i18n.langue() == "en":
+        return f"{float(v):,.{dec}f}"
     return f"{float(v):,.{dec}f}".replace(",", " ").replace(".", ",")
 
 
@@ -57,6 +64,8 @@ def _styles():
 
 
 def _tableau(lignes, largeurs, entete=True, aligner_droite=()):
+    if entete:
+        lignes = [[i18n.traduire(i18n.mot(x)) if isinstance(x, str) else x for x in lignes[0]]] + list(lignes[1:])
     t = Table(lignes, colWidths=largeurs, repeatRows=1 if entete else 0)
     style = [("FONT", (0, 0), (-1, -1), "Helvetica", 8.5), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
              ("ROWBACKGROUNDS", (0, 1 if entete else 0), (-1, -1), [colors.white, CLAIR]),
@@ -73,7 +82,7 @@ def _tableau(lignes, largeurs, entete=True, aligner_droite=()):
 
 def _tuiles(valeurs: list[tuple[str, str]]):
     """Indicateurs clés en tuiles (4 par ligne)."""
-    cellules = [[Paragraph(f"<font size=7.5 color='#5B6B66'>{_t(l)}</font><br/><font size=13><b>{_t(v)}</b></font>",
+    cellules = [[Paragraph(f"<font size=7.5 color='#5B6B66'>{_t(_v(l))}</font><br/><font size=13><b>{_t(v)}</b></font>",
                            _styles()["p"]) for l, v in valeurs[i:i + 4]] for i in range(0, len(valeurs), 4)]
     for ligne in cellules:
         ligne += [""] * (4 - len(ligne))
@@ -110,9 +119,16 @@ def _contexte_source(id_source: int):
     return r.lignes[0]
 
 
-def generer(id_source: int, proprietaire: str, periode: str = "semaine", maintenant: datetime | None = None
-            ) -> tuple[bytes, str]:
-    """Retourne (contenu PDF, nom de fichier). `proprietaire` : compte au nom duquel la base est lue."""
+def generer(id_source: int, proprietaire: str, periode: str = "semaine", maintenant: datetime | None = None,
+            langue: str | None = None) -> tuple[bytes, str]:
+    """Retourne (contenu PDF, nom de fichier). `proprietaire` : compte au nom duquel la base est lue.
+    `langue` : fr / en (par défaut, celle de la requête en cours)."""
+    if langue:
+        jeton = i18n.definir(langue)
+        try:
+            return generer(id_source, proprietaire, periode, maintenant)
+        finally:
+            i18n._langue.reset(jeton)
     if periode not in PERIODES:
         raise ValueError("Période inconnue")
     sources.detail(id_source, proprietaire)                    # contrôle d'accès
@@ -137,12 +153,12 @@ def generer(id_source: int, proprietaire: str, periode: str = "semaine", mainten
 
     elements = [
         Paragraph(_t(f"Rapport de risque {adjectif}"), s["titre"]),
-        Paragraph(_t(f"{src.organisation or 'Compte ' + src.proprietaire} · base « {src.nom} » · du "
-                     f"{debut:%d/%m/%Y} au {fin:%d/%m/%Y} · généré le {datetime.now():%d/%m/%Y à %H:%M}"), s["sous"]),
+        Paragraph(_t(f"{src.organisation or src.proprietaire} · base « {src.nom} » · du "
+                     f"{debut:%d/%m/%Y} au {fin:%d/%m/%Y} · généré le {datetime.now():%d/%m/%Y %H:%M}"), s["sous"]),
     ]
 
     # 1. Synthèse
-    elements.append(Paragraph("Synthèse de la période", s["h2"]))
+    elements.append(Paragraph(_t("Synthèse de la période"), s["h2"]))
     elements.append(_tuiles([
         ("Opérations analysées", _nombre(resume["analysees"]) if resume else "-"),
         ("Alertes détectées", _nombre(stats["total"])),
@@ -157,7 +173,7 @@ def generer(id_source: int, proprietaire: str, periode: str = "semaine", mainten
                          "WHERE id_source = :s AND date_detection >= :d GROUP BY date_detection::date "
                          "ORDER BY date_detection::date", {"s": id_source, "d": debut}).lignes
     if par_jour:
-        elements += [Spacer(1, 6), Paragraph("Alertes détectées par jour", s["petit"]),
+        elements += [Spacer(1, 6), Paragraph(_t("Alertes détectées par jour"), s["petit"]),
                      _graphique_alertes([(l.j, int(l.n)) for l in par_jour])]
 
     # 2. Points d'attention
@@ -184,7 +200,7 @@ def generer(id_source: int, proprietaire: str, periode: str = "semaine", mainten
                       f"sur {_nombre(credits['credits'])} crédits.")
     if not points:
         points.append("Rien de particulier à signaler sur la période.")
-    elements.append(Paragraph("Points d'attention", s["h2"]))
+    elements.append(Paragraph(_t("Points d'attention"), s["h2"]))
     elements += [Paragraph(_t(p), s["puce"], bulletText="•") for p in points]
 
     # 3. Alertes ouvertes les plus critiques
@@ -192,25 +208,25 @@ def generer(id_source: int, proprietaire: str, periode: str = "semaine", mainten
     ouvertes = db.ecrire("SELECT ref_operation, date_operation, montant, niveau, raisons, statut, assigne_a "
                          "FROM voicebank.suivi_alertes WHERE id_source = :s AND statut NOT IN ('fraude_confirmee', "
                          f"'fausse_alerte', 'resolue') ORDER BY {rang}, score DESC LIMIT 15", {"s": id_source}).lignes
-    elements.append(Paragraph("Alertes ouvertes les plus critiques", s["h2"]))
+    elements.append(Paragraph(_t("Alertes ouvertes les plus critiques"), s["h2"]))
     if ouvertes:
         lignes = [["Opération", "Date", f"Montant ({lib_devise})", "Niveau", "Raison principale", "Statut", "Assignée à"]]
         for a in ouvertes:
             raison = (a.raisons or [{}])[0]
             lignes.append([Paragraph(_t(str(a.ref_operation)[:18]), s["petit"]),
                            f"{a.date_operation:%d/%m/%Y}" if a.date_operation else "-", _nombre(a.montant),
-                           Paragraph(f"<font color='{COULEURS.get(a.niveau, GRIS).hexval()}'><b>{_t(a.niveau)}</b></font>",
+                           Paragraph(f"<font color='{COULEURS.get(a.niveau, GRIS).hexval()}'><b>{_t(_v(a.niveau))}</b></font>",
                                      s["petit"]),
                            Paragraph(_t(raison.get("detail") or raison.get("variable") or ""), s["petit"]),
-                           _t(suivi.STATUTS[a.statut]), Paragraph(_t(a.assigne_a or "-"), s["petit"])])
+                           _t(_v(suivi.STATUTS[a.statut])), Paragraph(_t(a.assigne_a or "-"), s["petit"])])
         elements.append(_tableau(lignes, [24 * mm, 18 * mm, 24 * mm, 16 * mm, 50 * mm, 18 * mm, 24 * mm],
                                  aligner_droite=(2,)))
     else:
-        elements.append(Paragraph("Aucune alerte ouverte.", s["p"]))
+        elements.append(Paragraph(_t("Aucune alerte ouverte."), s["p"]))
 
     # 4. Portefeuille de crédits
     if credits:
-        elements.append(Paragraph("Portefeuille de crédits", s["h2"]))
+        elements.append(Paragraph(_t("Portefeuille de crédits"), s["h2"]))
         elements.append(_tuiles([("Crédits", _nombre(credits["credits"])), ("En défaut ou en retard", _nombre(credits["defauts"])),
                                  ("Taux de défaut", f"{_nombre(credits['taux_defaut'] * 100, 1)} %"),
                                  ("En cours", _nombre(credits["en_cours"]))]))
@@ -226,12 +242,12 @@ def generer(id_source: int, proprietaire: str, periode: str = "semaine", mainten
         if risque:
             lignes = [["Crédit", f"Montant ({lib_devise})", "Probabilité de défaut", "Niveau"]]
             lignes += [[_t(c.get("id") or "-"), _nombre(c.get("montant")), f"{_nombre(c['probabilite_defaut'] * 100, 1)} %",
-                        _t(c["niveau_risque"])] for c in risque[:10]]
-            elements += [Spacer(1, 6), Paragraph("Crédits en cours les plus à risque", s["petit"]),
+                        _t(_v(c["niveau_risque"]))] for c in risque[:10]]
+            elements += [Spacer(1, 6), Paragraph(_t("Crédits en cours les plus à risque"), s["petit"]),
                          _tableau(lignes, [45 * mm, 40 * mm, 45 * mm, 40 * mm], aligner_droite=(1, 2))]
 
     # 5. Fiches des modèles
-    elements.append(Paragraph("Modèles d'IA utilisés", s["h2"]))
+    elements.append(Paragraph(_t("Modèles d'IA utilisés"), s["h2"]))
     for cle in ("operations", "credits"):
         f = fiches.get(cle) or {}
         if f.get("indisponible") and not f.get("nom"):
@@ -253,7 +269,7 @@ def generer(id_source: int, proprietaire: str, periode: str = "semaine", mainten
         elements.append(KeepTogether(bloc + [Spacer(1, 5)]))
 
     # 6. Méthodologie
-    elements.append(Paragraph("Méthodologie et limites", s["h2"]))
+    elements.append(Paragraph(_t("Méthodologie et limites"), s["h2"]))
     for texte in ["Les modèles apprennent les habitudes de votre base (montants par type d'opération, valeurs rares, "
                   "heures) et signalent ce qui s'en écarte ; ils orientent la vérification humaine, ils ne décident pas.",
                   "Les alertes classées « fausse alerte » ne sont plus signalées ; les verdicts servent à mesurer la "
@@ -269,7 +285,7 @@ def generer(id_source: int, proprietaire: str, periode: str = "semaine", mainten
         canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(GRIS)
         canvas.drawString(18 * mm, 10 * mm, pied.replace("&amp;", "&"))
-        canvas.drawRightString(192 * mm, 10 * mm, f"Page {doc.page}")
+        canvas.drawRightString(192 * mm, 10 * mm, f"Page {doc.page}")       # identique en anglais
         canvas.setStrokeColor(LAITON)
         canvas.setLineWidth(1.2)
         canvas.line(18 * mm, 287 * mm, 192 * mm, 287 * mm)
@@ -277,7 +293,7 @@ def generer(id_source: int, proprietaire: str, periode: str = "semaine", mainten
 
     tampon = io.BytesIO()
     doc = SimpleDocTemplate(tampon, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=16 * mm,
-                            bottomMargin=16 * mm, title=f"Rapport de risque {adjectif}",
+                            bottomMargin=16 * mm, title=i18n.traduire(f"Rapport de risque {adjectif}"),
                             author="VoiceBank Analytics", subject=str(src.nom))
     doc.build(elements, onFirstPage=page, onLaterPages=page)
     nom = f"voicebank_rapport_{adjectif}_{fin:%Y-%m-%d}.pdf"

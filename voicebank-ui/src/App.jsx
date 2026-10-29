@@ -41,6 +41,7 @@ import {
   Volume2, VolumeX, Flag, Wrench, Menu, MessagesSquare, CornerDownRight, Calendar, Clock, Timer,
   ChartColumn, ChartLine, ChartPie, ChartArea, Gauge, Table2, BookCheck, Zap, Sparkles,
 } from "lucide-react";
+import { LANGUE, LOCALE, LOCALE_VOIX, tx } from "./i18n";
 
 // ════════════════════════════════════════
 // CONFIGURATION
@@ -53,7 +54,7 @@ const MAX_LIGNES_HISTO = 200;   // lignes de données gardées par entrée
 
 const SOURCES = {
   rag:    { label: "RAG",    classe: "bg-emerald-100 text-emerald-700" },
-  rule:   { label: "Règle",  classe: "bg-amber-100 text-amber-700" },
+  rule:   { label: tx("Règle"),  classe: "bg-amber-100 text-amber-700" },
   gemini: { label: "Gemini", classe: "bg-foret-100 text-foret-700" },
 };
 
@@ -127,7 +128,7 @@ function formaterValeur(val) {
   if (typeof val === "number") {
     if (val > 1_000_000) return (val / 1_000_000).toFixed(1) + "M";
     if (val > 1_000)     return (val / 1_000).toFixed(1) + "k";
-    return val.toLocaleString("fr");
+    return val.toLocaleString(LOCALE);
   }
   return String(val ?? "");
 }
@@ -152,7 +153,7 @@ function PanelGraphiques({ dark, stats }) {
 
   const parMois = {};
   (transactions_mois || []).forEach(m => {
-    const cle = m.mois ? new Date(m.mois).toLocaleDateString("fr", { month: "short", year: "2-digit" }) : "";
+    const cle = m.mois ? new Date(m.mois).toLocaleDateString(LOCALE, { month: "short", year: "2-digit" }) : "";
     if (!parMois[cle]) parMois[cle] = { mois: cle, transactions: 0, fraudes: 0 };
     parMois[cle].transactions += m.nb_transactions || 0;
     parMois[cle].fraudes      += m.nb_fraudes      || 0;
@@ -163,7 +164,7 @@ function PanelGraphiques({ dark, stats }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div className={`rounded-2xl border p-5 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
-        <h3 className={`text-sm font-bold mb-4 ${dark ? "text-white" : "text-gray-900"}`}>Clients par banque</h3>
+        <h3 className={`text-sm font-bold mb-4 ${dark ? "text-white" : "text-gray-900"}`}>{tx("Clients par banque")}</h3>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={dataClients}>
             <CartesianGrid strokeDasharray="3 3" stroke={dark ? "#374151" : "#F3F4F6"} />
@@ -176,7 +177,7 @@ function PanelGraphiques({ dark, stats }) {
         </ResponsiveContainer>
       </div>
       <div className={`rounded-2xl border p-5 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
-        <h3 className={`text-sm font-bold mb-4 ${dark ? "text-white" : "text-gray-900"}`}>Transactions mensuelles</h3>
+        <h3 className={`text-sm font-bold mb-4 ${dark ? "text-white" : "text-gray-900"}`}>{tx("Transactions mensuelles")}</h3>
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={dataMois}>
             <CartesianGrid strokeDasharray="3 3" stroke={dark ? "#374151" : "#F3F4F6"} />
@@ -424,35 +425,35 @@ function CarteResultat({ item, dark, onSupprimer, role }) {
       >
         <div className="flex-1 min-w-0">
           {item.suite && item.question_precedente && (
-            <p className={`flex items-center gap-1 text-xs truncate ${dark ? "text-foret-300" : "text-foret-700"}`}><CornerDownRight size={12} /> suite de « {item.question_precedente} »</p>
+            <p className={`flex items-center gap-1 text-xs truncate ${dark ? "text-foret-300" : "text-foret-700"}`}><CornerDownRight size={12} />{" "}{tx("suite de « {question_precedente} »", { question_precedente: item.question_precedente })}</p>
           )}
           {(item.nom_source || (item.devise && item.devise !== "XAF" && item.colonnes_monetaires?.length > 0)) && (
             <p className={`text-xs truncate ${dark ? "text-laiton-300" : "text-laiton-600"}`}>
-              {[item.nom_source && `Base : ${item.nom_source}`,
-                item.devise && item.colonnes_monetaires?.length > 0 && `Montants en ${item.devise === "XAF" || item.devise === "XOF" ? "FCFA" : item.devise}`]
+              {[item.nom_source && tx("Base : {nom_source}", { nom_source: item.nom_source }),
+                item.devise && item.colonnes_monetaires?.length > 0 && tx("Montants en {devise}", { devise: item.devise === "XAF" || item.devise === "XOF" ? "FCFA" : item.devise })]
                 .filter(Boolean).join(" · ")}
             </p>
           )}
           <p className={`text-sm font-medium truncate ${dark ? "text-white" : "text-gray-900"}`}>{item.question}</p>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className={discret}>{item.total} résultats · {item.duree_ms}ms</span>
+            <span className={discret}>{tx("{total} résultats · {duree_ms}ms", { total: item.total, duree_ms: item.duree_ms })}</span>
             <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${(SOURCES[item.source] || SOURCES.gemini).classe}`}>
               {item.source === "rag" ? <BookCheck size={11} /> : item.source === "rule" ? <Zap size={11} /> : <Sparkles size={11} />}
               {(SOURCES[item.source] || SOURCES.gemini).label}
             </span>
-            <span className={`text-xs ${dark ? "text-gray-500" : "text-gray-400"}`}>{new Date(item.timestamp).toLocaleTimeString("fr")}</span>
+            <span className={`text-xs ${dark ? "text-gray-500" : "text-gray-400"}`}>{new Date(item.timestamp).toLocaleTimeString(LOCALE)}</span>
           </div>
         </div>
         <div className="flex items-center gap-2 ml-3">
           {item.data && item.data.length > 0 && (
             <button onClick={e => { e.stopPropagation(); telechargerCsv(nomFichier(item.question, "csv"), item.colonnes, item.data); }}
-              aria-label="Exporter en CSV (Excel)" title={item.total > item.data.length
-                ? `Exporter en CSV (Excel) — ${item.data.length} premières lignes` : "Exporter en CSV (Excel)"}
+              aria-label={tx("Exporter en CSV (Excel)")} title={item.total > item.data.length
+                ? tx("Exporter en CSV (Excel) — {length} premières lignes", { length: item.data.length }) : tx("Exporter en CSV (Excel)")}
               className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs ${dark ? "hover:bg-gray-600 text-gray-300" : "hover:bg-gray-100 text-gray-500"}`}>
-              <Download size={13} /> CSV
+              <Download size={13} />{" "}{tx("CSV")}
             </button>
           )}
-          <button onClick={e => { e.stopPropagation(); onSupprimer(item.id); }} aria-label="Supprimer ce résultat"
+          <button onClick={e => { e.stopPropagation(); onSupprimer(item.id); }} aria-label={tx("Supprimer ce résultat")}
             className={`p-1.5 rounded-lg ${dark ? "hover:bg-gray-600 text-gray-400" : "hover:bg-gray-100 text-gray-400"}`}>
             <Trash2 size={13} />
           </button>
@@ -462,8 +463,8 @@ function CarteResultat({ item, dark, onSupprimer, role }) {
       {item.resume && (
         <div className={`mx-5 mb-3 flex items-start gap-2 p-3 rounded-xl border-l-4 border-laiton-400 ${dark ? "bg-foret-900/50 text-foret-50" : "bg-foret-50 text-foret-900"}`}>
           <p className="text-sm flex-1">{item.resume}</p>
-          <button onClick={() => lireAVoixHaute([item.resume, item.commentaire])} aria-label="Lire la réponse et l'analyse à voix haute"
-            title={item.commentaire ? "Écouter la réponse et l'analyse" : "Écouter"}
+          <button onClick={() => lireAVoixHaute([item.resume, item.commentaire])} aria-label={tx("Lire la réponse et l'analyse à voix haute")}
+            title={item.commentaire ? tx("Écouter la réponse et l'analyse") : tx("Écouter")}
             className={`p-1.5 rounded-lg flex-shrink-0 ${dark ? "hover:bg-foret-800/40" : "hover:bg-foret-100"}`}>
             <Volume2 size={15} />
           </button>
@@ -482,7 +483,7 @@ function CarteResultat({ item, dark, onSupprimer, role }) {
         </div>
       )}
       {ouvert && (!item.data || item.data.length === 0) && (
-        <div className={`px-5 pb-3 text-sm ${dark ? "text-gray-400" : "text-gray-500"}`}>Aucun résultat trouvé pour cette question.</div>
+        <div className={`px-5 pb-3 text-sm ${dark ? "text-gray-400" : "text-gray-500"}`}>{tx("Aucun résultat trouvé pour cette question.")}</div>
       )}
       {ouvert && !item.nom_source && (
         <div className="px-5 pb-4">
@@ -490,12 +491,12 @@ function CarteResultat({ item, dark, onSupprimer, role }) {
             <button onClick={() => setAction(action === "signaler" ? null : "signaler")} disabled={lectureSeule}
               title={lectureSeule ? TITRE_LECTURE_SEULE : undefined}
               className={`flex items-center gap-1 text-xs hover:underline disabled:opacity-50 disabled:no-underline ${dark ? "text-gray-400" : "text-gray-500"}`}>
-              <Flag size={12} /> Réponse incorrecte ?
+              <Flag size={12} />{" "}{tx("Réponse incorrecte ?")}
             </button>
             {role === "admin" && (
               <button onClick={() => setAction(action === "corriger" ? null : "corriger")}
                 className={`flex items-center gap-1 text-xs hover:underline ${dark ? "text-foret-300" : "text-foret-600"}`}>
-                <Wrench size={12} /> Corriger la requête
+                <Wrench size={12} />{" "}{tx("Corriger la requête")}
               </button>
             )}
           </div>
@@ -562,16 +563,16 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
       pdf.setTextColor(255, 255, 255);
       pdf.setFontSize(16);
       pdf.setFont("helvetica", "bold");
-      pdf.text("VoiceBank Analytics", margin, 13);
+      pdf.text(tx("VoiceBank Analytics"), margin, 13);
 
       pdf.setFontSize(9);
       pdf.setFont("helvetica", "normal");
-      pdf.text("Rapport d'historique des requêtes", margin, 20);
-      pdf.text(`Généré le ${now.toLocaleDateString("fr-FR")} à ${now.toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" })}`, margin, 27);
+      pdf.text(tx("Rapport d'historique des requêtes"), margin, 20);
+      pdf.text(tx("Généré le {date} à {heure}", { date: now.toLocaleDateString(LOCALE), heure: now.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" }) }), margin, 27);
 
       // Compteur à droite
       pdf.setFontSize(9);
-      pdf.text(`${selection.size} entrée${selection.size > 1 ? "s" : ""}`, pageW - margin, 20, { align: "right" });
+      pdf.text(tx(selection.size > 1 ? "{n} entrées" : "{n} entrée", { n: selection.size }), pageW - margin, 20, { align: "right" });
 
       let y = 42;
 
@@ -597,14 +598,14 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
         y += 10 + (lignesQ.length - 1) * 5 + 4;
 
         // ── Métadonnées ──
-        const dateStr = new Date(item.timestamp).toLocaleString("fr-FR");
+        const dateStr = new Date(item.timestamp).toLocaleString(LOCALE);
         pdf.setFontSize(8);
         pdf.setFont("helvetica", "normal");
         pdf.setTextColor(107, 114, 128);
-        pdf.text(`Date : ${dateStr}`, margin, y);
-        pdf.text(`Durée : ${item.duree_ms} ms`, margin + 55, y);
+        pdf.text(tx("Date : {dateStr}", { dateStr }), margin, y);
+        pdf.text(tx("Durée : {duree_ms} ms", { duree_ms: item.duree_ms }), margin + 55, y);
 
-        const sourceBadge = item.source === "rag" ? "RAG" : item.source === "rule" ? "Règle" : "Gemini";
+        const sourceBadge = item.source === "rag" ? "RAG" : item.source === "rule" ? tx("Règle") : "Gemini";
         pdf.setTextColor(255, 255, 255);
         const badgeColor = item.source === "rag" ? [16, 185, 129] : item.source === "rule" ? [245, 158, 11] : [59, 130, 246];
         pdf.setFillColor(...badgeColor);
@@ -628,7 +629,7 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
         pdf.setTextColor(59, 130, 246);
         pdf.setFontSize(7.5);
         pdf.setFont("helvetica", "bold");
-        pdf.text("Requête SQL :", margin, y);
+        pdf.text(tx("Requête SQL :"), margin, y);
         y += 4;
 
         pdf.setFont("courier", "normal");
@@ -643,7 +644,7 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(8);
         pdf.setTextColor(17, 24, 39);
-        pdf.text(`Résultats : ${item.total} ligne${item.total > 1 ? "s" : ""}  ·  ${item.colonnes?.length || 0} colonne${(item.colonnes?.length || 0) > 1 ? "s" : ""}`, margin, y);
+        pdf.text(tx("Résultats : {lignes} ligne(s)  ·  {colonnes} colonne(s)", { lignes: item.total, colonnes: item.colonnes?.length || 0 }), margin, y);
         y += 6;
 
         // ── Capture du graphique ──
@@ -655,7 +656,7 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
             pdf.setFont("helvetica", "bold");
             pdf.setFontSize(8);
             pdf.setTextColor(59, 130, 246);
-            pdf.text("Visualisation :", margin, y);
+            pdf.text(tx("Visualisation :"), margin, y);
             y += 4;
 
             const canvas = await html2canvas(chartEl, {
@@ -683,7 +684,7 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
             pdf.setFont("helvetica", "italic");
             pdf.setFontSize(7.5);
             pdf.setTextColor(156, 163, 175);
-            pdf.text("[Aperçu graphique indisponible — données tabulaires ci-dessous]", margin, y);
+            pdf.text(tx("[Aperçu graphique indisponible — données tabulaires ci-dessous]"), margin, y);
             y += 5;
           }
         }
@@ -720,7 +721,7 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
             pdf.setFontSize(7);
             pdf.setTextColor(156, 163, 175);
             pdf.setFont("helvetica", "italic");
-            pdf.text(`… et ${item.total - 5} ligne${item.total - 5 > 1 ? "s" : ""} supplémentaire${item.total - 5 > 1 ? "s" : ""}`, margin, y + 4);
+            pdf.text(tx("… et {n} ligne(s) supplémentaire(s)", { n: item.total - 5 }), margin, y + 4);
             y += 8;
           } else {
             y += 3;
@@ -743,15 +744,15 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
         pdf.setFontSize(7);
         pdf.setFont("helvetica", "normal");
         pdf.setTextColor(100, 116, 139);
-        pdf.text("VoiceBank Analytics — Rapport confidentiel", margin, pageH - 4);
-        pdf.text(`Page ${p} / ${totalPages}`, pageW - margin, pageH - 4, { align: "right" });
+        pdf.text(tx("VoiceBank Analytics — Rapport confidentiel"), margin, pageH - 4);
+        pdf.text(tx("Page {p} / {totalPages}", { p, totalPages }), pageW - margin, pageH - 4, { align: "right" });
       }
 
-      const nomFichier = `VoiceBank_Rapport_${now.toISOString().slice(0, 10)}_${now.getHours()}h${now.getMinutes()}.pdf`;
+      const nomFichier = tx("VoiceBank_Rapport_{x}_{x2}h{x3}.pdf", { x: now.toISOString().slice(0, 10), x2: now.getHours(), x3: now.getMinutes() });
       pdf.save(nomFichier);
     } catch (err) {
       console.error("Erreur PDF :", err);
-      alert("Erreur lors de la génération du PDF.");
+      alert(tx("Erreur lors de la génération du PDF."));
     } finally {
       setGenerationPDF(false);
     }
@@ -791,12 +792,12 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
                 ? <CheckSquare size={15} className="text-foret-400 opacity-60" />
                 : <Square size={15} />
               }
-              {toutSelectionne ? "Désélectionner tout" : "Tout sélectionner"}
+              {toutSelectionne ? tx("Désélectionner tout") : tx("Tout sélectionner")}
             </button>
 
             {selection.size > 0 && (
               <span className={`text-sm font-medium px-3 py-1.5 rounded-xl ${dark ? "bg-foret-900/40 text-foret-300" : "bg-foret-50 text-foret-700"}`}>
-                {selection.size} sélectionné{selection.size > 1 ? "s" : ""}
+                {tx("{size} sélectionné", { size: selection.size })}{selection.size > 1 ? "s" : ""}
               </span>
             )}
           </div>
@@ -806,7 +807,7 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
             <input
               value={recherche}
               onChange={e => setRecherche(e.target.value)}
-              placeholder="Rechercher..."
+              placeholder={tx("Rechercher...")}
               className={`text-sm px-3 py-2 rounded-xl border outline-none transition-all w-full sm:w-48 ${
                 dark ? "bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-foret-500" : "bg-gray-50 border-gray-200 text-gray-900 focus:border-foret-400"
               }`}
@@ -817,7 +818,7 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
               onClick={onToutEffacer}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm transition-all ${dark ? "text-red-400 hover:bg-red-900/20" : "text-red-500 hover:bg-red-50"}`}
             >
-              <Trash2 size={14} /> Vider
+              <Trash2 size={14} />{" "}{tx("Vider")}
             </button>
 
             {/* Télécharger PDF */}
@@ -831,8 +832,8 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
               }`}
             >
               {generationPDF
-                ? <><RefreshCw size={14} className="animate-spin" /> Génération…</>
-                : <><Download size={14} /> Rapport PDF {selection.size > 0 ? `(${selection.size})` : ""}</>
+                ? <><RefreshCw size={14} className="animate-spin" />{" "}{tx("Génération…")}</>
+                : <><Download size={14} />{" "}{tx("Rapport PDF")}{" "}{selection.size > 0 ? `(${selection.size})` : ""}</>
               }
             </button>
           </div>
@@ -844,18 +845,18 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
         <div className={`rounded-2xl border p-16 text-center ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
           <History size={40} className={`mx-auto mb-3 opacity-20 ${dark ? "text-gray-400" : "text-gray-500"}`} />
           <p className={`text-sm ${dark ? "text-gray-500" : "text-gray-400"}`}>
-            {recherche ? "Aucune requête ne correspond à votre recherche" : "Aucun historique pour le moment"}
+            {recherche ? tx("Aucune requête ne correspond à votre recherche") : tx("Aucun historique pour le moment")}
           </p>
           <p className={`text-xs mt-1 ${dark ? "text-gray-600" : "text-gray-300"}`}>
-            {!recherche && "Posez une question pour commencer"}
+            {!recherche && tx("Posez une question pour commencer")}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           {historiqueFiltre.map((item) => {
             const date    = new Date(item.timestamp);
-            const dateStr = date.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
-            const heurStr = date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+            const dateStr = date.toLocaleDateString(LOCALE, { day: "2-digit", month: "short", year: "numeric" });
+            const heurStr = date.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
             const sel     = selection.has(item.id);
             const type    = detecterTypeGraphique(item.colonnes || [], item.data || []);
 
@@ -908,7 +909,7 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
                         <Clock size={12} aria-hidden="true" /> {heurStr}
                       </span>
                       <span className={`flex items-center gap-1 text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>
-                        <Timer size={12} aria-hidden="true" /> {item.duree_ms} ms
+                        <Timer size={12} aria-hidden="true" /> {tx("{duree_ms} ms", { duree_ms: item.duree_ms })}
                       </span>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                         item.source === "rag"
@@ -918,7 +919,7 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
                           : dark ? "bg-foret-900/40 text-foret-400" : "bg-foret-100 text-foret-700"
                       }`}>
                         <span className="inline-flex items-center gap-1">
-                          {item.source === "rag" ? <><BookCheck size={11} /> RAG</> : item.source === "rule" ? <><Zap size={11} /> Règle</> : <><Sparkles size={11} /> Gemini</>}
+                          {item.source === "rag" ? <><BookCheck size={11} />{" "}{tx("RAG")}</> : item.source === "rule" ? <><Zap size={11} />{" "}{tx("Règle")}</> : <><Sparkles size={11} />{" "}{tx("Gemini")}</>}
                         </span>
                       </span>
                     </div>
@@ -932,10 +933,10 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
                     <div className="flex items-center gap-3 mt-1.5">
                       <span className={`flex items-center gap-1 text-xs font-medium ${dark ? "text-gray-300" : "text-gray-600"}`}>
                         <FileText size={11} />
-                        {item.total} ligne{item.total !== 1 ? "s" : ""}
+                        {tx("{total} ligne", { total: item.total })}{item.total !== 1 ? "s" : ""}
                       </span>
                       <span className={`text-xs ${dark ? "text-gray-500" : "text-gray-400"}`}>
-                        {item.colonnes?.length || 0} colonne{(item.colonnes?.length || 0) !== 1 ? "s" : ""}
+                        {tx("{x} colonne", { x: item.colonnes?.length || 0 })}{(item.colonnes?.length || 0) !== 1 ? "s" : ""}
                       </span>
                       <span className={`text-xs px-1.5 py-0.5 rounded ${dark ? "bg-gray-700 text-gray-400" : "bg-gray-100 text-gray-500"}`}>
                         {type.toUpperCase()}
@@ -961,7 +962,7 @@ function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffacer }) {
       {historiqueFiltre.length > 0 && (
         <div className={`mt-4 p-3 rounded-xl text-xs flex items-center gap-2 ${dark ? "bg-gray-800/50 text-gray-500 border border-gray-700" : "bg-gray-50 text-gray-400 border border-gray-200"}`}>
           <Download size={12} className="flex-shrink-0" />
-          <p>Sélectionne les requêtes à inclure, puis clique sur <strong>Rapport PDF</strong>. Le PDF contient la question, le résumé, la requête SQL, la date et le graphique ou le tableau.</p>
+          <p>{tx("Sélectionne les requêtes à inclure, puis clique sur")}{" "}<strong>{tx("Rapport PDF")}</strong>{tx(". Le PDF contient la question, le résumé, la requête SQL, la date et le graphique ou le tableau.")}</p>
         </div>
       )}
     </div>
@@ -998,7 +999,7 @@ function BoutonMicro({ onDebut, onTexteEnDirect, onTranscription, onErreur, dark
     if (!ReconnaissanceVocale) return;
     try {
       const rec = new ReconnaissanceVocale();
-      rec.lang = "fr-FR";
+      rec.lang = LOCALE_VOIX;
       rec.interimResults = true;
       rec.continuous = true;
       rec.onresult = (e) => {
@@ -1020,7 +1021,7 @@ function BoutonMicro({ onDebut, onTexteEnDirect, onTranscription, onErreur, dark
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
-      onErreur("Microphone inaccessible. Autorise le micro dans ton navigateur.");
+      onErreur(tx("Microphone inaccessible. Autorise le micro dans ton navigateur."));
       return;
     }
     const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
@@ -1042,13 +1043,13 @@ function BoutonMicro({ onDebut, onTexteEnDirect, onTranscription, onErreur, dark
         const res = await http.post("/vocal/transcrire", formData, { timeout: 120000 });
         if (res.data?.texte?.trim()) onTranscription(res.data.texte.trim());
         else if (texteDirect) onTranscription(texteDirect);
-        else onErreur("Aucun texte détecté. Parle plus fort ou plus clairement.");
+        else onErreur(tx("Aucun texte détecté. Parle plus fort ou plus clairement."));
       } catch (e) {
         if (texteDirect) {
           onTranscription(texteDirect);
-          onErreur(`Transcription serveur impossible (${messageErreur(e)}) : texte du navigateur conservé, vérifie-le avant d'envoyer.`);
+          onErreur(tx("Transcription serveur impossible ({x}) : texte du navigateur conservé, vérifie-le avant d'envoyer.", { x: messageErreur(e) }));
         } else {
-          onErreur(`Transcription impossible : ${messageErreur(e)}`);
+          onErreur(tx("Transcription impossible : {x}", { x: messageErreur(e) }));
         }
       }
       setStatut("idle");
@@ -1071,7 +1072,7 @@ function BoutonMicro({ onDebut, onTexteEnDirect, onTranscription, onErreur, dark
       <button
         onClick={statut === "recording" ? arreter : demarrer}
         disabled={statut === "processing"}
-        aria-label={statut === "recording" ? "Arrêter l'enregistrement" : "Poser une question à voix haute"}
+        aria-label={statut === "recording" ? tx("Arrêter l'enregistrement") : tx("Poser une question à voix haute")}
         className={`relative w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg disabled:opacity-60 ${
           statut === "recording" ? "bg-red-500 hover:bg-red-600 scale-110" : "bg-foret-600 hover:bg-foret-700"
         }`}
@@ -1082,7 +1083,7 @@ function BoutonMicro({ onDebut, onTexteEnDirect, onTranscription, onErreur, dark
           : <Mic size={22} className="text-white" />}
       </button>
       <span className={`text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>
-        {statut === "recording" ? "Parle… clique pour finir" : statut === "processing" ? "Finalisation…" : "Cliquer pour parler"}
+        {statut === "recording" ? tx("Parle… clique pour finir") : statut === "processing" ? tx("Finalisation…") : tx("Cliquer pour parler")}
       </span>
     </div>
   );
@@ -1144,27 +1145,28 @@ function PanelAnalyse({ dark }) {
   const champ = `w-full px-3 py-2 rounded-xl border text-sm outline-none ${
     dark ? "bg-gray-700 border-gray-600 text-white focus:border-foret-500" : "bg-gray-50 border-gray-200 text-gray-900 focus:border-foret-500"}`;
   const etiquette = `block text-xs mb-1 ${dark ? "text-gray-400" : "text-gray-500"}`;
-  const listes = [["type_transaction", "Type"], ["canal", "Canal"]];
+  const listes = [["type_transaction", tx("Type")], ["canal", tx("Canal")]];
 
   return (
     <div className={`rounded-2xl border p-6 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`}>
-      <h2 className={`text-lg font-bold mb-1 ${dark ? "text-white" : "text-gray-900"}`}>Analyser une transaction</h2>
+      <h2 className={`text-lg font-bold mb-1 ${dark ? "text-white" : "text-gray-900"}`}>{tx("Analyser une transaction")}</h2>
       <p className={`text-xs mb-1 ${dark ? "text-gray-400" : "text-gray-500"}`}>
-        Le modèle d'IA compare l'opération aux habitudes observées (montant, heure, canal, lieu…), explique son score et indique la conduite à tenir.
+        {tx("Le modèle d'IA compare l'opération aux habitudes observées (montant, heure, canal, lieu…), explique son score et indique la conduite à tenir.")}
       </p>
       {infos && (
         <p className={`text-xs mb-4 ${infos.remarque ? "text-amber-500" : dark ? "text-gray-500" : "text-gray-400"}`}>
           {infos.remarque || (infos.date_entrainement
-            ? `Modèle entraîné le ${new Date(infos.date_entrainement).toLocaleDateString("fr-FR")} sur ${Number(infos.nb_transactions).toLocaleString("fr-FR")} transactions${infos.fiabilite ? ` · fiabilité ${infos.fiabilite} (AUC ${String(infos.auc_xgboost).replace(".", ",")})` : ""}.`
+            ? tx("Modèle entraîné le {date} sur {n} transactions", { date: new Date(infos.date_entrainement).toLocaleDateString(LOCALE), n: Number(infos.nb_transactions).toLocaleString(LOCALE) })
+              + (infos.fiabilite ? tx(" · fiabilité {fiabilite} (AUC {auc})", { fiabilite: tx(infos.fiabilite), auc: Number(infos.auc_xgboost).toLocaleString(LOCALE) }) : "") + "."
             : "")}
         </p>
       )}
       {!ref ? (
-        <p className={`text-sm ${dark ? "text-gray-400" : "text-gray-500"}`}>{erreur || "Chargement du modèle…"}</p>
+        <p className={`text-sm ${dark ? "text-gray-400" : "text-gray-500"}`}>{erreur || tx("Chargement du modèle…")}</p>
       ) : (
         <form onSubmit={analyser} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label>
-            <span className={etiquette}>Montant ({devise.libelle})</span>
+            <span className={etiquette}>{tx("Montant ({libelle})", { libelle: devise.libelle })}</span>
             <input type="number" min="0" step="any" required
               value={form.montant_fcfa === "" ? "" : Math.round(devise.convertir(form.montant_fcfa) * 100) / 100}
               onChange={e => setForm({ ...form, montant_fcfa: e.target.value === "" ? "" : devise.versFcfa(e.target.value) })} className={champ} />
@@ -1178,19 +1180,19 @@ function PanelAnalyse({ dark }) {
           <ChampsEtablissement dark={dark} valeurs={form} connues={{ banque: ref.banque, ville: ref.ville }}
             maj={m => setForm(f => ({ ...f, ...m, ...(m.pays ? { est_internationale: m.pays === PAYS_MODELE ? "Non" : "Oui" } : {}) }))} />
           <label>
-            <span className={etiquette}>Internationale</span>
+            <span className={etiquette}>{tx("Internationale")}</span>
             <select value={form.est_internationale} onChange={e => setForm({ ...form, est_internationale: e.target.value })} className={champ}>
-              <option>Non</option><option>Oui</option>
+              <option value="Non">{tx("Non")}</option><option value="Oui">{tx("Oui")}</option>
             </select>
           </label>
           <label>
-            <span className={etiquette}>Heure de l'opération</span>
+            <span className={etiquette}>{tx("Heure de l'opération")}</span>
             <input type="time" value={form.heure} onChange={e => setForm({ ...form, heure: e.target.value })} className={champ} />
           </label>
           <div className="sm:col-span-2 flex items-center gap-3">
             <button type="submit" disabled={chargement}
               className="px-4 py-2 bg-foret-600 hover:bg-foret-700 text-white text-sm font-semibold rounded-xl disabled:opacity-50">
-              {chargement ? "Analyse…" : "Analyser"}
+              {chargement ? tx("Analyse…") : tx("Analyser")}
             </button>
             {erreur && <span className="text-sm text-red-500">{erreur}</span>}
           </div>
@@ -1208,7 +1210,7 @@ function BarreSourceRisque({ dark, sourceActive, sourcesPretes, externe, onChois
       <div className={`mb-4 flex flex-wrap items-center gap-3 p-3 rounded-xl border ${dark ? "border-gray-700 bg-gray-800/60" : "border-gray-200 bg-white"}`}>
         <SelecteurSource dark={dark} sourceActive={sourceActive} sourcesPretes={sourcesPretes} onChoisir={onChoisir} />
         <span className={`text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>
-          {sourceActive ? "Modèles appris sur cette base." : "Démonstration : banque fictive, modèles pré-entraînés."}
+          {sourceActive ? tx("Modèles appris sur cette base.") : tx("Démonstration : banque fictive, modèles pré-entraînés.")}
         </span>
       </div>
     );
@@ -1216,8 +1218,8 @@ function BarreSourceRisque({ dark, sourceActive, sourcesPretes, externe, onChois
   if (!externe) return null;
   return (
     <div className={`mb-4 flex flex-wrap items-center gap-3 p-3 rounded-xl border text-sm ${dark ? "border-laiton-400/30 bg-laiton-400/5 text-gray-300" : "border-amber-200 bg-amber-50 text-gray-700"}`}>
-      <span>Démonstration sur une banque fictive. Branche ta base ou tes fichiers pour analyser tes propres opérations et crédits.</span>
-      <button onClick={onMesDonnees} className="ml-auto px-3 py-1.5 rounded-lg bg-foret-600 hover:bg-foret-700 text-white text-xs font-semibold">Mes données</button>
+      <span>{tx("Démonstration sur une banque fictive. Branche ta base ou tes fichiers pour analyser tes propres opérations et crédits.")}</span>
+      <button onClick={onMesDonnees} className="ml-auto px-3 py-1.5 rounded-lg bg-foret-600 hover:bg-foret-700 text-white text-xs font-semibold">{tx("Mes données")}</button>
     </div>
   );
 }
@@ -1328,16 +1330,16 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
         if (data.statut === "paye") {
           fini = true;
           if (data.jeton) onSession(appliquerJeton(data.jeton));
-          setInfo(`Paiement confirmé : abonnement ${data.formule} actif jusqu'au ${new Date(data.abonnement_fin).toLocaleDateString("fr-FR")}. Merci !`);
+          setInfo(tx("Paiement confirmé : abonnement {formule} actif jusqu'au {x}. Merci !", { formule: data.formule, x: new Date(data.abonnement_fin).toLocaleDateString(LOCALE) }));
           rafraichirAcces();
         } else if (data.statut === "en_attente" && ++essais < 10) {
-          setInfo("Paiement en cours de confirmation…");
+          setInfo(tx("Paiement en cours de confirmation…"));
           setTimeout(verifier, 3000);
           return;
         } else {
           fini = true;
-          setMessage(data.statut === "en_attente" ? "Paiement pas encore confirmé. Il s'activera automatiquement dès réception."
-            : "Le paiement n'a pas abouti. Tu peux réessayer depuis la page Abonnement.");
+          setMessage(data.statut === "en_attente" ? tx("Paiement pas encore confirmé. Il s'activera automatiquement dès réception.")
+            : tx("Le paiement n'a pas abouti. Tu peux réessayer depuis la page Abonnement."));
           if (data.statut === "en_attente") setInfo(null);
         }
       } catch (e) {
@@ -1393,11 +1395,11 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
     setEcoute(null);
     const reponse = interpreterReponse(texte);
     if (reponse.type === "vide") { setQuestion(""); return; }
-    if (reponse.type === "non") { setQuestion(""); lireAVoixHaute("D'accord. Je reste à ta disposition."); return; }
+    if (reponse.type === "non") { setQuestion(""); lireAVoixHaute(tx("D'accord. Je reste à ta disposition.")); return; }
     if (reponse.type === "oui") {
       setQuestion("");
       if (relance?.question) poserRef.current(relance.question);
-      else if (essai === 1) lireAVoixHaute("Je t'écoute.", { onFin: () => ecouterLaReponse(null, 2) });
+      else if (essai === 1) lireAVoixHaute(tx("Je t'écoute."), { onFin: () => ecouterLaReponse(null, 2) });
       return;
     }
     poserRef.current(reponse.texte);
@@ -1446,7 +1448,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
     // Base de l'organisation (connecteur) ou base VoiceBank principale
     const res = src
       ? await appelerQuestion("post", `/sources/${src.id}/question`, { texte: q, devise: devise.code }, { timeout: 90000 })
-      : await appelerQuestion("post", "/vocal/question", { texte: q, langue: "fr", devise: devise.code,
+      : await appelerQuestion("post", "/vocal/question", { texte: q, langue: LANGUE, devise: devise.code,
           contexte: contexte && !historique[0]?.nom_source ? contexte : null });
     if (!res) return;  // le message d'erreur est affiché via `erreur`
     if (externe) setAcces(a => a ? { ...a, questions_jour: a.questions_jour + 1 } : a);
@@ -1497,49 +1499,49 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
 
   const supprimerItem = (id) => setHistorique(prev => prev.filter(item => item.id !== id));
   const toutEffacer = () => {
-    if (window.confirm("Supprimer tout l'historique ?")) setHistorique([]);
+    if (window.confirm(tx("Supprimer tout l'historique ?"))) setHistorique([]);
   };
 
   const tableauSource = useTableauSource(sourceActive, devise.code);
   const kpis = sourceActive ? kpisSource(tableauSource.donnees, devise) : dashboard ? [
-    { titre: "Clients",        valeur: Number(dashboard.total_clients || 0).toLocaleString("fr"),       icone: Users,       couleur: "#1F654D" },
-    { titre: "Transactions",   valeur: Number(dashboard.total_transactions || 0).toLocaleString("fr"),   icone: Activity,    couleur: "#3E6FB0" },
-    { titre: "Fraudes",        valeur: Number(dashboard.total_fraudes || 0).toLocaleString("fr"),        icone: ShieldAlert, couleur: "#EF4444" },
-    { titre: "Crédits en cours", valeur: Number(dashboard.encours_credit_fcfa || 0) > 0
+    { titre: tx("Clients"),        valeur: Number(dashboard.total_clients || 0).toLocaleString(LOCALE),       icone: Users,       couleur: "#1F654D" },
+    { titre: tx("Transactions"),   valeur: Number(dashboard.total_transactions || 0).toLocaleString(LOCALE),   icone: Activity,    couleur: "#3E6FB0" },
+    { titre: tx("Fraudes"),        valeur: Number(dashboard.total_fraudes || 0).toLocaleString(LOCALE),        icone: ShieldAlert, couleur: "#EF4444" },
+    { titre: tx("Crédits en cours"), valeur: Number(dashboard.encours_credit_fcfa || 0) > 0
         ? devise.formater(dashboard.encours_credit_fcfa, { compact: true }) : "--",
       icone: CreditCard, couleur: "#A9852A" },
   ] : [];
 
   const suggestions = sourceActive?.suggestions?.length ? sourceActive.suggestions.slice(0, 6) : [
-    "Top 10 clients par solde",
-    "Crédits en défaut",
-    "Transactions frauduleuses par banque",
-    "Alertes critiques",
-    "Clients diaspora France",
-    "Volume transactions par ville",
+    tx("Top 10 clients par solde"),
+    tx("Crédits en défaut"),
+    tx("Transactions frauduleuses par banque"),
+    tx("Alertes critiques"),
+    tx("Clients diaspora France"),
+    tx("Volume transactions par ville"),
   ];
 
   const PAGES = {
-    assistant:     { titre: "Assistant vocal",        sousTitre: "Pose une question sur tes données, à la voix ou au clavier" },
-    donnees:       { titre: "Mes données",            sousTitre: "Brancher, diagnostiquer et interroger les données de ton organisation" },
-    tableau:       { titre: "Tableau de bord",         sousTitre: sourceActive ? `Vue d'ensemble de « ${sourceActive.nom} », calculée d'après sa structure`
-                                                                       : "Vue d'ensemble des clients, des transactions et des crédits" },
-    alertes:       { titre: "Alertes de fraude",       sousTitre: sourceActive ? `Opérations atypiques de « ${sourceActive.nom} »` : "Alertes à vérifier et décisions prises" },
-    analyse:       { titre: "Analyse de transaction",  sousTitre: "Estimer le risque de fraude d'une opération" },
-    credit:        { titre: "Score de crédit",         sousTitre: sourceActive ? `Portefeuille de crédits de « ${sourceActive.nom} »` : "Risque de défaut d'une demande ou d'un crédit en cours" },
-    historique:    { titre: "Historique",              sousTitre: "Questions de la session et rapport PDF" },
-    modeles:       { titre: "Fiche des modèles",       sousTitre: sourceActive ? `Modèles d'IA appris sur « ${sourceActive.nom} » : données, fiabilité, dérive` : "Modèles d'IA de la démonstration : données, fiabilité, limites" },
-    journal:       { titre: "Journal de l'organisation", sousTitre: "Traitement des alertes et activité des membres" },
-    notifications: { titre: "Notifications",           sousTitre: "Alertes, résumé du matin et rapports PDF reçus par e-mail" },
-    apprentissage: { titre: "Apprentissage",           sousTitre: "Réponses signalées et corrections enregistrées" },
-    fiabilite:     { titre: "Fiabilité",               sousTitre: "Taux de bonnes réponses sur les questions de référence" },
-    audit:         { titre: "Audit",                   sousTitre: "Qui a fait quoi, et quand" },
-    comptes:       { titre: "Comptes",                 sousTitre: "Qui peut se connecter, avec quels droits" },
-    abonnement:    { titre: "Abonnement",              sousTitre: "Formules, paiement et factures" },
-    maintenance:   { titre: "Maintenance",             sousTitre: "Mettre le service en maintenance et prévenir les utilisateurs" },
-    organisation:  { titre: acces?.type_organisation === "particulier" ? "Mon compte" : "Mon organisation",
-                     sousTitre: acces?.organisation ? `${acces.organisation} : membres et abonnement partagé` : "Membres et abonnement partagé" },
-    abonnements:   { titre: "Abonnements",             sousTitre: "Visiteurs, abonnés et paiements reçus" },
+    assistant:     { titre: tx("Assistant vocal"),        sousTitre: tx("Pose une question sur tes données, à la voix ou au clavier") },
+    donnees:       { titre: tx("Mes données"),            sousTitre: tx("Brancher, diagnostiquer et interroger les données de ton organisation") },
+    tableau:       { titre: tx("Tableau de bord"),         sousTitre: sourceActive ? tx("Vue d'ensemble de « {nom} », calculée d'après sa structure", { nom: sourceActive.nom })
+                                                                       : tx("Vue d'ensemble des clients, des transactions et des crédits") },
+    alertes:       { titre: tx("Alertes de fraude"),       sousTitre: sourceActive ? tx("Opérations atypiques de « {nom} »", { nom: sourceActive.nom }) : tx("Alertes à vérifier et décisions prises") },
+    analyse:       { titre: tx("Analyse de transaction"),  sousTitre: tx("Estimer le risque de fraude d'une opération") },
+    credit:        { titre: tx("Score de crédit"),         sousTitre: sourceActive ? tx("Portefeuille de crédits de « {nom} »", { nom: sourceActive.nom }) : tx("Risque de défaut d'une demande ou d'un crédit en cours") },
+    historique:    { titre: tx("Historique"),              sousTitre: tx("Questions de la session et rapport PDF") },
+    modeles:       { titre: tx("Fiche des modèles"),       sousTitre: sourceActive ? tx("Modèles d'IA appris sur « {nom} » : données, fiabilité, dérive", { nom: sourceActive.nom }) : tx("Modèles d'IA de la démonstration : données, fiabilité, limites") },
+    journal:       { titre: tx("Journal de l'organisation"), sousTitre: tx("Traitement des alertes et activité des membres") },
+    notifications: { titre: tx("Notifications"),           sousTitre: tx("Alertes, résumé du matin et rapports PDF reçus par e-mail") },
+    apprentissage: { titre: tx("Apprentissage"),           sousTitre: tx("Réponses signalées et corrections enregistrées") },
+    fiabilite:     { titre: tx("Fiabilité"),               sousTitre: tx("Taux de bonnes réponses sur les questions de référence") },
+    audit:         { titre: tx("Audit"),                   sousTitre: tx("Qui a fait quoi, et quand") },
+    comptes:       { titre: tx("Comptes"),                 sousTitre: tx("Qui peut se connecter, avec quels droits") },
+    abonnement:    { titre: tx("Abonnement"),              sousTitre: tx("Formules, paiement et factures") },
+    maintenance:   { titre: tx("Maintenance"),             sousTitre: tx("Mettre le service en maintenance et prévenir les utilisateurs") },
+    organisation:  { titre: acces?.type_organisation === "particulier" ? tx("Mon compte") : tx("Mon organisation"),
+                     sousTitre: acces?.organisation ? tx("{organisation} : membres et abonnement partagé", { organisation: acces.organisation }) : tx("Membres et abonnement partagé") },
+    abonnements:   { titre: tx("Abonnements"),             sousTitre: tx("Visiteurs, abonnés et paiements reçus") },
   };
   // Essai ou abonnement échu : seule la page Abonnement reste accessible.
   const page = acces?.expire ? "abonnement" : PAGES[onglet] ? onglet : "assistant";
@@ -1556,13 +1558,13 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center px-4">
           <div role="alertdialog" aria-modal="true" aria-labelledby="titre-inactivite"
             className={`w-full max-w-sm rounded-2xl border p-6 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}`}>
-            <h2 id="titre-inactivite" className="text-lg font-bold flex items-center gap-2 mb-2"><Timer size={18} /> Toujours là ?</h2>
+            <h2 id="titre-inactivite" className="text-lg font-bold flex items-center gap-2 mb-2"><Timer size={18} />{" "}{tx("Toujours là ?")}</h2>
             <p className={`text-sm mb-4 ${dark ? "text-gray-300" : "text-gray-600"}`}>
-              Sans activité, tu seras déconnecté dans <strong>{Math.ceil(resteMs / 1000)} s</strong>, pour protéger les données des clients.
+              {tx("Sans activité, tu seras déconnecté dans")}{" "}<strong>{tx("{x} s", { x: Math.ceil(resteMs / 1000) })}</strong>{tx(", pour protéger les données des clients.")}
             </p>
             <div className="flex gap-2">
-              <button onClick={rester} autoFocus className="px-4 py-2 bg-foret-600 hover:bg-foret-700 text-white text-sm font-semibold rounded-xl">Rester connecté</button>
-              <button onClick={onDeconnexion} className={`px-4 py-2 rounded-xl text-sm ${dark ? "hover:bg-gray-700" : "hover:bg-gray-100"}`}>Se déconnecter</button>
+              <button onClick={rester} autoFocus className="px-4 py-2 bg-foret-600 hover:bg-foret-700 text-white text-sm font-semibold rounded-xl">{tx("Rester connecté")}</button>
+              <button onClick={onDeconnexion} className={`px-4 py-2 rounded-xl text-sm ${dark ? "hover:bg-gray-700" : "hover:bg-gray-100"}`}>{tx("Se déconnecter")}</button>
             </div>
           </div>
         </div>
@@ -1575,7 +1577,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
         {/* ── Barre du haut ─────────────────────────────── */}
         <header className={`sticky top-0 z-20 border-b px-4 sm:px-8 py-3 flex items-center gap-3 backdrop-blur-md ${
           dark ? "bg-gray-950/85 border-gray-800" : "bg-gray-50/85 border-gray-200"}`}>
-          <button onClick={() => setMenuOuvert(true)} aria-label="Ouvrir le menu"
+          <button onClick={() => setMenuOuvert(true)} aria-label={tx("Ouvrir le menu")}
             className={`lg:hidden p-2 rounded-lg ${dark ? "hover:bg-gray-800" : "hover:bg-gray-200"}`}>
             <Menu size={18} />
           </button>
@@ -1584,25 +1586,25 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
             <p className={`text-xs truncate ${dark ? "text-gray-400" : "text-gray-500"}`}>{PAGES[page].sousTitre}</p>
           </div>
           {parle && (
-            <button onClick={arreterLecture} aria-label="Arrêter la lecture" title="Arrêter la lecture"
+            <button onClick={arreterLecture} aria-label={tx("Arrêter la lecture")} title={tx("Arrêter la lecture")}
               className={`flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full text-xs font-medium ${
                 dark ? "bg-laiton-400/15 text-laiton-300 hover:bg-laiton-400/25" : "bg-laiton-200/70 text-laiton-600 hover:bg-laiton-200"}`}>
               <span className="flex items-end gap-0.5 h-3" aria-hidden="true">
                 {[0, 1, 2].map(i => <span key={i} className="w-0.5 bg-current rounded-full animate-pulse"
                   style={{ height: `${[60, 100, 70][i]}%`, animationDelay: `${i * 150}ms` }} />)}
               </span>
-              <span className="hidden sm:inline">Lecture</span>
+              <span className="hidden sm:inline">{tx("Lecture")}</span>
               <Square size={11} fill="currentColor" />
             </button>
           )}
           {ecoute && (
-            <button onClick={arreterEcoute} aria-label="Arrêter l'écoute" title="Arrêter l'écoute"
+            <button onClick={arreterEcoute} aria-label={tx("Arrêter l'écoute")} title={tx("Arrêter l'écoute")}
               className="flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full text-xs font-medium bg-red-500/15 text-red-500 hover:bg-red-500/25">
               <span className="relative flex w-2 h-2" aria-hidden="true">
                 <span className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-75" />
                 <span className="relative w-2 h-2 rounded-full bg-red-500" />
               </span>
-              <span>{ecoute === "transcription" ? "Je réfléchis…" : ecoute === "parole" ? "Je t'écoute…" : "À toi…"}</span>
+              <span>{ecoute === "transcription" ? tx("Je réfléchis…") : ecoute === "parole" ? tx("Je t'écoute…") : tx("À toi…")}</span>
               <Square size={11} fill="currentColor" />
             </button>
           )}
@@ -1610,20 +1612,20 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
             ? "bg-gray-900 border-gray-700 text-gray-200" : "bg-white border-gray-200 text-gray-700"}`} />
           {voix && (
             <button onClick={basculerConversation} aria-pressed={conversation}
-              aria-label={conversation ? "Désactiver le mode conversation" : "Activer le mode conversation"}
-              title={conversation ? "Mode conversation : je t'écoute après chaque réponse" : "Mode conversation désactivé"}
+              aria-label={conversation ? tx("Désactiver le mode conversation") : tx("Activer le mode conversation")}
+              title={conversation ? tx("Mode conversation : je t'écoute après chaque réponse") : tx("Mode conversation désactivé")}
               className={`p-2 rounded-lg transition-colors ${conversation
                 ? (dark ? "text-laiton-300 hover:bg-gray-800" : "text-laiton-600 hover:bg-gray-200")
                 : (dark ? "text-gray-500 hover:bg-gray-800" : "text-gray-400 hover:bg-gray-200")}`}>
               <MessagesSquare size={17} />
             </button>
           )}
-          <button onClick={basculerVoix} aria-label={voix ? "Désactiver la réponse vocale" : "Activer la réponse vocale"}
-            title={voix ? "Réponse vocale activée" : "Réponse vocale désactivée"}
+          <button onClick={basculerVoix} aria-label={voix ? tx("Désactiver la réponse vocale") : tx("Activer la réponse vocale")}
+            title={voix ? tx("Réponse vocale activée") : tx("Réponse vocale désactivée")}
             className={`p-2 rounded-lg transition-colors ${dark ? "text-gray-300 hover:bg-gray-800" : "text-gray-600 hover:bg-gray-200"}`}>
             {voix ? <Volume2 size={17} /> : <VolumeX size={17} />}
           </button>
-          <button onClick={() => setDark(!dark)} aria-label="Changer de thème" title={dark ? "Thème clair" : "Thème sombre"}
+          <button onClick={() => setDark(!dark)} aria-label={tx("Changer de thème")} title={dark ? tx("Thème clair") : tx("Thème sombre")}
             className={`p-2 rounded-lg transition-colors ${dark ? "text-gray-300 hover:bg-gray-800" : "text-gray-600 hover:bg-gray-200"}`}>
             {dark ? <Sun size={17} /> : <Moon size={17} />}
           </button>
@@ -1633,8 +1635,8 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
         <main className="w-full max-w-5xl mx-auto px-4 sm:px-8 py-6 flex-1">
           {maintenance?.active && estAdmin && (
             <div role="status" className="mb-4 px-4 py-3 rounded-xl border border-amber-500/50 bg-amber-500/10 text-amber-500 text-sm flex flex-wrap items-center gap-2">
-              <strong>Maintenance en cours :</strong> les utilisateurs voient la page de maintenance, toi seul as accès.
-              <button onClick={() => allerA("maintenance")} className="underline">Gérer</button>
+              <strong>{tx("Maintenance en cours :")}</strong>{" "}{tx("les utilisateurs voient la page de maintenance, toi seul as accès.")}
+              <button onClick={() => allerA("maintenance")} className="underline">{tx("Gérer")}</button>
             </div>
           )}
           <BandeauAnnonce annonce={maintenance?.annonce} sombre={dark} />
@@ -1642,14 +1644,14 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
           {info && (
             <div role="status" className="mb-4 flex items-start gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 text-sm">
               <span className="flex-1">{info}</span>
-              <button onClick={() => setInfo(null)} aria-label="Fermer"><X size={14} /></button>
+              <button onClick={() => setInfo(null)} aria-label={tx("Fermer")}><X size={14} /></button>
             </div>
           )}
           {message && (
             <div role="alert" className="mb-4 flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-500 text-sm">
               <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
               <span className="flex-1">{message}</span>
-              <button onClick={() => setMessage(null)} aria-label="Fermer"><X size={14} /></button>
+              <button onClick={() => setMessage(null)} aria-label={tx("Fermer")}><X size={14} /></button>
             </div>
           )}
 
@@ -1688,18 +1690,18 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
                     <div className="flex gap-2">
                       <input
                         ref={champQuestionRef}
-                        aria-label="Question"
+                        aria-label={tx("Question")}
                         value={question}
                         onChange={e => { if (ecouteRef.current) arreterEcoute(); setQuestion(e.target.value); }}
                         onKeyDown={e => e.key === "Enter" && poserQuestion()}
-                        placeholder={dictee || ecoute ? "Je t'écoute…" : "Pose ta question en français..."}
+                        placeholder={dictee || ecoute ? tx("Je t'écoute…") : tx("Pose ta question en français...")}
                         maxLength={500}
                         className={`flex-1 min-w-0 px-4 py-3 rounded-xl border text-sm outline-none transition-all ${
                           dark ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-foret-500"
                                : "bg-gray-50 border-gray-200 text-gray-900 focus:border-foret-500"
                         }`}
                       />
-                      <button onClick={() => poserQuestion()} disabled={chargement || !question.trim()} aria-label="Envoyer"
+                      <button onClick={() => poserQuestion()} disabled={chargement || !question.trim()} aria-label={tx("Envoyer")}
                         className="px-4 py-3 bg-foret-600 hover:bg-foret-700 text-white rounded-xl transition-all disabled:opacity-50">
                         {chargement ? <RefreshCw size={15} className="animate-spin" /> : <Send size={15} />}
                       </button>
@@ -1724,13 +1726,13 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h2 className={`text-sm font-bold ${dark ? "text-white" : "text-gray-900"}`}>
-                      Résultats ({historique.length})
+                      {tx("Résultats ({length})", { length: historique.length })}
                     </h2>
                     <button onClick={toutEffacer}
                       className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all ${
                         dark ? "text-gray-400 hover:bg-gray-700" : "text-gray-500 hover:bg-gray-100"
                       }`}>
-                      <Trash2 size={12} /> Tout effacer
+                      <Trash2 size={12} />{" "}{tx("Tout effacer")}
                     </button>
                   </div>
                   {historique.slice(0, 5).map(item => (
@@ -1739,15 +1741,15 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
                   {historique.length > 5 && (
                     <button onClick={() => allerA("historique")}
                       className={`text-xs mb-2 ${dark ? "text-foret-400" : "text-foret-600"}`}>
-                      Voir les {historique.length - 5} autres dans l'historique
+                      {tx("Voir les {x} autres dans l'historique", { x: historique.length - 5 })}
                     </button>
                   )}
                 </div>
               ) : (
                 <div className={`text-center py-16 ${dark ? "text-gray-500" : "text-gray-400"}`}>
                   <Mic size={40} className="mx-auto mb-3 opacity-30" />
-                  <p className="text-sm">Pose une question vocale ou texte pour voir les résultats</p>
-                  <p className="text-xs mt-1">Les résultats s'accumulent ici avec leurs graphiques</p>
+                  <p className="text-sm">{tx("Pose une question vocale ou texte pour voir les résultats")}</p>
+                  <p className="text-xs mt-1">{tx("Les résultats s'accumulent ici avec leurs graphiques")}</p>
                 </div>
               )}
 
@@ -1769,7 +1771,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
                 ? <PanelTableauSource dark={dark} etat={tableauSource} devise={devise} />
                 : stats
                   ? <PanelGraphiques dark={dark} stats={stats} />
-                  : <p className={`text-sm ${dark ? "text-gray-500" : "text-gray-400"}`}>Statistiques indisponibles.</p>}
+                  : <p className={`text-sm ${dark ? "text-gray-500" : "text-gray-400"}`}>{tx("Statistiques indisponibles.")}</p>}
             </>
           )}
           {page === "donnees"    && <PanelSources dark={dark} onInterroger={choisirSource} onAbonnement={() => allerA("abonnement")} />}
@@ -1801,7 +1803,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
         </LectureSeule.Provider>
 
         <footer className={`px-4 sm:px-8 py-4 text-xs ${dark ? "text-gray-600" : "text-gray-400"}`}>
-          &copy; {new Date().getFullYear()} VoiceBank Analytics — Rayan Nguebou Temgoua
+          {tx("© {x} VoiceBank Analytics — Rayan Nguebou Temgoua", { x: new Date().getFullYear() })}
         </footer>
       </div>
     </div>

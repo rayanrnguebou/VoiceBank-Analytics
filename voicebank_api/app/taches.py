@@ -188,22 +188,27 @@ def rapports_periodiques(src, maintenant_local: datetime) -> dict:
         if _derniere(nom_tache):
             continue
         dest = destinataires(src.id_source, preference)
-        if dest:
-            try:
-                pdf, nom_fichier = rapports.generer(src.id_source, src.proprietaire, periode,
-                                                    maintenant_local.replace(tzinfo=None))
-            except Exception as e:                      # un rapport raté ne doit pas bloquer les autres tâches
-                log.warning("Rapport %s impossible pour la source %s : %s", periode, src.id_source, e)
+        pdfs = {}                                           # un rapport par langue des destinataires
+        for _, email, nom in dest:
+            langue = courriel.langue_destinataire(email)
+            if langue not in pdfs:
+                try:
+                    pdfs[langue] = rapports.generer(src.id_source, src.proprietaire, periode,
+                                                    maintenant_local.replace(tzinfo=None), langue=langue)
+                except Exception as e:                  # un rapport raté ne doit pas bloquer les autres tâches
+                    log.warning("Rapport %s impossible pour la source %s : %s", periode, src.id_source, e)
+                    pdfs[langue] = None
+            if not pdfs[langue]:
                 continue
-            for _, email, nom in dest:
-                courriel.envoyer_en_arriere_plan(email, courriel.Message(
-                    sujet=f"Rapport de risque {rapports.PERIODES[periode][0]} · {src.nom}",
-                    titre=f"Rapport de risque {rapports.PERIODES[periode][0]}",
-                    salutation=_salut(nom),
-                    paragraphes=[f"Vous trouverez ci-joint le rapport {rapports.PERIODES[periode][0]} de « {src.nom} » : "
-                                 "synthèse des alertes, points d'attention, portefeuille de crédits et fiabilité des modèles."],
-                    bouton=("Ouvrir VoiceBank", config.URL_INTERFACE),
-                    pieces=[(nom_fichier, pdf, "application/pdf")]))
+            pdf, nom_fichier = pdfs[langue]
+            courriel.envoyer_en_arriere_plan(email, courriel.Message(
+                sujet=f"Rapport de risque {rapports.PERIODES[periode][0]} · {src.nom}",
+                titre=f"Rapport de risque {rapports.PERIODES[periode][0]}",
+                salutation=_salut(nom),
+                paragraphes=[f"Vous trouverez ci-joint le rapport {rapports.PERIODES[periode][0]} de « {src.nom} » : "
+                             "synthèse des alertes, points d'attention, portefeuille de crédits et fiabilité des modèles."],
+                bouton=("Ouvrir VoiceBank", config.URL_INTERFACE),
+                pieces=[(nom_fichier, pdf, "application/pdf")]))
         _noter(nom_tache, {"destinataires": len(dest)})
         res[preference] = len(dest)
     return res

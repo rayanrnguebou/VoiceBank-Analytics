@@ -6,6 +6,7 @@ import { useAPI } from "../useAPI";
 import ChampListe from "../ChampListe";
 import { useLectureSeule, TITRE_LECTURE_SEULE } from "../lectureSeule";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate } from "../ui";
+import { tx } from "../i18n";
 
 // ── Signaler une réponse fausse (tous les utilisateurs) ─────────────
 export function FormulaireSignalement({ item, dark, onFermer }) {
@@ -20,14 +21,14 @@ export function FormulaireSignalement({ item, dark, onFermer }) {
     if (res) setEnvoye(true);
   };
 
-  if (envoye) return <p className="text-xs text-emerald-500 mt-2">Merci, un administrateur va vérifier cette réponse.</p>;
+  if (envoye) return <p className="text-xs text-emerald-500 mt-2">{tx("Merci, un administrateur va vérifier cette réponse.")}</p>;
   return (
     <div className="mt-3 space-y-2">
       <input value={commentaire} onChange={e => setCommentaire(e.target.value)} maxLength={1000} autoFocus
-        placeholder="Qu'est-ce qui est faux ? (ex. : il manque le filtre sur Douala)" className={champ(dark)} />
+        placeholder={tx("Qu'est-ce qui est faux ? (ex. : il manque le filtre sur Douala)")} className={champ(dark)} />
       <div className="flex gap-2">
-        <button onClick={envoyer} disabled={chargement} className={boutonPrincipal}>Envoyer le signalement</button>
-        <button onClick={onFermer} className={boutonSecondaire(dark)}>Annuler</button>
+        <button onClick={envoyer} disabled={chargement} className={boutonPrincipal}>{tx("Envoyer le signalement")}</button>
+        <button onClick={onFermer} className={boutonSecondaire(dark)}>{tx("Annuler")}</button>
       </div>
       {erreur && <p className="text-xs text-red-500">{erreur}</p>}
     </div>
@@ -54,30 +55,30 @@ export function EditeurCorrection({ question: q0, sql: sql0, idSignalement, dark
     if (res) { setOk(true); onTermine && onTermine(); }
   };
 
-  if (ok) return <p className="text-xs text-emerald-500 mt-2">Correction enregistrée : la prochaine question similaire utilisera cette requête.</p>;
+  if (ok) return <p className="text-xs text-emerald-500 mt-2">{tx("Correction enregistrée : la prochaine question similaire utilisera cette requête.")}</p>;
   return (
     <div className={`mt-3 p-3 rounded-xl space-y-2 ${dark ? "bg-gray-900/40" : "bg-foret-50"}`}>
       <label className="block">
-        <span className={etiquette(dark)}>Question</span>
+        <span className={etiquette(dark)}>{tx("Question")}</span>
         <input value={question} onChange={e => setQuestion(e.target.value)} maxLength={500} className={champ(dark)} />
       </label>
       <label className="block">
-        <span className={etiquette(dark)}>Requête SQL correcte (SELECT sur le schéma voicebank)</span>
+        <span className={etiquette(dark)}>{tx("Requête SQL correcte (SELECT sur le schéma voicebank)")}</span>
         <textarea value={sql} onChange={e => { setSql(e.target.value); setApercu(null); }} rows={4} maxLength={5000}
           spellCheck={false} className={`${champ(dark)} font-mono text-xs`} />
       </label>
       <div className="flex flex-wrap gap-2">
         <button onClick={tester} disabled={test.chargement || !sql.trim()} className={boutonSecondaire(dark)}>
-          {test.chargement ? "Test…" : "Tester la requête"}
+          {test.chargement ? tx("Test…") : tx("Tester la requête")}
         </button>
         <button onClick={enregistrer} disabled={ls || !apercu || enreg.chargement || !question.trim()} className={boutonPrincipal}
-          title={ls ? TITRE_LECTURE_SEULE : !apercu ? "Teste d'abord la requête" : ""}>Enregistrer la correction</button>
+          title={ls ? TITRE_LECTURE_SEULE : !apercu ? tx("Teste d'abord la requête") : ""}>{tx("Enregistrer la correction")}</button>
       </div>
       {test.erreur && <p className="text-xs text-red-500">{test.erreur}</p>}
       {enreg.erreur && <p className="text-xs text-red-500">{enreg.erreur}</p>}
       {apercu && (
         <div className="overflow-x-auto">
-          <p className={`${texteDiscret(dark)} mb-1`}>{apercu.total} ligne(s) — aperçu :</p>
+          <p className={`${texteDiscret(dark)} mb-1`}>{tx("{total} ligne(s) — aperçu :", { total: apercu.total })}</p>
           <table className="text-xs w-full">
             <thead><tr>{apercu.colonnes.slice(0, 6).map(c => <th key={c} className={`text-left px-2 py-1 ${dark ? "text-gray-300" : "text-gray-600"}`}>{c}</th>)}</tr></thead>
             <tbody>{apercu.data.slice(0, 3).map((l, i) => (
@@ -107,29 +108,29 @@ export function PanelApprentissage({ dark, onChange }) {
 
   const rejeter = async id => { if (await appeler("post", `/signalements/${id}/traiter`, { statut: "Rejeté" })) charger(); };
   const supprimer = async c => {
-    if (!window.confirm(`Supprimer la correction « ${c.question} » ?`)) return;
+    if (!window.confirm(tx("Supprimer la correction « {question} » ?", { question: c.question }))) return;
     if (await appeler("post", `/rag/corrections/${c.id}/supprimer`)) charger();
   };
 
   return (
     <div className="space-y-4">
       <div className={carte(dark)}>
-        <h2 className={titre(dark)}>Réponses signalées ({signalements.length})</h2>
-        <p className={`${texteDiscret(dark)} mb-4`}>Corrige-les : la correction est enregistrée et réutilisée automatiquement (RAG).</p>
-        {signalements.length === 0 && <p className={texteDiscret(dark)}>Aucun signalement en attente.</p>}
+        <h2 className={titre(dark)}>{tx("Réponses signalées ({length})", { length: signalements.length })}</h2>
+        <p className={`${texteDiscret(dark)} mb-4`}>{tx("Corrige-les : la correction est enregistrée et réutilisée automatiquement (RAG).")}</p>
+        {signalements.length === 0 && <p className={texteDiscret(dark)}>{tx("Aucun signalement en attente.")}</p>}
         <div className="space-y-2">
           {signalements.map(s => (
             <div key={s.id_signalement} className={`p-3 rounded-xl ${dark ? "bg-gray-700" : "bg-gray-50"}`}>
               <p className={`text-sm font-medium ${dark ? "text-white" : "text-gray-900"}`}>{s.question}</p>
-              <p className={texteDiscret(dark)}>par {s.utilisateur} · {formaterDate(s.date_signalement)} · source {s.source || "?"}</p>
+              <p className={texteDiscret(dark)}>{tx("par {utilisateur} · {x} · source", { utilisateur: s.utilisateur, x: formaterDate(s.date_signalement) })}{" "}{s.source || "?"}</p>
               {s.commentaire && <p className={`text-xs italic mt-1 ${dark ? "text-gray-300" : "text-gray-600"}`}>« {s.commentaire} »</p>}
               {edition === s.id_signalement ? (
                 <EditeurCorrection question={s.question} sql={s.requete_sql} idSignalement={s.id_signalement} dark={dark}
                   onTermine={() => setTimeout(() => { setEdition(null); charger(); }, 1200)} />
               ) : (
                 <div className="flex gap-2 mt-2">
-                  <button onClick={() => setEdition(s.id_signalement)} disabled={ls} title={ls ? TITRE_LECTURE_SEULE : undefined} className={`${boutonSecondaire(dark)} disabled:opacity-50`}>Corriger</button>
-                  <button onClick={() => rejeter(s.id_signalement)} disabled={ls} title={ls ? TITRE_LECTURE_SEULE : undefined} className={`${boutonSecondaire(dark)} disabled:opacity-50`}>Rejeter</button>
+                  <button onClick={() => setEdition(s.id_signalement)} disabled={ls} title={ls ? TITRE_LECTURE_SEULE : undefined} className={`${boutonSecondaire(dark)} disabled:opacity-50`}>{tx("Corriger")}</button>
+                  <button onClick={() => rejeter(s.id_signalement)} disabled={ls} title={ls ? TITRE_LECTURE_SEULE : undefined} className={`${boutonSecondaire(dark)} disabled:opacity-50`}>{tx("Rejeter")}</button>
                 </div>
               )}
             </div>
@@ -139,8 +140,8 @@ export function PanelApprentissage({ dark, onChange }) {
 
       <div className={carte(dark)}>
         <div className="flex items-center justify-between mb-2">
-          <h2 className={titre(dark)}>Corrections apprises ({corrections.length})</h2>
-          <button onClick={() => setEdition("nouvelle")} disabled={ls} title={ls ? TITRE_LECTURE_SEULE : undefined} className={`${boutonSecondaire(dark)} disabled:opacity-50`}>+ Ajouter</button>
+          <h2 className={titre(dark)}>{tx("Corrections apprises ({length})", { length: corrections.length })}</h2>
+          <button onClick={() => setEdition("nouvelle")} disabled={ls} title={ls ? TITRE_LECTURE_SEULE : undefined} className={`${boutonSecondaire(dark)} disabled:opacity-50`}>{tx("+ Ajouter")}</button>
         </div>
         {edition === "nouvelle" && <EditeurCorrection dark={dark} onTermine={() => setTimeout(() => { setEdition(null); charger(); }, 1200)} />}
         <div className="divide-y divide-gray-500/20 mt-2">
@@ -151,8 +152,8 @@ export function PanelApprentissage({ dark, onChange }) {
                 <p className={`text-xs font-mono truncate ${dark ? "text-gray-500" : "text-gray-400"}`}>{c.sql_correct}</p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                <span className={texteDiscret(dark)}>{c.utilisee} util.</span>
-                <button onClick={() => supprimer(c)} disabled={ls} title={ls ? TITRE_LECTURE_SEULE : undefined} className="text-xs text-red-500 hover:underline disabled:opacity-40 disabled:no-underline">Supprimer</button>
+                <span className={texteDiscret(dark)}>{tx("{utilisee} util.", { utilisee: c.utilisee })}</span>
+                <button onClick={() => supprimer(c)} disabled={ls} title={ls ? TITRE_LECTURE_SEULE : undefined} className="text-xs text-red-500 hover:underline disabled:opacity-40 disabled:no-underline">{tx("Supprimer")}</button>
               </div>
             </div>
           ))}
@@ -198,23 +199,23 @@ export function PanelFiabilite({ dark }) {
   return (
     <div className={carte(dark)}>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-        <h2 className={titre(dark)}>Fiabilité des réponses</h2>
+        <h2 className={titre(dark)}>{tx("Fiabilité des réponses")}</h2>
         <button onClick={lancer} disabled={ls || etat?.en_cours} title={ls ? TITRE_LECTURE_SEULE : undefined} className={boutonPrincipal}>
-          {etat?.en_cours ? "Évaluation en cours…" : "Lancer l'évaluation"}
+          {etat?.en_cours ? tx("Évaluation en cours…") : tx("Lancer l'évaluation")}
         </button>
       </div>
       <p className={`${texteDiscret(dark)} mb-4`}>
-        {details.nb_questions || 50} questions de référence : on compare le résultat obtenu au résultat attendu.
+        {tx("{x} questions de référence : on compare le résultat obtenu au résultat attendu.", { x: details.nb_questions || 50 })}
       </p>
       {erreur && <p className="text-sm text-red-500">{erreur}</p>}
-      {!d ? <p className={texteDiscret(dark)}>Aucune évaluation pour l'instant.</p> : (
+      {!d ? <p className={texteDiscret(dark)}>{tx("Aucune évaluation pour l'instant.")}</p> : (
         <>
           <div className="flex flex-wrap items-baseline gap-3 mb-4">
             <span className={`text-4xl font-bold ${couleur(Number(d.taux_reussite))}`}>{Number(d.taux_reussite).toFixed(1)} %</span>
-            <span className={texteDiscret(dark)}>{d.nb_reussies}/{d.nb_questions} justes · {formaterDate(d.date_evaluation)} · Gemini {d.gemini_actif ? "actif" : "inactif"}</span>
+            <span className={texteDiscret(dark)}>{tx("{nb_reussies}/{nb_questions} justes · {x} · Gemini", { nb_reussies: d.nb_reussies, nb_questions: d.nb_questions, x: formaterDate(d.date_evaluation) })}{" "}{d.gemini_actif ? "actif" : "inactif"}</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            {[["Par catégorie", details.par_categorie], ["Par source", details.par_source]].map(([nom, groupe]) => (
+            {[[tx("Par catégorie"), details.par_categorie], [tx("Par source"), details.par_source]].map(([nom, groupe]) => (
               <div key={nom}>
                 <p className={`text-xs font-semibold mb-1 ${dark ? "text-gray-300" : "text-gray-700"}`}>{nom}</p>
                 {Object.entries(groupe || {}).filter(([, s]) => s.questions).map(([cle, s]) => (
@@ -229,10 +230,10 @@ export function PanelFiabilite({ dark }) {
               </div>
             ))}
           </div>
-          {!d.gemini_actif && <p className="text-xs text-amber-500 mb-3">Sans clé Gemini, seules les questions couvertes par les règles et le RAG peuvent réussir.</p>}
+          {!d.gemini_actif && <p className="text-xs text-amber-500 mb-3">{tx("Sans clé Gemini, seules les questions couvertes par les règles et le RAG peuvent réussir.")}</p>}
           {erreursListe.length > 0 && (
             <details>
-              <summary className={`text-xs cursor-pointer ${dark ? "text-gray-300" : "text-gray-700"}`}>{erreursListe.length} questions à améliorer</summary>
+              <summary className={`text-xs cursor-pointer ${dark ? "text-gray-300" : "text-gray-700"}`}>{tx("{length} questions à améliorer", { length: erreursListe.length })}</summary>
               <ul className="mt-2 space-y-1">
                 {erreursListe.map(x => (
                   <li key={x.id} className={texteDiscret(dark)}>[{x.statut}] {x.question}</li>
@@ -241,7 +242,7 @@ export function PanelFiabilite({ dark }) {
             </details>
           )}
           {etat.historique?.length > 1 && (
-            <p className={`${texteDiscret(dark)} mt-3`}>Historique : {etat.historique.map(h => `${Number(h.taux_reussite).toFixed(0)} %`).join(" · ")}</p>
+            <p className={`${texteDiscret(dark)} mt-3`}>{tx("Historique :")}{" "}{etat.historique.map(h => `${Number(h.taux_reussite).toFixed(0)} %`).join(" · ")}</p>
           )}
         </>
       )}
@@ -251,11 +252,11 @@ export function PanelFiabilite({ dark }) {
 
 // ── Onglet Audit (admin) ─────────────────────────────
 const LIBELLES_ACTIONS = {
-  connexion: "Connexion", connexion_refusee: "Connexion refusée", consultation_client: "Fiche client consultée",
-  correction_rag: "Correction enregistrée", correction_supprimee: "Correction supprimée", signalement: "Réponse signalée",
-  signalement_traite: "Signalement traité", alerte_traitee: "Alerte traitée", evaluation_lancee: "Évaluation lancée",
-  score_credit: "Score de crédit consulté", compte_cree: "Compte créé", compte_reinitialise: "Mot de passe réinitialisé",
-  compte_modifie: "Compte modifié", mot_de_passe_change: "Mot de passe changé",
+  connexion: tx("Connexion"), connexion_refusee: tx("Connexion refusée"), consultation_client: tx("Fiche client consultée"),
+  correction_rag: tx("Correction enregistrée"), correction_supprimee: tx("Correction supprimée"), signalement: tx("Réponse signalée"),
+  signalement_traite: tx("Signalement traité"), alerte_traitee: tx("Alerte traitée"), evaluation_lancee: tx("Évaluation lancée"),
+  score_credit: tx("Score de crédit consulté"), compte_cree: tx("Compte créé"), compte_reinitialise: tx("Mot de passe réinitialisé"),
+  compte_modifie: tx("Compte modifié"), mot_de_passe_change: tx("Mot de passe changé"),
 };
 
 export function PanelAudit({ dark }) {
@@ -270,28 +271,28 @@ export function PanelAudit({ dark }) {
   return (
     <div className="space-y-4">
       <div className={carte(dark)}>
-        <h2 className={`${titre(dark)} mb-3`}>Activité des 30 derniers jours</h2>
+        <h2 className={`${titre(dark)} mb-3`}>{tx("Activité des 30 derniers jours")}</h2>
         {erreur && <p className="text-sm text-red-500">{erreur}</p>}
         <div className="flex flex-wrap gap-3">
           {(donnees?.synthese_30j || []).map(s => (
             <div key={s.utilisateur || "?"} className={`px-4 py-3 rounded-xl ${dark ? "bg-gray-700" : "bg-gray-50"}`}>
               <p className={`text-sm font-semibold ${dark ? "text-white" : "text-gray-900"}`}>{s.utilisateur || "inconnu"}</p>
-              <p className={texteDiscret(dark)}>{s.questions} questions · {s.taux_succes} % réussies</p>
+              <p className={texteDiscret(dark)}>{tx("{questions} questions · {taux_succes} % réussies", { questions: s.questions, taux_succes: s.taux_succes })}</p>
             </div>
           ))}
         </div>
       </div>
       <div className={carte(dark)}>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <h2 className={titre(dark)}>Journal d'audit</h2>
-          <ChampListe dark={dark} className="w-64 max-w-full" aria-label="Filtrer les actions" valeur={action} onChange={setAction}
-            options={[{ valeur: "", libelle: "Toutes les actions" }, ...Object.entries(LIBELLES_ACTIONS).map(([k, v]) => ({ valeur: k, libelle: v }))]} />
+          <h2 className={titre(dark)}>{tx("Journal d'audit")}</h2>
+          <ChampListe dark={dark} className="w-64 max-w-full" aria-label={tx("Filtrer les actions")} valeur={action} onChange={setAction}
+            options={[{ valeur: "", libelle: tx("Toutes les actions") }, ...Object.entries(LIBELLES_ACTIONS).map(([k, v]) => ({ valeur: k, libelle: v }))]} />
         </div>
         <div className="overflow-x-auto max-h-96">
           <table className="w-full text-xs">
             <thead><tr className={dark ? "text-gray-400" : "text-gray-500"}>
-              <th className="text-left p-2">Date</th><th className="text-left p-2">Utilisateur</th>
-              <th className="text-left p-2">Action</th><th className="text-left p-2">Détail</th><th className="text-left p-2">IP</th>
+              <th className="text-left p-2">{tx("Date")}</th><th className="text-left p-2">{tx("Utilisateur")}</th>
+              <th className="text-left p-2">{tx("Action")}</th><th className="text-left p-2">{tx("Détail")}</th><th className="text-left p-2">{tx("IP")}</th>
             </tr></thead>
             <tbody>
               {(donnees?.evenements || []).map(e => (
@@ -308,12 +309,12 @@ export function PanelAudit({ dark }) {
         </div>
       </div>
       <div className={carte(dark)}>
-        <h2 className={`${titre(dark)} mb-3`}>Dernières questions posées</h2>
+        <h2 className={`${titre(dark)} mb-3`}>{tx("Dernières questions posées")}</h2>
         <div className="space-y-1 max-h-72 overflow-y-auto">
           {(donnees?.questions || []).map((q, i) => (
             <p key={i} className={texteDiscret(dark)}>
-              {q.succes ? <CircleCheck size={12} className="inline text-emerald-500 -mt-0.5" aria-label="réussie" /> : <CircleX size={12} className="inline text-red-500 -mt-0.5" aria-label="échouée" />}{" "}
-              {formaterDate(q.date_requete)} · <strong>{q.utilisateur || "?"}</strong> · {q.question} · {q.duree_ms} ms
+              {q.succes ? <CircleCheck size={12} className="inline text-emerald-500 -mt-0.5" aria-label={tx("réussie")} /> : <CircleX size={12} className="inline text-red-500 -mt-0.5" aria-label={tx("échouée")} />}{" "}
+              {formaterDate(q.date_requete)} · <strong>{q.utilisateur || "?"}</strong>{" "}{tx("· {question} · {duree_ms} ms", { question: q.question, duree_ms: q.duree_ms })}
             </p>
           ))}
         </div>

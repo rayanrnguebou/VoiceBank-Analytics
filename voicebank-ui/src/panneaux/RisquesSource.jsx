@@ -8,11 +8,12 @@ import { Choix } from "../ChampListe";
 import ResultatRisque from "./Explication";
 import { SuiviAlerte, ChipStatut, BoutonsRapport, OUVERTS } from "./Surveillance";
 import { telechargerCsv, nomFichier } from "../ui";
+import { LOCALE, tx } from "../i18n";
 
 const pct = v => `${(Number(v) * 100).toFixed(1).replace(".", ",")} %`;
 
 function Pastille({ niveau, children }) {
-  return <span className={`text-[11px] font-semibold text-white px-2 py-0.5 rounded-full whitespace-nowrap ${COULEURS_NIVEAU[niveau] || "bg-gray-500"}`}>{children || niveau}</span>;
+  return <span className={`text-[11px] font-semibold text-white px-2 py-0.5 rounded-full whitespace-nowrap ${COULEURS_NIVEAU[niveau] || "bg-gray-500"}`}>{children || tx(niveau)}</span>;
 }
 
 function Indisponible({ dark, message }) {
@@ -21,7 +22,7 @@ function Indisponible({ dark, message }) {
       <Info size={18} className="text-laiton-400 flex-shrink-0 mt-0.5" />
       <div>
         <p className={`text-sm ${dark ? "text-gray-200" : "text-gray-800"}`}>{message}</p>
-        <p className={`${texteDiscret(dark)} mt-1`}>Choisis une autre base dans « Données interrogées », ou la démonstration.</p>
+        <p className={`${texteDiscret(dark)} mt-1`}>{tx("Choisis une autre base dans « Données interrogées », ou la démonstration.")}</p>
       </div>
     </div>
   );
@@ -43,7 +44,7 @@ export function PanelOperationsSource({ source, dark }) {
   }, [appeler, source.id, devise.code]);
 
   if (erreur) return <Indisponible dark={dark} message={erreur} />;
-  if (!d || chargement) return <p className={texteDiscret(dark)}>Apprentissage des habitudes de « {source.nom} »… (quelques secondes la première fois)</p>;
+  if (!d || chargement) return <p className={texteDiscret(dark)}>{tx("Apprentissage des habitudes de « {nom} »… (quelques secondes la première fois)", { nom: source.nom })}</p>;
   const r = d.resume;
   const suiviActif = !!d.suivi_actif;
   const selonStatut = o => !suiviActif || statut === "toutes" || (o.suivi && gardees.has(o.suivi.id)) || (statut === "a_traiter"
@@ -66,23 +67,22 @@ export function PanelOperationsSource({ source, dark }) {
       <div className={carte(dark)}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className={`${titre(dark)} flex items-center gap-2`}><ShieldAlert size={19} className="text-red-500" /> Opérations atypiques</h2>
+            <h2 className={`${titre(dark)} flex items-center gap-2`}><ShieldAlert size={19} className="text-red-500" />{" "}{tx("Opérations atypiques")}</h2>
             <p className={`${texteDiscret(dark)} mt-1`}>
-              Modèle appris sur {r.analysees.toLocaleString("fr-FR")} opérations récentes de « {r.titre} »
-              {r.periode ? ` (du ${new Date(r.periode[0]).toLocaleDateString("fr-FR")} au ${new Date(r.periode[1]).toLocaleDateString("fr-FR")})` : ""} :
-              montant, {r.categories.join(", ")}{r.heure_prise_en_compte ? ", heure" : ""}.
+              {tx("Modèle appris sur {x} opérations récentes de « {titre} »", { x: r.analysees.toLocaleString(LOCALE), titre: r.titre })}
+              {r.periode ? tx(" (du {debut} au {fin})", { debut: new Date(r.periode[0]).toLocaleDateString(LOCALE), fin: new Date(r.periode[1]).toLocaleDateString(LOCALE) }) : ""}{" "}{tx(": montant,")}{" "}{r.categories.join(", ")}{r.heure_prise_en_compte ? tx(", heure") : ""}.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {suiviActif && <BoutonsRapport source={source} dark={dark} />}
-            <button onClick={exporter} className={`${boutonSecondaire(dark)} flex items-center gap-1.5`}><Download size={13} /> CSV</button>
+            <button onClick={exporter} className={`${boutonSecondaire(dark)} flex items-center gap-1.5`}><Download size={13} />{" "}{tx("CSV")}</button>
           </div>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-          {[["Opérations analysées", r.analysees.toLocaleString("fr-FR")], ["Très atypiques (2 %)", r.atypiques.toLocaleString("fr-FR")],
-            ...(suiviActif ? [["Alertes à traiter", compteStatut("a_traiter").toLocaleString("fr-FR")]] : []),
-            ...(r.fraudes_connues ? [["Fraudes connues dans la base", r.fraudes_connues.toLocaleString("fr-FR")],
-              ["Repérées par le modèle", `${String(r.fraudes_reperees_pct).replace(".", ",")} % (hasard : ${r.fraudes_hasard_pct} %)`]] : [])
+          {[[tx("Opérations analysées"), r.analysees.toLocaleString(LOCALE)], [tx("Très atypiques (2 %)"), r.atypiques.toLocaleString(LOCALE)],
+            ...(suiviActif ? [[tx("Alertes à traiter"), compteStatut("a_traiter").toLocaleString(LOCALE)]] : []),
+            ...(r.fraudes_connues ? [[tx("Fraudes connues dans la base"), r.fraudes_connues.toLocaleString(LOCALE)],
+              [tx("Repérées par le modèle"), tx("{pct} % (hasard : {hasard} %)", { pct: Number(r.fraudes_reperees_pct).toLocaleString(LOCALE), hasard: r.fraudes_hasard_pct })]] : [])
           ].map(([t, v]) => (
             <div key={t} className={`p-3 rounded-xl ${dark ? "bg-gray-700/50" : "bg-gray-50"}`}>
               <p className={texteDiscret(dark)}>{t}</p><p className="text-lg font-bold mt-0.5">{v}</p>
@@ -92,9 +92,9 @@ export function PanelOperationsSource({ source, dark }) {
       </div>
       <div className={carte(dark)}>
         {suiviActif && (
-          <div role="tablist" aria-label="Statut des alertes" className={`flex flex-wrap gap-1 mb-3 pb-3 border-b ${dark ? "border-gray-700" : "border-gray-200"}`}>
-            {[["a_traiter", "À traiter"], ["fraude_confirmee", "Fraudes confirmées"], ["fausse_alerte", "Fausses alertes"],
-              ["resolue", "Résolues"], ["toutes", "Toutes"]].map(([k, l]) => (
+          <div role="tablist" aria-label={tx("Statut des alertes")} className={`flex flex-wrap gap-1 mb-3 pb-3 border-b ${dark ? "border-gray-700" : "border-gray-200"}`}>
+            {[["a_traiter", tx("À traiter")], ["fraude_confirmee", tx("Fraudes confirmées")], ["fausse_alerte", tx("Fausses alertes")],
+              ["resolue", tx("Résolues")], ["toutes", tx("Toutes")]].map(([k, l]) => (
               <button key={k} role="tab" aria-selected={statut === k} onClick={() => { setStatut(k); setNbVisibles(15); setOuvert(null); setGardees(new Set()); }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium ${statut === k ? (dark ? "bg-gray-700 text-white" : "bg-foret-50 text-foret-800") : texteDiscret(dark)}`}>
                 {l} ({compteStatut(k)})
@@ -105,7 +105,7 @@ export function PanelOperationsSource({ source, dark }) {
         <div className="flex flex-wrap gap-1.5 mb-3">
           {["Tous", "Critique", "Élevé", "Moyen"].map(n => (
             <button key={n} onClick={() => { setFiltre(n); setNbVisibles(15); setOuvert(null); }}
-              className={`px-3 py-1 rounded-full text-xs ${filtre === n ? "bg-foret-600 text-white" : dark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`}>{n} ({compte(n)})</button>
+              className={`px-3 py-1 rounded-full text-xs ${filtre === n ? "bg-foret-600 text-white" : dark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`}>{tx(n)} ({compte(n)})</button>
           ))}
         </div>
         <div className="space-y-2">
@@ -115,15 +115,15 @@ export function PanelOperationsSource({ source, dark }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <Pastille niveau={o.niveau_risque} />
-                    <span className={texteDiscret(dark)}>Plus atypique que {pct(o.score)} des opérations</span>
+                    <span className={texteDiscret(dark)}>{tx("Plus atypique que {x} des opérations", { x: pct(o.score) })}</span>
                     {o.id && <span className={`${texteDiscret(dark)} font-mono`}>{o.id}</span>}
-                    {o.fraude_connue && <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-500">fraude connue</span>}
+                    {o.fraude_connue && <span className="text-[11px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-500">{tx("fraude connue")}</span>}
                     {o.suivi && <ChipStatut statut={o.suivi.statut} />}
                     {o.suivi?.assigne_a && <span className={texteDiscret(dark)}>→ {o.suivi.assigne_a}</span>}
-                    {o.suivi?.commentaires > 0 && <span className={texteDiscret(dark)}>· {o.suivi.commentaires} commentaire{o.suivi.commentaires > 1 ? "s" : ""}</span>}
+                    {o.suivi?.commentaires > 0 && <span className={texteDiscret(dark)}>{tx("· {commentaires} commentaire", { commentaires: o.suivi.commentaires })}{o.suivi.commentaires > 1 ? "s" : ""}</span>}
                   </div>
                   <p className={`text-sm mt-1 ${dark ? "text-gray-200" : "text-gray-800"}`}>{o.raisons.map(x => x.detail || x.variable).join(" · ")}</p>
-                  <p className={`${texteDiscret(dark)} truncate`}>{[o.date && new Date(o.date).toLocaleDateString("fr-FR"), ...Object.values(o.categories).filter(Boolean)].filter(Boolean).join(" · ")}</p>
+                  <p className={`${texteDiscret(dark)} truncate`}>{[o.date && new Date(o.date).toLocaleDateString(LOCALE), ...Object.values(o.categories).filter(Boolean)].filter(Boolean).join(" · ")}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="font-bold tabular-nums">{devise.formaterValeur(o.montant)}</p>
@@ -140,10 +140,10 @@ export function PanelOperationsSource({ source, dark }) {
               )}
             </div>
           ))}
-          {ops.length === 0 && <p className={texteDiscret(dark)}>{suiviActif && statut === "a_traiter" ? "Aucune alerte à traiter : tout est à jour." : "Aucune opération à ce niveau."}</p>}
+          {ops.length === 0 && <p className={texteDiscret(dark)}>{suiviActif && statut === "a_traiter" ? tx("Aucune alerte à traiter : tout est à jour.") : tx("Aucune opération à ce niveau.")}</p>}
           {toutes.length > ops.length && (
             <button onClick={() => setNbVisibles(nbVisibles + 15)} className={`${boutonSecondaire(dark)} w-full`}>
-              Afficher plus ({toutes.length - ops.length} restantes)
+              {tx("Afficher plus ({x} restantes)", { x: toutes.length - ops.length })}
             </button>
           )}
         </div>
@@ -176,16 +176,16 @@ export function PanelAnalyseSource({ source, dark }) {
     if (r) setRes(r.data);
   };
   if (form.erreur) return <Indisponible dark={dark} message={form.erreur} />;
-  if (!f) return <p className={texteDiscret(dark)}>Apprentissage des habitudes de « {source.nom} »…</p>;
+  if (!f) return <p className={texteDiscret(dark)}>{tx("Apprentissage des habitudes de « {nom} »…", { nom: source.nom })}</p>;
   return (
     <div className={carte(dark)}>
-      <h2 className={`${titre(dark)} flex items-center gap-2`}><ScanSearch size={19} /> Analyser une opération</h2>
+      <h2 className={`${titre(dark)} flex items-center gap-2`}><ScanSearch size={19} />{" "}{tx("Analyser une opération")}</h2>
       <p className={`${texteDiscret(dark)} mb-4`}>
-        L'opération est comparée aux habitudes de « {f.titre} » (montant habituel : {devise.formaterValeur(f.montant_habituel)}).
+        {tx("L'opération est comparée aux habitudes de « {titre} » (montant habituel : {x}).", { titre: f.titre, x: devise.formaterValeur(f.montant_habituel) })}
       </p>
       <form onSubmit={analyser} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label>
-          <span className={etiquette(dark)}>Montant ({devise.libelle})</span>
+          <span className={etiquette(dark)}>{tx("Montant ({libelle})", { libelle: devise.libelle })}</span>
           <input type="number" min="0" step="any" required value={v.montant} onChange={e => setV({ ...v, montant: e.target.value })} className={champ(dark)} />
         </label>
         {f.categories.map(c => (
@@ -197,12 +197,12 @@ export function PanelAnalyseSource({ source, dark }) {
         ))}
         {f.heure && (
           <label>
-            <span className={etiquette(dark)}>Heure de l'opération</span>
+            <span className={etiquette(dark)}>{tx("Heure de l'opération")}</span>
             <input type="time" value={v.heure} onChange={e => setV({ ...v, heure: e.target.value })} className={champ(dark)} />
           </label>
         )}
         <div className="sm:col-span-2 flex items-center gap-3">
-          <button type="submit" disabled={calcul.chargement} className={boutonPrincipal}>{calcul.chargement ? "Analyse…" : "Analyser"}</button>
+          <button type="submit" disabled={calcul.chargement} className={boutonPrincipal}>{calcul.chargement ? tx("Analyse…") : tx("Analyser")}</button>
           {calcul.erreur && <span className="text-sm text-red-500">{calcul.erreur}</span>}
         </div>
       </form>
@@ -223,17 +223,17 @@ export function PanelCreditSource({ source, dark }) {
     appeler("get", `/sources/${source.id}/risques/credits`, null, { params: { devise: devise.code }, timeout: 90000 }).then(r => r && setD(r.data));
   }, [appeler, source.id, devise.code]);
   if (erreur) return <Indisponible dark={dark} message={erreur} />;
-  if (!d || chargement) return <p className={texteDiscret(dark)}>Analyse du portefeuille de « {source.nom} »…</p>;
+  if (!d || chargement) return <p className={texteDiscret(dark)}>{tx("Analyse du portefeuille de « {nom} »…", { nom: source.nom })}</p>;
   return (
     <div className="space-y-4">
       <div className={carte(dark)}>
-        <h2 className={`${titre(dark)} flex items-center gap-2`}><Landmark size={19} /> Portefeuille de crédits</h2>
+        <h2 className={`${titre(dark)} flex items-center gap-2`}><Landmark size={19} />{" "}{tx("Portefeuille de crédits")}</h2>
         <p className={`${texteDiscret(dark)} mt-1`}>
-          Table « {d.titre} », statut lu dans « {d.colonne_statut} ». Les défauts et retards sont reconnus d'après les valeurs de ce statut.
+          {tx("Table « {titre} », statut lu dans « {colonne_statut} ». Les défauts et retards sont reconnus d'après les valeurs de ce statut.", { titre: d.titre, colonne_statut: d.colonne_statut })}
         </p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-          {[["Crédits", d.credits.toLocaleString("fr-FR")], ["En défaut ou en retard", d.defauts.toLocaleString("fr-FR")],
-            ["Taux de défaut observé", pct(d.taux_defaut)], ["En cours", d.en_cours.toLocaleString("fr-FR")]].map(([t, x]) => (
+          {[[tx("Crédits"), d.credits.toLocaleString(LOCALE)], [tx("En défaut ou en retard"), d.defauts.toLocaleString(LOCALE)],
+            [tx("Taux de défaut observé"), pct(d.taux_defaut)], [tx("En cours"), d.en_cours.toLocaleString(LOCALE)]].map(([t, x]) => (
             <div key={t} className={`p-3 rounded-xl ${dark ? "bg-gray-700/50" : "bg-gray-50"}`}>
               <p className={texteDiscret(dark)}>{t}</p><p className="text-lg font-bold mt-0.5">{x}</p>
             </div>
@@ -242,8 +242,8 @@ export function PanelCreditSource({ source, dark }) {
       </div>
 
       <div className={carte(dark)}>
-        <h2 className={`${titre(dark)} mb-1`}>Où se concentrent les défauts ?</h2>
-        <p className={`${texteDiscret(dark)} mb-4`}>Taux de défaut par segment, comparé à la moyenne du portefeuille ({pct(d.taux_defaut)}).</p>
+        <h2 className={`${titre(dark)} mb-1`}>{tx("Où se concentrent les défauts ?")}</h2>
+        <p className={`${texteDiscret(dark)} mb-4`}>{tx("Taux de défaut par segment, comparé à la moyenne du portefeuille ({x}).", { x: pct(d.taux_defaut) })}</p>
         <div className="grid lg:grid-cols-2 gap-5">
           {d.segments.map(s => (
             <div key={s.colonne + s.libelle}>
@@ -266,13 +266,12 @@ export function PanelCreditSource({ source, dark }) {
       </div>
 
       <div className={carte(dark)}>
-        <h2 className={`${titre(dark)} mb-1`}>Crédits en cours les plus à risque</h2>
+        <h2 className={`${titre(dark)} mb-1`}>{tx("Crédits en cours les plus à risque")}</h2>
         {d.modele ? (
           <>
             <p className={`${texteDiscret(dark)} mb-3`}>
-              {d.modele.type} appris sur les {d.credits.toLocaleString("fr-FR")} crédits de la base
-              {d.modele.auc ? ` (fiabilité ${d.modele.fiabilite} : AUC ${String(d.modele.auc).replace(".", ",")} en validation croisée)` : ""}.
-              Le pourcentage est la probabilité de défaut estimée ; « ×2 » signifie deux fois le risque moyen du portefeuille. Clique sur un crédit pour voir pourquoi.
+              {tx("{type} appris sur les {x} crédits de la base", { type: d.modele.type, x: d.credits.toLocaleString(LOCALE) })}
+              {d.modele.auc ? tx(" (fiabilité {fiabilite} : AUC {auc} en validation croisée)", { fiabilite: tx(d.modele.fiabilite || ""), auc: Number(d.modele.auc).toLocaleString(LOCALE) }) : ""}{tx(". Le pourcentage est la probabilité de défaut estimée ; « ×2 » signifie deux fois le risque moyen du portefeuille. Clique sur un crédit pour voir pourquoi.")}
             </p>
             {d.modele.avertissement && (
               <p className="text-xs mb-3 p-2.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">{d.modele.avertissement}</p>
@@ -284,16 +283,16 @@ export function PanelCreditSource({ source, dark }) {
                     className={`w-full flex items-center justify-between gap-3 p-3 rounded-xl text-left ${dark ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-50 hover:bg-gray-100"}`}>
                     <div className="min-w-0">
                       <p className="text-sm font-medium">
-                        Crédit <span className="font-mono">{c.id || i + 1}</span>
+                        {tx("Crédit")}{" "}<span className="font-mono">{c.id || i + 1}</span>
                         {c.montant != null && <span className="ml-2 tabular-nums">{devise.formaterValeur(c.montant)}</span>}
                       </p>
                       <p className={`${texteDiscret(dark)} truncate`}>
                         {[...Object.entries(c.valeurs || {}).filter(([, x]) => x).map(([k, x]) => `${k} : ${x}`),
-                          c.facteurs?.[0] && c.facteurs[0].impact > 0 ? `surtout : ${c.facteurs[0].variable.toLowerCase()}` : null].filter(Boolean).join(" · ")}
+                          c.facteurs?.[0] && c.facteurs[0].impact > 0 ? tx("surtout : {variable}", { variable: c.facteurs[0].variable.toLowerCase() }) : null].filter(Boolean).join(" · ")}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      {c.risque_relatif != null && <span className={`${texteDiscret(dark)} tabular-nums`}>×{String(c.risque_relatif).replace(".", ",")}</span>}
+                      {c.risque_relatif != null && <span className={`${texteDiscret(dark)} tabular-nums`}>{tx("×")}{String(c.risque_relatif).replace(".", ",")}</span>}
                       <Pastille niveau={c.niveau_risque}>{pct(c.probabilite_defaut)}</Pastille>
                     </div>
                   </button>
@@ -306,8 +305,7 @@ export function PanelCreditSource({ source, dark }) {
           </>
         ) : (
           <p className={`${texteDiscret(dark)}`}>
-            Pas assez de défauts connus (15 au moins) pour apprendre un modèle fiable sur cette base : les taux de défaut par segment
-            ci-dessus restent valables pour orienter le suivi.
+            {tx("Pas assez de défauts connus (15 au moins) pour apprendre un modèle fiable sur cette base : les taux de défaut par segment ci-dessus restent valables pour orienter le suivi.")}
           </p>
         )}
       </div>

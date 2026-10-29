@@ -5,6 +5,7 @@ import { useAPI } from "../useAPI";
 import { useLectureSeule, TITRE_LECTURE_SEULE } from "../lectureSeule";
 import { carte, champ, titre, texteDiscret, boutonSecondaire, formaterDate } from "../ui";
 import { useDevise } from "../devise";
+import { LOCALE, tx } from "../i18n";
 
 const NIVEAUX = ["Tous", "Critique", "Élevé", "Moyen"];
 const COULEUR_NIVEAU = {
@@ -30,10 +31,10 @@ function LigneAlerte({ a, dark, onTraitee }) {
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${COULEUR_NIVEAU[a.niveau_alerte] || "bg-gray-100 text-gray-600"}`}>{a.niveau_alerte}</span>
-            <span className={texteDiscret(dark)}>Score {(a.score_anomalie * 100).toFixed(0)} %</span>
+            <span className={texteDiscret(dark)}>{tx("Score {x} %", { x: (a.score_anomalie * 100).toFixed(0) })}</span>
             <span className={texteDiscret(dark)}>{a.id_transaction}</span>
           </div>
-          <p className={`text-xs truncate ${dark ? "text-gray-300" : "text-gray-600"}`}>{a.motif || "Comportement inhabituel"}</p>
+          <p className={`text-xs truncate ${dark ? "text-gray-300" : "text-gray-600"}`}>{a.motif || tx("Comportement inhabituel")}</p>
           <p className={texteDiscret(dark)}>{[a.banque, a.ville, a.type_transaction].filter(Boolean).join(" · ")}</p>
         </div>
         <div className="text-right">
@@ -46,24 +47,24 @@ function LigneAlerte({ a, dark, onTraitee }) {
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${a.decision === "Fraude confirmée" ? "bg-red-500 text-white" : "bg-emerald-500 text-white"}`}>
             {a.decision === "Fraude confirmée" ? <CircleX size={12} /> : <CircleCheck size={12} />}
-            {a.decision || "Traitée"}
+            {a.decision ? tx(a.decision) : tx("Traitée")}
           </span>
-          <span className={texteDiscret(dark)}>par {a.traitee_par || "?"} · {formaterDate(a.date_traitement)}</span>
+          <span className={texteDiscret(dark)}>{tx("par")}{" "}{a.traitee_par || "?"} · {formaterDate(a.date_traitement)}</span>
           {a.commentaire && <span className={`text-xs italic ${dark ? "text-gray-300" : "text-gray-600"}`}>« {a.commentaire} »</span>}
         </div>
       ) : !ouvert ? (
         <button onClick={() => setOuvert(true)} disabled={ls} title={ls ? TITRE_LECTURE_SEULE : undefined}
-          className={`mt-2 ${boutonSecondaire(dark)} disabled:opacity-50`}>Traiter</button>
+          className={`mt-2 ${boutonSecondaire(dark)} disabled:opacity-50`}>{tx("Traiter")}</button>
       ) : (
         <div className="mt-2 space-y-2">
           <input value={commentaire} onChange={e => setCommentaire(e.target.value)} maxLength={1000}
-            placeholder="Commentaire (facultatif) : client joint, carte bloquée…" className={champ(dark)} />
+            placeholder={tx("Commentaire (facultatif) : client joint, carte bloquée…")} className={champ(dark)} />
           <div className="flex flex-wrap gap-2">
             <button disabled={chargement} onClick={() => decider("Fraude confirmée")}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500 hover:bg-red-600 text-white disabled:opacity-50">Fraude confirmée</button>
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500 hover:bg-red-600 text-white disabled:opacity-50">{tx("Fraude confirmée")}</button>
             <button disabled={chargement} onClick={() => decider("Faux positif")}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50">Faux positif</button>
-            <button onClick={() => setOuvert(false)} className={boutonSecondaire(dark)}>Annuler</button>
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50">{tx("Faux positif")}</button>
+            <button onClick={() => setOuvert(false)} className={boutonSecondaire(dark)}>{tx("Annuler")}</button>
           </div>
           {erreur && <p className="text-xs text-red-500">{erreur}</p>}
         </div>
@@ -94,23 +95,23 @@ export default function PanelAlertes({ dark, onChange }) {
   return (
     <div className={carte(dark)}>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-        <h2 className={`${titre(dark)} flex items-center gap-2`}><ShieldAlert size={19} strokeWidth={1.75} className="text-red-500" /> Alertes fraude</h2>
+        <h2 className={`${titre(dark)} flex items-center gap-2`}><ShieldAlert size={19} strokeWidth={1.75} className="text-red-500" />{" "}{tx("Alertes fraude")}</h2>
         <div className="flex gap-1">
-          <button className={pastille(!traitees)} onClick={() => setTraitees(false)}>À traiter</button>
-          <button className={pastille(traitees)} onClick={() => setTraitees(true)}>Traitées</button>
+          <button className={pastille(!traitees)} onClick={() => setTraitees(false)}>{tx("À traiter")}</button>
+          <button className={pastille(traitees)} onClick={() => setTraitees(true)}>{tx("Traitées")}</button>
         </div>
       </div>
       {stats && (
         <p className={`${texteDiscret(dark)} mb-3`}>
-          {Number(stats.a_traiter).toLocaleString("fr-FR")} à traiter · {Number(stats.confirmees).toLocaleString("fr-FR")} fraudes confirmées · {Number(stats.faux_positifs).toLocaleString("fr-FR")} faux positifs
+          {tx("{x} à traiter · {x2} fraudes confirmées · {x3} faux positifs", { x: Number(stats.a_traiter).toLocaleString(LOCALE), x2: Number(stats.confirmees).toLocaleString(LOCALE), x3: Number(stats.faux_positifs).toLocaleString(LOCALE) })}
         </p>
       )}
       <div className="flex flex-wrap gap-1 mb-4">
-        {NIVEAUX.map(n => <button key={n} className={pastille(niveau === n)} onClick={() => setNiveau(n)}>{n}</button>)}
+        {NIVEAUX.map(n => <button key={n} className={pastille(niveau === n)} onClick={() => setNiveau(n)}>{tx(n)}</button>)}
       </div>
       <div className="space-y-2">
         {alertes.length === 0
-          ? <p className={`text-sm text-center py-4 ${dark ? "text-gray-500" : "text-gray-400"}`}>Aucune alerte {traitees ? "traitée" : "à traiter"}{niveau !== "Tous" ? ` (${niveau})` : ""}</p>
+          ? <p className={`text-sm text-center py-4 ${dark ? "text-gray-500" : "text-gray-400"}`}>{tx("Aucune alerte")}{" "}{traitees ? tx("traitée") : tx("à traiter")}{niveau !== "Tous" ? ` (${niveau})` : ""}</p>
           : alertes.map(a => <LigneAlerte key={a.id_alerte} a={a} dark={dark} onTraitee={() => { charger(); onChange && onChange(); }} />)}
       </div>
     </div>

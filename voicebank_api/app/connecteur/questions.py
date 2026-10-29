@@ -12,7 +12,7 @@ import re
 
 from sqlglot import exp
 
-from .. import config
+from .. import config, i18n
 from . import semantique as sem
 
 log = logging.getLogger("voicebank")
@@ -280,9 +280,9 @@ def sql_gemini(question: str, profil: dict, dialecte: str) -> str | None:
     schema = profil.get("schema")
     prefixe = f"Les tables sont dans le schéma « {schema} » : préfixe-les ({schema}.table).\n" if schema and dialecte in ("postgres", "tsql", "oraclevb") else ""
     prompt = (
-        f"Tu traduis des questions en français en UNE requête SQL {NOMS_DIALECTES.get(dialecte, dialecte)}.\n"
+        f"Tu traduis des questions (en français ou en anglais) en UNE requête SQL {NOMS_DIALECTES.get(dialecte, dialecte)}.\n"
         "Règles : une seule requête SELECT, uniquement les tables et colonnes listées, alias de colonnes "
-        "lisibles en français, pas de commentaire, pas de point-virgule, au plus 1000 lignes. Pour les "
+        f"lisibles en {'anglais' if i18n.langue() == 'en' else 'français'}, pas de commentaire, pas de point-virgule, au plus 1000 lignes. Pour les "
         "évolutions dans le temps, regroupe par année et mois. N'utilise jamais une colonne marquée "
         "« personnel » dans un filtre ou un regroupement sauf si la question le demande explicitement.\n"
         + prefixe + carte_pour_ia(profil, question) +

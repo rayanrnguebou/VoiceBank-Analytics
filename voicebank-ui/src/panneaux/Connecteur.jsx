@@ -10,31 +10,21 @@ import { useAPI } from "../useAPI";
 import { http } from "../api";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate } from "../ui";
 import { useDevise } from "../devise";
+import { LOCALE, tx } from "../i18n";
 
 const ICONES = { postgresql: Database, mysql: Database, sqlserver: Server, oracle: Server, fichier: FileSpreadsheet, demo: Sparkles };
 const LIB_ROLES = {
-  identifiant: "Identifiant", montant: "Montant", quantite: "Quantité", taux: "Taux", score: "Score", date: "Date",
-  statut: "Statut", categorie: "Catégorie", geographie: "Lieu", drapeau_fraude: "Fraude", texte: "Texte",
-  mesure: "Mesure", secret: "Secret",
+  identifiant: tx("Identifiant"), montant: tx("Montant"), quantite: tx("Quantité"), taux: tx("Taux"), score: tx("Score"), date: tx("Date"),
+  statut: tx("Statut"), categorie: tx("Catégorie"), geographie: tx("Lieu"), drapeau_fraude: tx("Fraude"), texte: tx("Texte"),
+  mesure: tx("Mesure"), secret: tx("Secret"),
 };
-const LIB_DOMAINES = { banque: "Banque", microfinance: "Microfinance", assurance: "Assurance", commerce: "Commerce",
-  "générique": "Données générales" };
+const LIB_DOMAINES = { banque: tx("Banque"), microfinance: tx("Microfinance"), assurance: tx("Assurance"), commerce: tx("Commerce"),
+  "générique": tx("Données générales") };
 const AIDE_LECTURE_SEULE = {
-  postgresql: `CREATE ROLE voicebank_lecture LOGIN PASSWORD 'mot-de-passe-long';
-GRANT CONNECT ON DATABASE ma_base TO voicebank_lecture;
-GRANT USAGE ON SCHEMA public TO voicebank_lecture;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO voicebank_lecture;`,
-  mysql: `CREATE USER 'voicebank_lecture'@'%' IDENTIFIED BY 'mot-de-passe-long';
-GRANT SELECT ON ma_base.* TO 'voicebank_lecture'@'%';`,
-  sqlserver: `CREATE LOGIN voicebank_lecture WITH PASSWORD = 'mot-de-passe-long';
-USE ma_base;
-CREATE USER voicebank_lecture FOR LOGIN voicebank_lecture;
-ALTER ROLE db_datareader ADD MEMBER voicebank_lecture;`,
-  oracle: `CREATE USER voicebank_lecture IDENTIFIED BY "mot-de-passe-long";
-GRANT CREATE SESSION TO voicebank_lecture;
--- pour chaque table du schéma à analyser (ex. BANQUE) :
-GRANT SELECT ON BANQUE.CLIENTS TO voicebank_lecture;
--- puis indique BANQUE dans « Schéma ».`,
+  postgresql: tx("CREATE ROLE voicebank_lecture LOGIN PASSWORD 'mot-de-passe-long';\nGRANT CONNECT ON DATABASE ma_base TO voicebank_lecture;\nGRANT USAGE ON SCHEMA public TO voicebank_lecture;\nGRANT SELECT ON ALL TABLES IN SCHEMA public TO voicebank_lecture;"),
+  mysql: tx("CREATE USER 'voicebank_lecture'@'%' IDENTIFIED BY 'mot-de-passe-long';\nGRANT SELECT ON ma_base.* TO 'voicebank_lecture'@'%';"),
+  sqlserver: tx("CREATE LOGIN voicebank_lecture WITH PASSWORD = 'mot-de-passe-long';\nUSE ma_base;\nCREATE USER voicebank_lecture FOR LOGIN voicebank_lecture;\nALTER ROLE db_datareader ADD MEMBER voicebank_lecture;"),
+  oracle: tx("CREATE USER voicebank_lecture IDENTIFIED BY \"mot-de-passe-long\";\nGRANT CREATE SESSION TO voicebank_lecture;\n-- pour chaque table du schéma à analyser (ex. BANQUE) :\nGRANT SELECT ON BANQUE.CLIENTS TO voicebank_lecture;\n-- puis indique BANQUE dans « Schéma »."),
 };
 
 function Jauge({ score, dark }) {
@@ -42,7 +32,7 @@ function Jauge({ score, dark }) {
   const couleur = score >= 85 ? "#10B981" : score >= 65 ? "#C9A13B" : "#EF4444";
   const r = 22, c = 2 * Math.PI * r;
   return (
-    <div className="relative w-14 h-14 flex-shrink-0" title={`Qualité des données : ${score}/100`}>
+    <div className="relative w-14 h-14 flex-shrink-0" title={tx("Qualité des données : {score}/100", { score })}>
       <svg viewBox="0 0 56 56" className="w-14 h-14 -rotate-90">
         <circle cx="28" cy="28" r={r} fill="none" stroke={dark ? "#2D3532" : "#E9EDEB"} strokeWidth="5" />
         <circle cx="28" cy="28" r={r} fill="none" stroke={couleur} strokeWidth="5" strokeLinecap="round"
@@ -58,7 +48,7 @@ function BlocCode({ code, dark }) {
   return (
     <div className="relative">
       <pre className={`text-xs p-3 rounded-lg overflow-x-auto ${dark ? "bg-gray-900 text-foret-200" : "bg-gray-100 text-foret-900"}`}>{code}</pre>
-      <button type="button" aria-label="Copier" onClick={async () => { try { await navigator.clipboard.writeText(code); setCopie(true); } catch (e) { /* rien */ } }}
+      <button type="button" aria-label={tx("Copier")} onClick={async () => { try { await navigator.clipboard.writeText(code); setCopie(true); } catch (e) { /* rien */ } }}
         className={`absolute top-2 right-2 ${boutonSecondaire(dark)}`}>{copie ? <Check size={12} /> : <Copy size={12} />}</button>
     </div>
   );
@@ -99,15 +89,15 @@ function NouvelleSource({ dark, types, onCree, onAnnuler }) {
     return (
       <div className={carte(dark)}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className={titre(dark)}>Connecter tes données</h2>
-          <button onClick={onAnnuler} className={boutonSecondaire(dark)}>Annuler</button>
+          <h2 className={titre(dark)}>{tx("Connecter tes données")}</h2>
+          <button onClick={onAnnuler} className={boutonSecondaire(dark)}>{tx("Annuler")}</button>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {[["postgresql", "PostgreSQL", "Base PostgreSQL accessible sur Internet"],
-            ["mysql", "MySQL / MariaDB", "Très courant dans les logiciels de gestion"],
-            ["sqlserver", "SQL Server", "Fréquent dans les banques et grandes structures"],
-            ["oracle", "Oracle", "Systèmes bancaires centraux (12c et plus)"],
-            ["fichier", "Excel / CSV", "Dépose tes fichiers, sans accès serveur"]].map(([code, lib, desc]) => {
+          {[["postgresql", "PostgreSQL", tx("Base PostgreSQL accessible sur Internet")],
+            ["mysql", tx("MySQL / MariaDB"), tx("Très courant dans les logiciels de gestion")],
+            ["sqlserver", tx("SQL Server"), tx("Fréquent dans les banques et grandes structures")],
+            ["oracle", "Oracle", tx("Systèmes bancaires centraux (12c et plus)")],
+            ["fichier", tx("Excel / CSV"), tx("Dépose tes fichiers, sans accès serveur")]].map(([code, lib, desc]) => {
             const Icone = ICONES[code];
             return (
               <button key={code} onClick={() => setType(code)}
@@ -121,8 +111,7 @@ function NouvelleSource({ dark, types, onCree, onAnnuler }) {
         </div>
         <p className={`${texteDiscret(dark)} mt-4 flex items-start gap-2`}>
           <ShieldCheck size={14} className="flex-shrink-0 mt-0.5 text-emerald-500" />
-          Lecture seule : VoiceBank n'écrit jamais dans ta base. Les identifiants sont chiffrés, les données personnelles
-          masquées et jamais envoyées à l'IA, et toi seul peux interroger cette source.
+          {tx("Lecture seule : VoiceBank n'écrit jamais dans ta base. Les identifiants sont chiffrés, les données personnelles masquées et jamais envoyées à l'IA, et toi seul peux interroger cette source.")}
         </p>
       </div>
     );
@@ -132,14 +121,14 @@ function NouvelleSource({ dark, types, onCree, onAnnuler }) {
     <form onSubmit={connecter} className={`${carte(dark)} space-y-4`}>
       <div className="flex items-center justify-between">
         <h2 className={`${titre(dark)} flex items-center gap-2`}>
-          <button type="button" onClick={() => { setType(null); setResultat(null); }} aria-label="Retour" className={boutonSecondaire(dark)}><ArrowLeft size={14} /></button>
-          {type === "fichier" ? "Importer des fichiers" : `Connecter une base ${types.find(t => t.code === type)?.libelle || ""}`}
+          <button type="button" onClick={() => { setType(null); setResultat(null); }} aria-label={tx("Retour")} className={boutonSecondaire(dark)}><ArrowLeft size={14} /></button>
+          {type === "fichier" ? tx("Importer des fichiers") : tx("Connecter une base {type}", { type: types.find(x => x.code === type)?.libelle || "" })}
         </h2>
-        <button type="button" onClick={onAnnuler} className={boutonSecondaire(dark)}>Annuler</button>
+        <button type="button" onClick={onAnnuler} className={boutonSecondaire(dark)}>{tx("Annuler")}</button>
       </div>
       <label className="block">
-        <span className={etiquette(dark)}>Nom de la source</span>
-        <input value={f.nom} onChange={maj("nom")} required minLength={2} maxLength={80} placeholder="ex. Base de production, Export du mois…" className={champ(dark)} />
+        <span className={etiquette(dark)}>{tx("Nom de la source")}</span>
+        <input value={f.nom} onChange={maj("nom")} required minLength={2} maxLength={80} placeholder={tx("ex. Base de production, Export du mois…")} className={champ(dark)} />
       </label>
 
       {type === "fichier" ? (
@@ -148,59 +137,59 @@ function NouvelleSource({ dark, types, onCree, onAnnuler }) {
             onDrop={e => { e.preventDefault(); setFichiers([...e.dataTransfer.files].slice(0, 5)); }}
             className={`cursor-pointer p-6 rounded-xl border-2 border-dashed text-center ${dark ? "border-gray-600 hover:border-laiton-400" : "border-gray-300 hover:border-laiton-400"}`}>
             <Upload size={22} className="mx-auto text-laiton-400" />
-            <p className="text-sm mt-2">Dépose tes fichiers ici ou clique pour choisir</p>
-            <p className={texteDiscret(dark)}>CSV ou Excel .xlsx · 5 fichiers, 10 Mo chacun au plus · chaque feuille devient une table</p>
-            <input ref={entree} type="file" multiple accept=".csv,.txt,.xlsx" className="hidden" aria-label="Fichiers"
+            <p className="text-sm mt-2">{tx("Dépose tes fichiers ici ou clique pour choisir")}</p>
+            <p className={texteDiscret(dark)}>{tx("CSV ou Excel .xlsx · 5 fichiers, 10 Mo chacun au plus · chaque feuille devient une table")}</p>
+            <input ref={entree} type="file" multiple accept=".csv,.txt,.xlsx" className="hidden" aria-label={tx("Fichiers")}
               onChange={e => setFichiers([...e.target.files].slice(0, 5))} />
           </div>
           {fichiers.length > 0 && (
-            <ul className="mt-2 space-y-1">{fichiers.map(x => <li key={x.name} className="text-xs flex items-center gap-2"><FileSpreadsheet size={12} /> {x.name} · {(x.size / 1024).toFixed(0)} Ko</li>)}</ul>
+            <ul className="mt-2 space-y-1">{fichiers.map(x => <li key={x.name} className="text-xs flex items-center gap-2"><FileSpreadsheet size={12} /> {tx("{name} · {x} Ko", { name: x.name, x: (x.size / 1024).toFixed(0) })}</li>)}</ul>
           )}
         </div>
       ) : (
         <>
           <div className="grid sm:grid-cols-3 gap-3">
-            <label className="sm:col-span-2"><span className={etiquette(dark)}>Adresse du serveur</span>
-              <input value={f.hote} onChange={maj("hote")} required maxLength={253} placeholder="ex. db.mabanque.cm" className={champ(dark)} /></label>
-            <label><span className={etiquette(dark)}>Port</span>
+            <label className="sm:col-span-2"><span className={etiquette(dark)}>{tx("Adresse du serveur")}</span>
+              <input value={f.hote} onChange={maj("hote")} required maxLength={253} placeholder={tx("ex. db.mabanque.cm")} className={champ(dark)} /></label>
+            <label><span className={etiquette(dark)}>{tx("Port")}</span>
               <input type="number" min={1} max={65535} value={f.port} onChange={maj("port")} placeholder={String(portDefaut || "")} className={champ(dark)} /></label>
-            <label><span className={etiquette(dark)}>{type === "oracle" ? "Nom du service" : "Base de données"}</span>
-              <input value={f.base} onChange={maj("base")} required maxLength={128} placeholder={type === "oracle" ? "ex. ORCLPDB1" : undefined} className={champ(dark)} /></label>
-            <label><span className={etiquette(dark)}>Utilisateur (lecture seule)</span>
+            <label><span className={etiquette(dark)}>{type === "oracle" ? tx("Nom du service") : tx("Base de données")}</span>
+              <input value={f.base} onChange={maj("base")} required maxLength={128} placeholder={type === "oracle" ? tx("ex. ORCLPDB1") : undefined} className={champ(dark)} /></label>
+            <label><span className={etiquette(dark)}>{tx("Utilisateur (lecture seule)")}</span>
               <input value={f.utilisateur} onChange={maj("utilisateur")} required maxLength={128} autoComplete="off" className={champ(dark)} /></label>
-            <label><span className={etiquette(dark)}>Mot de passe</span>
+            <label><span className={etiquette(dark)}>{tx("Mot de passe")}</span>
               <input type="password" value={f.mot_de_passe} onChange={maj("mot_de_passe")} maxLength={256} autoComplete="new-password" className={champ(dark)} /></label>
-            <label><span className={etiquette(dark)}>Chiffrement SSL</span>
+            <label><span className={etiquette(dark)}>{tx("Chiffrement SSL")}</span>
               <select value={f.ssl} onChange={maj("ssl")} className={champ(dark)}
-                title="Vérifié : chiffré et identité du serveur contrôlée (certificat reconnu). Exigé : chiffré sans contrôle d'identité.">
-                <option value="prefere">Si disponible</option><option value="exige">Exigé</option>
-                {type !== "sqlserver" && <option value="verifie">Vérifié (certificat contrôlé)</option>}
-                <option value="desactive">Désactivé</option>
+                title={tx("Vérifié : chiffré et identité du serveur contrôlée (certificat reconnu). Exigé : chiffré sans contrôle d'identité.")}>
+                <option value="prefere">{tx("Si disponible")}</option><option value="exige">{tx("Exigé")}</option>
+                {type !== "sqlserver" && <option value="verifie">{tx("Vérifié (certificat contrôlé)")}</option>}
+                <option value="desactive">{tx("Désactivé")}</option>
               </select>
-              {type === "oracle" && (f.ssl === "prefere" || f.ssl === "desactive") && <span className={`${texteDiscret(dark)} block mt-1`}>Oracle : connexion non chiffrée. Choisis « Exigé » si ton serveur accepte TCPS (souvent le port 2484).</span>}
-              {f.ssl === "verifie" && <span className={`${texteDiscret(dark)} block mt-1`}>Saisis le nom exact du serveur (pas son adresse IP) : il doit figurer sur son certificat.</span>}
+              {type === "oracle" && (f.ssl === "prefere" || f.ssl === "desactive") && <span className={`${texteDiscret(dark)} block mt-1`}>{tx("Oracle : connexion non chiffrée. Choisis « Exigé » si ton serveur accepte TCPS (souvent le port 2484).")}</span>}
+              {f.ssl === "verifie" && <span className={`${texteDiscret(dark)} block mt-1`}>{tx("Saisis le nom exact du serveur (pas son adresse IP) : il doit figurer sur son certificat.")}</span>}
             </label>
             {type !== "mysql" && (
-              <label><span className={etiquette(dark)}>Schéma (facultatif)</span>
-                <input value={f.schema} onChange={maj("schema")} maxLength={128} pattern="[A-Za-z0-9_]+" placeholder={type === "sqlserver" ? "dbo" : type === "oracle" ? "propriétaire des tables, ex. BANQUE" : "public"} className={champ(dark)} /></label>
+              <label><span className={etiquette(dark)}>{tx("Schéma (facultatif)")}</span>
+                <input value={f.schema} onChange={maj("schema")} maxLength={128} pattern="[A-Za-z0-9_]+" placeholder={type === "sqlserver" ? "dbo" : type === "oracle" ? tx("propriétaire des tables, ex. BANQUE") : "public"} className={champ(dark)} /></label>
             )}
           </div>
           <button type="button" onClick={() => setAide(!aide)} className={`text-xs flex items-center gap-1 ${dark ? "text-foret-300" : "text-foret-700"}`}>
-            {aide ? <ChevronUp size={12} /> : <ChevronDown size={12} />} Comment créer un compte en lecture seule ?
+            {aide ? <ChevronUp size={12} /> : <ChevronDown size={12} />}{" "}{tx("Comment créer un compte en lecture seule ?")}
           </button>
           {aide && (
             <div className="space-y-2">
-              <p className={texteDiscret(dark)}>À faire exécuter par l'administrateur de la base, puis autoriser l'adresse du serveur VoiceBank dans le pare-feu :</p>
+              <p className={texteDiscret(dark)}>{tx("À faire exécuter par l'administrateur de la base, puis autoriser l'adresse du serveur VoiceBank dans le pare-feu :")}</p>
               <BlocCode code={AIDE_LECTURE_SEULE[type]} dark={dark} />
             </div>
           )}
           <div className="flex flex-wrap items-center gap-3">
             <button type="button" onClick={tester} disabled={test.chargement || !f.hote || !f.base || !f.utilisateur} className={`${boutonSecondaire(dark)} flex items-center gap-1`}>
-              <Link2 size={13} /> {test.chargement ? "Test…" : "Tester la connexion"}
+              <Link2 size={13} /> {test.chargement ? tx("Test…") : tx("Tester la connexion")}
             </button>
             {test.erreur && <span className="text-sm text-red-500">{test.erreur}</span>}
             {resultat && (
-              <span className="text-sm text-emerald-500 flex items-center gap-1"><Check size={14} /> Connecté · version {resultat.version} · {resultat.tables} table(s)</span>
+              <span className="text-sm text-emerald-500 flex items-center gap-1"><Check size={14} />{" "}{tx("Connecté · version {version} · {tables} table(s)", { version: resultat.version, tables: resultat.tables })}</span>
             )}
           </div>
           {resultat?.avertissement && (
@@ -210,9 +199,9 @@ function NouvelleSource({ dark, types, onCree, onAnnuler }) {
       )}
       {envoi.erreur && <p role="alert" className="text-sm text-red-500">{envoi.erreur}</p>}
       <button type="submit" disabled={envoi.chargement || (type === "fichier" ? !fichiers.length : !resultat)} className={boutonPrincipal}>
-        {envoi.chargement ? "Connexion…" : type === "fichier" ? "Importer et analyser" : "Connecter et analyser"}
+        {envoi.chargement ? tx("Connexion…") : type === "fichier" ? tx("Importer et analyser") : tx("Connecter et analyser")}
       </button>
-      {type !== "fichier" && !resultat && <p className={texteDiscret(dark)}>Teste d'abord la connexion.</p>}
+      {type !== "fichier" && !resultat && <p className={texteDiscret(dark)}>{tx("Teste d'abord la connexion.")}</p>}
     </form>
   );
 }
@@ -228,27 +217,27 @@ function TableProfil({ t, dark }) {
       <button onClick={() => setOuvert(!ouvert)} className="w-full flex items-center justify-between gap-3 p-3 text-left">
         <div className="min-w-0">
           <p className="text-sm font-semibold truncate">{t.nom} {t.entite && <span className={`${texteDiscret(dark)} font-normal`}>· {t.entite}</span>}</p>
-          <p className={texteDiscret(dark)}>{t.erreur || `${Number(t.lignes ?? 0).toLocaleString("fr-FR")} lignes · ${t.colonnes.length} colonnes${t.cle_primaire?.length ? ` · clé ${t.cle_primaire[0]}` : ""}`}</p>
+          <p className={texteDiscret(dark)}>{t.erreur || tx("{lignes} lignes · {colonnes} colonnes", { lignes: Number(t.lignes ?? 0).toLocaleString(LOCALE), colonnes: t.colonnes.length }) + (t.cle_primaire?.length ? tx(" · clé {x}", { x: t.cle_primaire[0] }) : "")}</p>
         </div>
         {ouvert ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
       </button>
       {ouvert && (
         <div className="overflow-x-auto px-3 pb-3">
           <table className="w-full text-xs">
-            <thead><tr className={texteDiscret(dark)}><th className="text-left p-1.5">Colonne</th><th className="text-left p-1.5">Rôle détecté</th>
-              <th className="text-left p-1.5">Vides</th><th className="text-left p-1.5">Aperçu</th></tr></thead>
+            <thead><tr className={texteDiscret(dark)}><th className="text-left p-1.5">{tx("Colonne")}</th><th className="text-left p-1.5">{tx("Rôle détecté")}</th>
+              <th className="text-left p-1.5">{tx("Vides")}</th><th className="text-left p-1.5">{tx("Aperçu")}</th></tr></thead>
             <tbody>
               {t.colonnes.map(c => (
                 <tr key={c.nom} className={`border-t ${dark ? "border-gray-700" : "border-gray-100"}`}>
                   <td className="p-1.5 font-mono">{c.nom}</td>
                   <td className="p-1.5 whitespace-nowrap">
                     <span className={`px-1.5 py-0.5 rounded ${c.role === "secret" ? "bg-red-500/15 text-red-500" : dark ? "bg-gray-700" : "bg-gray-100"}`}>{LIB_ROLES[c.role] || c.role}</span>
-                    {c.pii && <span className="ml-1 inline-flex items-center gap-0.5 text-amber-600" title="Donnée personnelle : masquée, jamais envoyée à l'IA"><Lock size={11} /> {c.pii.replace("_", " ")}</span>}
+                    {c.pii && <span className="ml-1 inline-flex items-center gap-0.5 text-amber-600" title={tx("Donnée personnelle : masquée, jamais envoyée à l'IA")}><Lock size={11} /> {c.pii.replace("_", " ")}</span>}
                   </td>
                   <td className="p-1.5">{c.nulls_pct == null ? "—" : `${c.nulls_pct} %`}</td>
                   <td className={`p-1.5 ${texteDiscret(dark)}`}>
                     {c.valeurs ? c.valeurs.slice(0, 4).map(v => v.valeur).join(", ")
-                      : c.min != null ? `${Number(c.min).toLocaleString("fr-FR")} → ${Number(c.max).toLocaleString("fr-FR")}`
+                      : c.min != null ? `${Number(c.min).toLocaleString(LOCALE)} → ${Number(c.max).toLocaleString(LOCALE)}`
                       : c.date_min ? `${c.date_min} → ${c.date_max}` : ""}
                   </td>
                 </tr>
@@ -273,14 +262,14 @@ function MonnaieSource({ d, dark }) {
   };
   return (
     <label className={`flex flex-wrap items-center gap-2 mt-3 ${texteDiscret(dark)}`}>
-      Les montants de cette base sont en
-      <select value={choix} onChange={changer} aria-label="Monnaie de la base"
+      {tx("Les montants de cette base sont en")}
+      <select value={choix} onChange={changer} aria-label={tx("Monnaie de la base")}
         className={`text-xs px-2 py-1 rounded-lg border outline-none ${dark ? "bg-gray-700 border-gray-600 text-gray-200" : "bg-gray-50 border-gray-200"}`}>
-        <option value="">détection automatique ({d.devise_detectee || "XAF par défaut"})</option>
+        <option value="">{tx("détection automatique (")}{d.devise_detectee || tx("XAF par défaut")})</option>
         {liste.map(x => <option key={x.code} value={x.code}>{x.nom}</option>)}
       </select>
       {ok && <Check size={13} className="text-emerald-500" />}
-      <span>— l'affichage suit la monnaie choisie en haut de l'écran.</span>
+      <span>{tx("— l'affichage suit la monnaie choisie en haut de l'écran.")}</span>
     </label>
   );
 }
@@ -290,24 +279,23 @@ function DetailSource({ dark, id, onRetour, onInterroger }) {
   const [d, setD] = useState(null);
   const [onglet, setOnglet] = useState("diagnostic");
   useEffect(() => { appeler("get", `/sources/${id}`, null, { timeout: 120000 }).then(r => r && setD(r.data)); }, [appeler, id]);
-  if (!d) return <div className={carte(dark)}><p className={texteDiscret(dark)}>{erreur || "Analyse de la base…"}</p></div>;
+  if (!d) return <div className={carte(dark)}><p className={texteDiscret(dark)}>{erreur || tx("Analyse de la base…")}</p></div>;
   const p = d.profil || {};
   const r = p.resume || {};
-  const onglets = [["diagnostic", `Diagnostic (${(p.diagnostics || []).length})`], ["carte", `Carte des données (${r.tables || 0})`],
-    ["relations", `Relations (${(p.relations || []).length})`], ["questions", "Questions suggérées"]];
+  const onglets = [["diagnostic", tx("Diagnostic ({length})", { length: (p.diagnostics || []).length })], ["carte", tx("Carte des données ({x})", { x: r.tables || 0 })],
+    ["relations", tx("Relations ({length})", { length: (p.relations || []).length })], ["questions", tx("Questions suggérées")]];
   return (
     <div className="space-y-4">
       <div className={carte(dark)}>
-        <button onClick={onRetour} className={`${boutonSecondaire(dark)} mb-3 flex items-center gap-1`}><ArrowLeft size={13} /> Mes données</button>
+        <button onClick={onRetour} className={`${boutonSecondaire(dark)} mb-3 flex items-center gap-1`}><ArrowLeft size={13} />{" "}{tx("Mes données")}</button>
         <div className="flex flex-wrap items-center gap-4">
           <Jauge score={p.score_qualite} dark={dark} />
           <div className="flex-1 min-w-0">
             <h2 className={titre(dark)}>{d.nom}</h2>
-            <p className={texteDiscret(dark)}>{d.libelle_type} · {LIB_DOMAINES[p.domaine] || p.domaine} · analysée le {formaterDate(p.date_analyse)}</p>
-            <p className="text-sm mt-1">{r.tables} tables · {Number(r.lignes || 0).toLocaleString("fr-FR")} lignes · {r.colonnes} colonnes ·{" "}
-              {r.relations} relations · <span className="text-amber-600">{r.donnees_personnelles} données personnelles protégées</span></p>
+            <p className={texteDiscret(dark)}>{tx("{libelle_type} · {x} · analysée le {x2}", { libelle_type: d.libelle_type, x: LIB_DOMAINES[p.domaine] || p.domaine, x2: formaterDate(p.date_analyse) })}</p>
+            <p className="text-sm mt-1">{tx("{tables} tables · {x} lignes · {colonnes} colonnes ·{x2}{relations} relations ·", { tables: r.tables, x: Number(r.lignes || 0).toLocaleString(LOCALE), colonnes: r.colonnes, x2: " ", relations: r.relations })}{" "}<span className="text-amber-600">{tx("{donnees_personnelles} données personnelles protégées", { donnees_personnelles: r.donnees_personnelles })}</span></p>
           </div>
-          <button onClick={() => onInterroger(d)} className={`${boutonPrincipal} flex items-center gap-2`}><Search size={15} /> Interroger cette base</button>
+          <button onClick={() => onInterroger(d)} className={`${boutonPrincipal} flex items-center gap-2`}><Search size={15} />{" "}{tx("Interroger cette base")}</button>
         </div>
         <MonnaieSource d={d} dark={dark} />
         <div className="flex flex-wrap gap-1 mt-4">
@@ -320,7 +308,7 @@ function DetailSource({ dark, id, onRetour, onInterroger }) {
 
       {onglet === "diagnostic" && (
         <div className={carte(dark)}>
-          {(p.diagnostics || []).length === 0 ? <p className="text-sm text-emerald-500">Aucun problème détecté.</p> : (
+          {(p.diagnostics || []).length === 0 ? <p className="text-sm text-emerald-500">{tx("Aucun problème détecté.")}</p> : (
             <ul className="space-y-2">
               {p.diagnostics.map((x, i) => {
                 const Icone = ICONE_GRAVITE[x.gravite];
@@ -333,18 +321,18 @@ function DetailSource({ dark, id, onRetour, onInterroger }) {
               })}
             </ul>
           )}
-          <p className={`${texteDiscret(dark)} mt-3`}>Analyse faite sur un échantillon de 500 lignes par table et quelques comptages, en lecture seule.</p>
+          <p className={`${texteDiscret(dark)} mt-3`}>{tx("Analyse faite sur un échantillon de 500 lignes par table et quelques comptages, en lecture seule.")}</p>
         </div>
       )}
       {onglet === "carte" && <div className="space-y-2">{(p.tables || []).map(t => <TableProfil key={t.nom} t={t} dark={dark} />)}</div>}
       {onglet === "relations" && (
         <div className={carte(dark)}>
-          {(p.relations || []).length === 0 ? <p className={texteDiscret(dark)}>Aucune relation trouvée.</p> : (
+          {(p.relations || []).length === 0 ? <p className={texteDiscret(dark)}>{tx("Aucune relation trouvée.")}</p> : (
             <ul className="space-y-1.5 text-sm">
               {p.relations.map((x, i) => (
                 <li key={i} className="font-mono text-xs">
                   {x.de}.{x.colonne} → {x.vers}.{x.colonne_cible}
-                  <span className={`${texteDiscret(dark)} font-sans`}> · {x.deduite ? "déduite des noms" : "déclarée"}{x.orphelins ? ` · ${x.orphelins} orpheline(s)` : ""}</span>
+                  <span className={`${texteDiscret(dark)} font-sans`}> · {x.deduite ? tx("déduite des noms") : tx("déclarée")}{x.orphelins ? ` · ${x.orphelins} orpheline(s)` : ""}</span>
                 </li>
               ))}
             </ul>
@@ -353,7 +341,7 @@ function DetailSource({ dark, id, onRetour, onInterroger }) {
       )}
       {onglet === "questions" && (
         <div className={carte(dark)}>
-          <p className={`${texteDiscret(dark)} mb-3`}>Questions adaptées à cette base. Clique pour la poser dans l'assistant :</p>
+          <p className={`${texteDiscret(dark)} mb-3`}>{tx("Questions adaptées à cette base. Clique pour la poser dans l'assistant :")}</p>
           <div className="flex flex-wrap gap-2">
             {(p.suggestions || []).map(s => (
               <button key={s} onClick={() => onInterroger(d, s)} className={`text-xs px-3 py-1.5 rounded-full border ${dark ? "border-gray-600 hover:border-laiton-400" : "border-gray-200 hover:border-laiton-400"}`}>{s}</button>
@@ -380,7 +368,7 @@ export default function PanelSources({ dark, onInterroger, onAbonnement }) {
   }, [liste, charger]);
 
   const supprimer = async (s) => {
-    if (!window.confirm(`Déconnecter « ${s.nom} » ? Ses identifiants et son analyse seront effacés (ta base n'est pas touchée).`)) return;
+    if (!window.confirm(tx("Déconnecter « {nom} » ? Ses identifiants et son analyse seront effacés (ta base n'est pas touchée).", { nom: s.nom }))) return;
     await http.post(`/sources/${s.id}/supprimer`).catch(() => {});
     charger();
   };
@@ -401,14 +389,13 @@ export default function PanelSources({ dark, onInterroger, onAbonnement }) {
     <div className="space-y-4">
       <div className={`${carte(dark)} flex flex-wrap items-center gap-4`}>
         <div className="flex-1 min-w-[240px]">
-          <h2 className={titre(dark)}>Tes données, comprises et interrogeables en français</h2>
-          <p className={texteDiscret(dark)}>Branche ta base (PostgreSQL, MySQL, SQL Server) ou tes fichiers Excel / CSV : VoiceBank analyse
-            leur structure, en fait le diagnostic, puis répond à tes questions, à la voix ou au clavier.</p>
+          <h2 className={titre(dark)}>{tx("Tes données, comprises et interrogeables en français")}</h2>
+          <p className={texteDiscret(dark)}>{tx("Branche ta base (PostgreSQL, MySQL, SQL Server) ou tes fichiers Excel / CSV : VoiceBank analyse leur structure, en fait le diagnostic, puis répond à tes questions, à la voix ou au clavier.")}</p>
         </div>
         {liste?.peut_ajouter ? (
-          <button onClick={() => setVue("nouvelle")} className={`${boutonPrincipal} flex items-center gap-2`}><Plus size={15} /> Connecter une source</button>
+          <button onClick={() => setVue("nouvelle")} className={`${boutonPrincipal} flex items-center gap-2`}><Plus size={15} />{" "}{tx("Connecter une source")}</button>
         ) : liste && (
-          <button onClick={onAbonnement} className={`${boutonPrincipal} flex items-center gap-2`}><Lock size={15} /> S'abonner pour brancher ses données</button>
+          <button onClick={onAbonnement} className={`${boutonPrincipal} flex items-center gap-2`}><Lock size={15} />{" "}{tx("S'abonner pour brancher ses données")}</button>
         )}
       </div>
       {erreur && <p className="text-sm text-red-500">{erreur}</p>}
@@ -416,32 +403,32 @@ export default function PanelSources({ dark, onInterroger, onAbonnement }) {
         {(liste?.data || []).map(s => {
           const Icone = ICONES[s.type] || Database;
           return (
-            <div key={s.id} role="group" aria-label={`Source ${s.nom}`} className={`${carte(dark)} !p-4 flex flex-col gap-3 min-w-0`}>
+            <div key={s.id} role="group" aria-label={tx("Source {nom}", { nom: s.nom })} className={`${carte(dark)} !p-4 flex flex-col gap-3 min-w-0`}>
               <div className="flex items-start gap-3">
                 <Icone size={20} className="text-laiton-400 flex-shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate flex items-center gap-2">{s.nom}
-                    {liste.source_defaut === s.id && <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-laiton-400/20 text-laiton-500 flex-shrink-0">Par défaut</span>}
+                    {liste.source_defaut === s.id && <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-laiton-400/20 text-laiton-500 flex-shrink-0">{tx("Par défaut")}</span>}
                   </p>
                   <p className={`${texteDiscret(dark)} truncate`}>{s.libelle_type} · {s.connexion}</p>
                 </div>
                 {s.statut === "pret" && <Jauge score={s.score_qualite} dark={dark} />}
               </div>
-              {s.statut === "analyse" && <p className="text-xs text-laiton-500 flex items-center gap-2"><RefreshCw size={12} className="animate-spin" /> Analyse de la structure et de la qualité…</p>}
+              {s.statut === "analyse" && <p className="text-xs text-laiton-500 flex items-center gap-2"><RefreshCw size={12} className="animate-spin" />{" "}{tx("Analyse de la structure et de la qualité…")}</p>}
               {s.statut === "erreur" && <p className="text-xs text-red-500 flex items-center gap-2"><ShieldAlert size={12} /> {s.erreur}</p>}
               {s.statut === "pret" && s.resume && (
-                <p className={texteDiscret(dark)}>{LIB_DOMAINES[s.domaine] || s.domaine} · {s.resume.tables} tables · {Number(s.resume.lignes).toLocaleString("fr-FR")} lignes · {s.resume.donnees_personnelles} données personnelles protégées</p>
+                <p className={texteDiscret(dark)}>{tx("{x} · {tables} tables · {x2} lignes · {donnees_personnelles} données personnelles protégées", { x: LIB_DOMAINES[s.domaine] || s.domaine, tables: s.resume.tables, x2: Number(s.resume.lignes).toLocaleString(LOCALE), donnees_personnelles: s.resume.donnees_personnelles })}</p>
               )}
               <div className="flex flex-wrap gap-2 mt-auto">
-                <button onClick={() => setVue(s.id)} disabled={s.statut !== "pret" && !s.demo} className={`${boutonSecondaire(dark)} disabled:opacity-50`}>Diagnostic et carte</button>
-                <button onClick={() => onInterroger(s)} disabled={s.statut !== "pret"} className={`${boutonSecondaire(dark)} disabled:opacity-50 flex items-center gap-1`}><Search size={12} /> Interroger</button>
+                <button onClick={() => setVue(s.id)} disabled={s.statut !== "pret" && !s.demo} className={`${boutonSecondaire(dark)} disabled:opacity-50`}>{tx("Diagnostic et carte")}</button>
+                <button onClick={() => onInterroger(s)} disabled={s.statut !== "pret"} className={`${boutonSecondaire(dark)} disabled:opacity-50 flex items-center gap-1`}><Search size={12} />{" "}{tx("Interroger")}</button>
                 {!s.demo && liste.peut_definir_defaut && s.statut === "pret" && (
-                  <button onClick={() => parDefaut(s)} title="Les membres de l'organisation arrivent directement sur cette base"
+                  <button onClick={() => parDefaut(s)} title={tx("Les membres de l'organisation arrivent directement sur cette base")}
                     className={`${boutonSecondaire(dark)} flex items-center gap-1`}><Star size={12} className={liste.source_defaut === s.id ? "fill-laiton-400 text-laiton-400" : ""} />
-                    {liste.source_defaut === s.id ? "Base par défaut" : "Définir par défaut"}</button>
+                    {liste.source_defaut === s.id ? tx("Base par défaut") : tx("Définir par défaut")}</button>
                 )}
-                {!s.demo && liste.peut_ajouter && <button onClick={() => reanalyser(s)} className={`${boutonSecondaire(dark)} flex items-center gap-1`}><RefreshCw size={12} /> Réanalyser</button>}
-                {!s.demo && liste.peut_ajouter && <button onClick={() => supprimer(s)} className={`${boutonSecondaire(dark)} text-red-500 flex items-center gap-1`}><Trash2 size={12} /> Déconnecter</button>}
+                {!s.demo && liste.peut_ajouter && <button onClick={() => reanalyser(s)} className={`${boutonSecondaire(dark)} flex items-center gap-1`}><RefreshCw size={12} />{" "}{tx("Réanalyser")}</button>}
+                {!s.demo && liste.peut_ajouter && <button onClick={() => supprimer(s)} className={`${boutonSecondaire(dark)} text-red-500 flex items-center gap-1`}><Trash2 size={12} />{" "}{tx("Déconnecter")}</button>}
               </div>
             </div>
           );

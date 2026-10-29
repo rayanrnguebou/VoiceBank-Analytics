@@ -8,6 +8,7 @@ import {
   Users, Activity, ShieldAlert, CreditCard, Wallet, ShoppingCart, Building2, Package, Table2, RefreshCw, Database,
 } from "lucide-react";
 import { http, messageErreur } from "../api";
+import { LOCALE, tx } from "../i18n";
 
 const ICONES = {
   clients: [Users, "#1F654D"], comptes: [Wallet, "#3E6FB0"], transactions: [Activity, "#3E6FB0"],
@@ -38,25 +39,25 @@ export function kpisSource(donnees, devise) {
       : i.type === "montant" ? [CreditCard, "#A9852A"] : (ICONES[i.entite] || [Table2, "#1F654D"]);
     return {
       titre: i.titre, icone, couleur,
-      valeur: i.type === "montant" ? devise.formaterValeur(i.valeur, { compact: true }) : Number(i.valeur || 0).toLocaleString("fr-FR"),
+      valeur: i.type === "montant" ? devise.formaterValeur(i.valeur, { compact: true }) : Number(i.valeur || 0).toLocaleString(LOCALE),
     };
   });
 }
 
 const libelleMois = l => {
   const [a, m] = String(l).split("-").map(Number);
-  return a && m ? new Date(a, m - 1, 1).toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }) : l;
+  return a && m ? new Date(a, m - 1, 1).toLocaleDateString(LOCALE, { month: "short", year: "2-digit" }) : l;
 };
 
 export function SelecteurSource({ dark, sourceActive, sourcesPretes, onChoisir }) {
   if (!sourcesPretes.length && !sourceActive) return null;
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className={`text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>Données interrogées :</span>
-      <select aria-label="Données interrogées" value={sourceActive ? String(sourceActive.id) : ""}
+      <span className={`text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>{tx("Données interrogées :")}</span>
+      <select aria-label={tx("Données interrogées")} value={sourceActive ? String(sourceActive.id) : ""}
         onChange={e => onChoisir(e.target.value ? sourcesPretes.find(x => String(x.id) === e.target.value) : null)}
         className={`text-xs px-2 py-1.5 rounded-lg border outline-none ${dark ? "bg-gray-700 border-gray-600" : "bg-gray-50 border-gray-200"}`}>
-        <option value="">Base VoiceBank (démonstration)</option>
+        <option value="">{tx("Base VoiceBank (démonstration)")}</option>
         {sourcesPretes.map(x => <option key={x.id} value={String(x.id)}>{x.nom} · {x.libelle_type}</option>)}
         {sourceActive && !sourcesPretes.some(x => x.id === sourceActive.id) && <option value={String(sourceActive.id)}>{sourceActive.nom}</option>}
       </select>
@@ -68,12 +69,12 @@ export function PanelTableauSource({ dark, etat, devise }) {
   const carte = `rounded-2xl border p-5 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200 shadow-sm"}`;
   const discret = `text-sm ${dark ? "text-gray-500" : "text-gray-400"}`;
   if (etat.chargement && !etat.donnees) {
-    return <p className={`${discret} flex items-center gap-2`} role="status"><RefreshCw size={14} className="animate-spin" /> Calcul du tableau de bord de ta base…</p>;
+    return <p className={`${discret} flex items-center gap-2`} role="status"><RefreshCw size={14} className="animate-spin" />{" "}{tx("Calcul du tableau de bord de ta base…")}</p>;
   }
   if (etat.erreur) return <p role="alert" className="text-sm text-red-500">{etat.erreur}</p>;
   const graphiques = etat.donnees?.graphiques || [];
   if (!graphiques.length) {
-    return <p className={`${discret} flex items-center gap-2`}><Database size={14} /> Pas assez de données datées ou catégorisées dans cette base pour tracer des graphiques. Pose une question à l'assistant.</p>;
+    return <p className={`${discret} flex items-center gap-2`}><Database size={14} />{" "}{tx("Pas assez de données datées ou catégorisées dans cette base pour tracer des graphiques. Pose une question à l'assistant.")}</p>;
   }
   const axe = { fill: dark ? "#9CA3AF" : "#6B7280", fontSize: 11 };
   const infobulle = { contentStyle: { backgroundColor: dark ? "#1F2937" : "#fff", border: "none", borderRadius: 8 },
@@ -84,7 +85,7 @@ export function PanelTableauSource({ dark, etat, devise }) {
       {graphiques.map((g, n) => {
         const montant = g.series.some(s => s.montant);
         const donnees = g.donnees.map(p => ({ ...p, label: g.temps ? libelleMois(p.label) : p.label }));
-        const format = v => (montant ? devise.formaterValeur(v, { compact: true }) : Number(v).toLocaleString("fr-FR"));
+        const format = v => (montant ? devise.formaterValeur(v, { compact: true }) : Number(v).toLocaleString(LOCALE));
         const Graphique = g.type === "line" ? LineChart : BarChart;
         return (
           <section key={g.id} className={carte} aria-label={g.titre}>

@@ -1,6 +1,7 @@
-# Sauvegarde quotidienne de la base en ligne (Render), chiffrée, conservée 30 jours.
+# Sauvegarde quotidienne de la base en ligne (Neon, ou Render), chiffrée, conservée 30 jours.
 # Secrets à créer (GitHub → Settings → Secrets and variables → Actions) :
-#   RENDER_DATABASE_URL     : External Database URL de voicebank-db (Render → Connect)
+#   BASE_EN_LIGNE_URL       : URL de la base en ligne (Neon → Connect, « Connection pooling » décoché)
+#                             (ancien nom accepté : RENDER_DATABASE_URL)
 #   SAUVEGARDE_MOT_DE_PASSE : phrase secrète longue, pour chiffrer (à garder hors de GitHub)
 # En cas d'échec, un e-mail part si ces secrets existent :
 #   BREVO_API_KEY, ALERTE_EMAIL (destinataire(s), séparés par des virgules), EMAIL_EXPEDITEUR
@@ -27,11 +28,11 @@ jobs:
       - name: Vérifier la configuration
         id: config
         env:
-          URL: ${{ secrets.RENDER_DATABASE_URL }}
+          URL: ${{ secrets.BASE_EN_LIGNE_URL || secrets.RENDER_DATABASE_URL }}
           MDP: ${{ secrets.SAUVEGARDE_MOT_DE_PASSE }}
         run: |
           if [ -z "$URL" ] || [ -z "$MDP" ]; then
-            echo "Secrets RENDER_DATABASE_URL / SAUVEGARDE_MOT_DE_PASSE absents : sauvegarde ignorée."
+            echo "Secrets BASE_EN_LIGNE_URL / SAUVEGARDE_MOT_DE_PASSE absents : sauvegarde ignorée."
             echo "actif=false" >> "$GITHUB_OUTPUT"
           else
             echo "actif=true" >> "$GITHUB_OUTPUT"
@@ -40,12 +41,12 @@ jobs:
       - name: Sauvegarder et chiffrer
         if: steps.config.outputs.actif == 'true'
         env:
-          URL: ${{ secrets.RENDER_DATABASE_URL }}
+          URL: ${{ secrets.BASE_EN_LIGNE_URL || secrets.RENDER_DATABASE_URL }}
           MDP: ${{ secrets.SAUVEGARDE_MOT_DE_PASSE }}
         run: |
           set -euo pipefail
           FICHIER="voicebank_en_ligne_$(date -u +%Y-%m-%d_%H%M).dump"
-          # Client PostgreSQL 17 : compatible avec toutes les versions proposées par Render
+          # Client PostgreSQL 18 : compatible avec toutes les versions proposées par Neon et Render
           docker run --rm -e URL postgres:18-alpine sh -c 'pg_dump "$URL" -Fc --no-owner' > "$FICHIER"
           test -s "$FICHIER"
           openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:MDP -in "$FICHIER" -out "$FICHIER.enc"
@@ -74,7 +75,7 @@ jobs:
           sujet: "⚠ Sauvegarde de la nuit en échec — VoiceBank"
           message: >-
             La sauvegarde automatique de la base en ligne a échoué cette nuit. Les sauvegardes précédentes restent
-            disponibles 30 jours. Vérifiez le secret RENDER_DATABASE_URL et l'état de la base sur Render, puis relancez
+            disponibles 30 jours. Vérifiez le secret BASE_EN_LIGNE_URL et l'état de la base (Neon), puis relancez
             le workflow « Sauvegarde en ligne ».
           brevo_api_key: ${{ secrets.BREVO_API_KEY }}
           destinataire: ${{ secrets.ALERTE_EMAIL }}

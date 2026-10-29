@@ -58,6 +58,11 @@ def etat(force: bool = False) -> dict:
     return e
 
 
+def derniere_connue() -> bool:
+    """Maintenance active d'après le dernier état lu (sans interroger la base : sondes de santé)."""
+    return bool((_cache["etat"] or {}).get("active")) or _env_active()
+
+
 def public() -> dict:
     e = etat()
     return {"active": e["active"], "message": e["message"] or MESSAGE_DEFAUT, "fin_prevue": e["fin_prevue"],

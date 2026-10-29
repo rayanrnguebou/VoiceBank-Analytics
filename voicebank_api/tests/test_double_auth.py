@@ -167,8 +167,16 @@ def test_surveillance_externe_et_sentry(client, monkeypatch):
     assert client.head("/health").status_code == 200
     assert client.get("/health/pret").json() == {"status": "ok"}
     from app import db
-    monkeypatch.setattr(db, "base_ok", lambda: False)
-    assert client.head("/health/pret").status_code == 503
+    # Sonde de Render : jamais la base (une base Neon peut dormir)
+    appels = []
+    monkeypatch.setattr(db, "lire", lambda *a, **k: appels.append(a) or (_ for _ in ()).throw(RuntimeError("base")))
+    assert client.get("/health/vivant").json() == {"status": "ok"} and appels == []
+    # Un succès récent suffit à /health/pret : la base n'est pas réveillée à chaque passage d'UptimeRobot
+    assert client.get("/health/pret").status_code == 200 and appels == []
+    # Sans succès récent, la base est interrogée : panne → 503
+    db._dernier_ok["t"] = 0
+    assert client.head("/health/pret").status_code == 503 and len(appels) == 1
+    monkeypatch.undo()
     # Rien de confidentiel ne part chez Sentry
     from app.alertes_erreurs import _nettoyer
     ev = _nettoyer({"request": {"data": {"mot_de_passe": "x"}, "cookies": "c", "query_string": "jeton=1",

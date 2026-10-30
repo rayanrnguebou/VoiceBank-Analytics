@@ -531,6 +531,12 @@ docker compose up -d --build api
 **Limites de l'offre gratuite**
 - L'API s'endort après 15 min sans visite : la page de connexion la réveille et affiche
   « Démarrage du serveur… » (jusqu'à une minute).
+- Le processeur est petit : une analyse (opérations atypiques, crédits, tableau de bord d'une base connectée)
+  peut prendre près d'une minute la première fois. L'interface affiche alors « Calcul en cours sur le serveur… »
+  (et attend jusqu'à 90 s) ; le résultat est gardé : les visites suivantes sont immédiates, et après 10 minutes
+  l'ancien résultat s'affiche tout de suite pendant que le nouveau se calcule en arrière-plan. Les tâches
+  automatiques (surveillance des bases, rapports) attendent un moment sans visite (`TACHES_CALME_S`, 30 s par
+  défaut) pour ne pas ralentir les utilisateurs.
 - La base PostgreSQL gratuite de Render **expire au bout de 30 jours** : `render.yaml` ne la crée plus, la base est
   chez Neon (gratuite, sans expiration) : voir « Base sans expiration (Neon) ». Pour un nouveau déploiement, crée la
   base Neon d'abord et mets son adresse dans `DATABASE_URL` : l'API crée le schéma et les données de démonstration au

@@ -167,6 +167,7 @@ EMAIL_CONTACT = _env("EMAIL_CONTACT") or EMAIL_EXPEDITEUR
 # TACHES_CLE : secret partagé avec GitHub Actions, qui appelle POST /taches/executer chaque heure.
 TACHES_CLE = _env("TACHES_CLE")
 # Secours : l'API exécute aussi les tâches toutes les 15 min tant qu'elle est éveillée (désactivé pendant les tests).
+TACHES_CALME_S = float(_env("TACHES_CALME_S", "0" if ENV == "test" else "30"))   # attente d'un moment calme
 TACHES_AUTO = _env("TACHES_AUTO", "false" if ENV == "test" else "true").lower() == "true"
 
 # ── Connecteur : bases et fichiers des organisations ─────────

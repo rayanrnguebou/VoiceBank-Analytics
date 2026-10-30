@@ -11,7 +11,9 @@ from pydantic import BaseModel, Field
 from .. import audit, config, courriel, credit, db, fraude, rapports, securite, suivi, taches
 from ..connecteur import service as sources
 from ..limites import ip_client, limiter
+from ..memoire import Memoire
 from ..securite import Utilisateur, utilisateur_courant
+
 
 router = APIRouter()
 
@@ -96,14 +98,15 @@ def fiches_source(request: Request, id_source: int = Path(ge=0), u: Utilisateur 
     return {"status": "ok", "data": f}
 
 
-_cache_demo: dict = {}
+_memoire_demo = Memoire(frais=600, garde=7 * 24 * 3600)
 
 
 def fiches_demo() -> dict:
-    """Fiches des modèles pré-entraînés de la banque de démonstration."""
-    import time
-    if _cache_demo.get("t", 0) > time.time() - 600:
-        return _cache_demo["fiches"]
+    """Fiches des modèles pré-entraînés de la banque de démonstration (rendues tout de suite, actualisées en fond)."""
+    return _memoire_demo.obtenir("fiches", _calculer_fiches_demo)
+
+
+def _calculer_fiches_demo() -> dict:
     infos = fraude.infos_modele()
     meta = fraude.modeles.get("meta") or {}
     fiches = {"operations": {
@@ -126,7 +129,6 @@ def fiches_demo() -> dict:
         "limites": ["Données fictives : les fraudes de démonstration sont peu prévisibles, d'où une fiabilité moyenne.",
                     "Une banque ou une ville que le modèle n'a pas apprise reçoit l'effet moyen des valeurs connues."]}}
     fiches["credits"] = _fiche_credit_demo()
-    _cache_demo.update(t=time.time(), fiches=fiches)
     return fiches
 
 

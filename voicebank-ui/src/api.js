@@ -22,9 +22,26 @@ function ecrireSession(s) {
   } catch (e) { /* stockage indisponible */ }
 }
 
-export const http = axios.create({ baseURL: API, timeout: 30000 });
+// 90 s : sur le serveur gratuit (une fraction de processeur), une analyse peut prendre près d'une minute.
+export const http = axios.create({ baseURL: API, timeout: 90000 });
+
+// Requête longue (plus de 5 s) : l'interface affiche « calcul en cours » au lieu de laisser croire à une panne.
+export const DELAI_LENT_MS = 5000;
+let enAttente = 0;
+const signalerLenteur = () => window.dispatchEvent(new CustomEvent("voicebank:lent", { detail: enAttente }));
+function suivreLenteur(config) {
+  if (config.silencieux) return config;
+  config._minuteurLent = setTimeout(() => { config._lente = true; enAttente += 1; signalerLenteur(); }, DELAI_LENT_MS);
+  return config;
+}
+function finLenteur(config) {
+  if (!config) return;
+  clearTimeout(config._minuteurLent);
+  if (config._lente) { config._lente = false; enAttente = Math.max(0, enAttente - 1); signalerLenteur(); }
+}
 
 http.interceptors.request.use(config => {
+  suivreLenteur(config);
   const s = lireSession();
   if (s) config.headers.Authorization = `Bearer ${s.token}`;
   config.headers["Accept-Language"] = LANGUE;      // messages de l'API dans la langue de l'interface
@@ -32,8 +49,9 @@ http.interceptors.request.use(config => {
 });
 
 http.interceptors.response.use(
-  r => r,
+  r => { finLenteur(r.config); return r; },
   e => {
+    finLenteur(e.config);
     if (e.response?.status === 402) window.dispatchEvent(new Event("voicebank:acces-expire"));
     // Maintenance décidée par l'administrateur : page dédiée avec son message
     if (e.response?.status === 503 && e.response?.data?.maintenance) {
@@ -69,7 +87,7 @@ export function appliquerJeton(data) {
 
 export async function connexion(nom, motDePasse) {
   // Délai long : sur l'offre gratuite de Render, l'API peut mettre ~1 min à se réveiller.
-  const { data } = await http.post("/auth/login", { nom, mot_de_passe: motDePasse }, { timeout: 90000 });
+  const { data } = await http.post("/auth/login", { nom, mot_de_passe: motDePasse }, { timeout: 90000, silencieux: true });
   return suiteConnexion(data);
 }
 
@@ -81,7 +99,7 @@ function suiteConnexion(data) {
 
 // Connexion avec un compte d'entreprise (Google, Microsoft) : le vérificateur PKCE reste dans l'onglet.
 export async function demarrerSSO(fournisseur) {
-  const { data } = await http.get(`/auth/sso/${fournisseur}/debut`, { timeout: 90000 });
+  const { data } = await http.get(`/auth/sso/${fournisseur}/debut`, { timeout: 90000, silencieux: true });
   try { sessionStorage.setItem("voicebank_sso", JSON.stringify({ f: fournisseur, v: data.verificateur })); } catch (e) { /* rien */ }
   window.location.assign(data.url);
 }
@@ -90,12 +108,12 @@ export async function terminerSSO(code, etat) {
   let s = null;
   try { s = JSON.parse(sessionStorage.getItem("voicebank_sso") || "null"); sessionStorage.removeItem("voicebank_sso"); } catch (e) { /* rien */ }
   if (!s) throw new Error(tx("Connexion commencée dans un autre onglet ou expirée : recommence."));
-  const { data } = await http.post(`/auth/sso/${s.f}/fin`, { code, etat, verificateur: s.v }, { timeout: 90000 });
+  const { data } = await http.post(`/auth/sso/${s.f}/fin`, { code, etat, verificateur: s.v }, { timeout: 90000, silencieux: true });
   return suiteConnexion(data);
 }
 
 export async function inscriptionEssai(corps) {
-  const { data } = await http.post("/auth/essai", corps, { timeout: 90000 });
+  const { data } = await http.post("/auth/essai", corps, { timeout: 90000, silencieux: true });
   return appliquerJeton(data);
 }
 
@@ -124,7 +142,7 @@ export function messageErreur(e) {
   const d = e?.response?.data?.detail;
   if (typeof d === "string") return d;
   if (Array.isArray(d)) return tx("Données invalides");
-  if (e?.code === "ECONNABORTED") return tx("Le serveur met trop de temps à répondre");
+  if (e?.code === "ECONNABORTED") return tx("Le serveur met trop de temps à répondre. Le calcul continue : réessaie dans une minute, le résultat sera prêt.");
   if (!e?.response && !e?.isAxiosError && e?.message) return e.message;
   if (!e?.response) return tx("API injoignable. Vérifie qu'elle est démarrée.");
   return tx("Erreur inattendue");

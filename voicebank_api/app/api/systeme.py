@@ -28,23 +28,30 @@ def accueil():
     return {"message": "VoiceBank Analytics API", "version": VERSION_API, "status": "OK"}
 
 
+@router.api_route("/health/vivant", methods=["GET", "HEAD"])
+def vivant():
+    """Sonde de Render et de Docker (toutes les quelques secondes) : ne touche pas la base."""
+    return {"status": "ok"}
+
+
 @router.api_route("/health/pret", methods=["GET", "HEAD"])
 def pret():
-    """Pour la surveillance externe (UptimeRobot) : 200 si l'API ET la base répondent, 503 sinon."""
-    if not db.base_ok():
+    """Pour la surveillance externe (UptimeRobot) : 200 si l'API ET la base répondent, 503 sinon.
+    Une base vue en bon état depuis moins de 20 min n'est pas réinterrogée (elle peut dormir : Neon)."""
+    if not db.base_ok(cache_s=20 * 60):
         return JSONResponse({"status": "degraded", "database": "deconnectee"}, status_code=503)
     return {"status": "ok"}
 
 
 @router.api_route("/health", methods=["GET", "HEAD"])
 def health():
-    ok = db.base_ok()
+    ok = db.base_ok(cache_s=10 * 60)
     return {"status": "ok" if ok else "degraded",
             "database": "connectee" if ok else "deconnectee",
             "gemini": "disponible" if config.GEMINI_API_KEY else "non configure",
             "whisper": transcription.etat(),
             "modeles_ia": sorted(k for k in fraude.modeles if k != "meta") + (["credit"] if credit.disponible() else []),
-            "maintenance": maintenance.etat()["active"],
+            "maintenance": maintenance.derniere_connue(),
             "timestamp": datetime.now().isoformat()}
 
 

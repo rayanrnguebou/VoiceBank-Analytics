@@ -5,6 +5,7 @@
   dynamique (IA, RAG, admin) et pour les endpoints de consultation.
 * `ecrire()`: requêtes internes paramétrées (journal, RAG) avec le compte applicatif.
 """
+import time as _horloge
 from datetime import date, datetime, time
 from decimal import Decimal
 from types import SimpleNamespace
@@ -13,9 +14,11 @@ from sqlalchemy import create_engine, text
 
 from . import config
 
-moteur_app = create_engine(config.DATABASE_URL, pool_pre_ping=True, pool_size=5, max_overflow=5)
+# pool_recycle : les bases « serverless » (Neon) ferment les connexions inactives et se mettent en veille
+_POOL = dict(pool_pre_ping=True, pool_size=5, max_overflow=5, pool_recycle=280)
+moteur_app = create_engine(config.DATABASE_URL, **_POOL)
 moteur_lecture = (moteur_app if config.READONLY_DATABASE_URL == config.DATABASE_URL else
-                  create_engine(config.READONLY_DATABASE_URL, pool_pre_ping=True, pool_size=5, max_overflow=5))
+                  create_engine(config.READONLY_DATABASE_URL, **_POOL))
 
 
 def _jsonable(v):
@@ -58,9 +61,17 @@ def ecrire(sql: str, params: dict | None = None) -> SimpleNamespace:
     return SimpleNamespace(rowcount=nb, lignes=lignes, scalar=lambda: lignes[0][0] if lignes else None)
 
 
-def base_ok() -> bool:
+_dernier_ok = {"t": 0.0}
+
+
+def base_ok(cache_s: float = 0) -> bool:
+    """La base répond-elle ? `cache_s` : un succès récent suffit (sondes de surveillance), pour ne pas
+    réveiller toutes les 5 minutes une base qui se met en veille quand personne ne s'en sert (Neon)."""
+    if cache_s and _horloge.time() - _dernier_ok["t"] < cache_s:
+        return True
     try:
         lire("SELECT 1")
+        _dernier_ok["t"] = _horloge.time()
         return True
     except Exception:
         return False

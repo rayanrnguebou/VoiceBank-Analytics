@@ -9,14 +9,12 @@ services:
     plan: free                         # sans cette ligne, Render propose une offre payante
     dockerfilePath: ./voicebank_api/Dockerfile
     dockerContext: .
-    healthCheckPath: /health
+    healthCheckPath: /health/vivant      # sonde sans base de données (la base peut dormir : Neon)
     envVars:
       - key: ENV
         value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: voicebank-db
-          property: connectionString
+      - key: DATABASE_URL              # base Neon (gratuite, sans expiration) : voir README, « Base sans expiration »
+        sync: false
       - key: READONLY_DATABASE_URL     # URL du compte voicebank_reader (voir README)
         sync: false
       - key: JWT_SECRET
@@ -102,7 +100,6 @@ services:
       - key: REACT_APP_TURNSTILE_SITE_KEY   # anti-robot (Cloudflare Turnstile) : clé de site, publique
         sync: false
 
-databases:
-  - name: voicebank-db                # offre gratuite : expire 30 jours après sa création (voir README)
-    databaseName: voicebank_db
-    plan: free
+# La base gratuite de Render expire au bout de 30 jours : la base de données est chez Neon (gratuite, sans expiration).
+# Retirer la base de ce fichier ne la supprime pas chez Render (« Changes to a Blueprint never cause a resource to be
+# deleted ») : supprime-la toi-même une fois les données copiées (sauvegarde/passer_a_neon).

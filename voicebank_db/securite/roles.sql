@@ -16,8 +16,13 @@ SELECT format('CREATE ROLE voicebank_app LOGIN PASSWORD %L', :'app_pwd')
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'voicebank_app') \gexec
 SELECT format('CREATE ROLE voicebank_reader LOGIN PASSWORD %L', :'reader_pwd')
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'voicebank_reader') \gexec
-ALTER ROLE voicebank_app    PASSWORD :'app_pwd'    NOSUPERUSER NOCREATEDB NOCREATEROLE;
-ALTER ROLE voicebank_reader PASSWORD :'reader_pwd' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+ALTER ROLE voicebank_app    PASSWORD :'app_pwd';
+ALTER ROLE voicebank_reader PASSWORD :'reader_pwd';
+-- Seul un superutilisateur peut toucher à l'attribut SUPERUSER. Sur une base hébergée (Neon, Render), on est
+-- simple propriétaire : les comptes qu'on crée n'ont de toute façon aucun de ces droits.
+SELECT format('ALTER ROLE %I NOSUPERUSER NOCREATEDB NOCREATEROLE', r)
+FROM unnest(ARRAY['voicebank_app', 'voicebank_reader']) AS r
+WHERE (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) \gexec
 
 -- Personne ne crée d'objets dans public
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;

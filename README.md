@@ -203,13 +203,41 @@ Les fichiers vont dans `sauvegardes/` (exclu de Git, les 10 plus récents sont g
 chaque sauvegarde dans `sauvegardes/journal.txt`). Docker Desktop doit être lancé à 20 h.
 Copie-les de temps en temps hors de l'ordinateur (clé USB, disque externe, cloud privé).
 
-### En ligne (Render)
+### Base sans expiration (Neon)
 
-La base gratuite de Render n'a pas de sauvegarde : un workflow GitHub en fait une **chaque nuit**,
+La base gratuite de Render **expire 30 jours après sa création** (puis est supprimée). Maintenant qu'elle contient de
+vrais comptes, organisations et paiements, elle doit être chez [Neon](https://neon.tech) : PostgreSQL gratuit
+**sans date d'expiration** (1 Go, mise en veille après 5 min sans requête, réveil en moins d'une seconde).
+
+1. **neon.tech → Sign up** (avec Google ou GitHub) → **Create project** : nom `voicebank`, PostgreSQL 17 ou 18,
+   région **la même que l'API sur Render** (Render → voicebank-api → *Settings → Region* : *Oregon* → *AWS US West 2
+   (Oregon)* ; *Frankfurt* → *AWS Europe Central 1 (Frankfurt)*). Une région éloignée ralentirait chaque page.
+2. Neon → **Connect** : **décoche « Connection pooling »**, copie l'adresse (`postgresql://…neon.tech/neondb?sslmode=require…`).
+3. Neon → *Branches → main → Compute → Edit* : taille **0,25 à 0,5 CU** (suffisant ; le quota gratuit de 100 « CU-heures » par
+   mois fait alors 200 à 400 heures d'activité, la base dormant le reste du temps).
+4. Sur ton PC (Docker Desktop lancé) : `sauvegarde\passer_a_neon.bat` (ou `sh sauvegarde/passer_a_neon.sh`).
+   Colle l'*External Database URL* de Render puis l'adresse Neon. Le script garde une copie dans
+   `sauvegarde/copies/`, copie **tout** (comptes, organisations, paiements, double authentification, journaux,
+   données), crée le compte en lecture seule, puis compare les deux bases table par table. **Rien n'est modifié sur
+   Render.**
+5. Render → voicebank-api → **Environment** : `DATABASE_URL` = l'adresse Neon, `READONLY_DATABASE_URL` = l'adresse
+   affichée par le script → **Save, rebuild and deploy**. Vérifie : `https://voicebank-api.onrender.com/health`
+   doit afficher `"database": "connectee"`, puis connecte-toi.
+6. GitHub → *Settings → Secrets → Actions* : `BASE_EN_LIGNE_URL` = l'adresse Neon (sauvegarde de la nuit), puis
+   *Actions → Sauvegarde en ligne → Run workflow*.
+7. Quelques jours plus tard, tout fonctionnant : Render → voicebank-db → *Settings* → **Delete Database**.
+
+Les sondes de Render (`/health/vivant`) ne touchent pas la base, et `/health/pret` (UptimeRobot) ne la réinterroge
+pas si elle a répondu dans les 20 dernières minutes : la base peut dormir quand personne ne s'en sert.
+
+### En ligne : sauvegarde de la nuit
+
+La base en ligne n'a pas de sauvegarde longue : un workflow GitHub en fait une **chaque nuit**,
 **chiffrée** (AES-256), conservée 30 jours dans l'onglet *Actions* du dépôt.
 
 1. GitHub → dépôt → **Settings → Secrets and variables → Actions → New repository secret** :
-   - `RENDER_DATABASE_URL` : Render → voicebank-db → **Connect** → *External Database URL* ;
+   - `BASE_EN_LIGNE_URL` : l'adresse de la base Neon (ou, avant le passage à Neon, Render → voicebank-db →
+     **Connect** → *External Database URL*) ;
    - `SAUVEGARDE_MOT_DE_PASSE` : une longue phrase secrète, notée en lieu sûr (sans elle, les
      sauvegardes sont illisibles).
 2. Onglet **Actions → Sauvegarde en ligne → Run workflow** pour tester tout de suite.
@@ -229,7 +257,7 @@ docker run --rm -i -e URL="<External Database URL>" postgres:18-alpine \
 
 Pour que le site public montre les mêmes données que ta base locale :
 `sauvegarde\publier_en_ligne.bat` (ou `sh sauvegarde/publier_en_ligne.sh`), puis colle l'*External
-Database URL* de Render. Le script sauvegarde d'abord ta base locale, puis remplace en ligne les
+Database URL* de Render (ou l'adresse Neon après le passage à Neon). Le script sauvegarde d'abord ta base locale, puis remplace en ligne les
 clients, crédits, transactions, alertes et corrections apprises. **Les comptes, mots de passe,
 paiements et journaux d'audit ne sont jamais copiés.** À relancer quand tes données changent.
 
@@ -503,11 +531,10 @@ docker compose up -d --build api
 **Limites de l'offre gratuite**
 - L'API s'endort après 15 min sans visite : la page de connexion la réveille et affiche
   « Démarrage du serveur… » (jusqu'à une minute).
-- La base PostgreSQL gratuite de Render **expire au bout de 30 jours**. Comme elle ne contient que des
-  données de démonstration, il suffit de la recréer (Render → voicebank-db → supprimer, puis
-  Blueprint → **Manual sync**) : l'API recrée le schéma et les données au démarrage, et le compte
-  administrateur de `VOICEBANK_USERS`. Pour une base sans expiration, crée une base gratuite chez
-  [Neon](https://neon.tech) et mets son URL dans `DATABASE_URL` (voicebank-api → Environment).
+- La base PostgreSQL gratuite de Render **expire au bout de 30 jours** : `render.yaml` ne la crée plus, la base est
+  chez Neon (gratuite, sans expiration) : voir « Base sans expiration (Neon) ». Pour un nouveau déploiement, crée la
+  base Neon d'abord et mets son adresse dans `DATABASE_URL` : l'API crée le schéma et les données de démonstration au
+  premier démarrage.
 - Si l'adresse de l'API change (domaine personnalisé), mets-la à jour dans `REACT_APP_API_URL`
   et dans la ligne `connect-src` de `render.yaml`.
 

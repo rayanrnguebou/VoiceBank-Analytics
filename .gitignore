@@ -52,3 +52,4 @@ Thumbs.db
 # Sauvegardes de la base (données réelles : jamais sur GitHub)
 /sauvegardes/
 *.dump
+/sauvegarde/copies/

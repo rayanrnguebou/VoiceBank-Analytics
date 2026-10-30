@@ -406,7 +406,7 @@ def lister_comptes() -> list[dict]:
                   "AS double_auth, "
                   "COALESCE(u.doit_changer_mdp AND u.mdp_provisoire_expire < LOCALTIMESTAMP, FALSE) AS provisoire_expire "
                   "FROM voicebank.utilisateurs u LEFT JOIN voicebank.organisations o ON o.id_org = u.id_org "
-                  "ORDER BY u.actif DESC, o.nom NULLS FIRST, u.nom")
+                  "WHERE u.efface_le IS NULL ORDER BY u.actif DESC, o.nom NULLS FIRST, u.nom")
     return [{k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in l._mapping.items()}
             for l in r.lignes]
 

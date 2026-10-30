@@ -3,12 +3,13 @@
 // provisoire (affiché une seule fois, valable 72 h) que la personne change à sa première connexion.
 import { useState, useEffect, useCallback } from "react";
 import {
-  KeyRound, UserPlus, Copy, Check, RotateCcw, Lock, ShieldCheck, UserX, UserCheck, X, Circle, CircleCheck, Mail, Smartphone,
+  KeyRound, UserPlus, Copy, Check, RotateCcw, Lock, ShieldCheck, UserX, UserCheck, X, Circle, CircleCheck, Mail, Smartphone, Trash2,
 } from "lucide-react";
 import { useAPI } from "../useAPI";
 import { appliquerJeton, http } from "../api";
 import { Logo } from "./BarreLaterale";
 import { SectionDoubleAuth } from "./DoubleAuth";
+import { SectionMesDonnees } from "./MesDonnees";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate } from "../ui";
 import { tx } from "../i18n";
 
@@ -132,6 +133,7 @@ export function FenetreMotDePasse({ dark, session, onTermine, onFermer }) {
           <FormulaireMotDePasse dark={dark} session={session} onAnnuler={onFermer}
             onTermine={s => { setFait(true); onTermine(s); }} />
         )}
+        <SectionMesDonnees dark={dark} />
       </div>
     </div>
   );
@@ -366,6 +368,13 @@ export function PanelComptes({ dark, session }) {
                               && action.appeler("post", `/admin/utilisateurs/${encodeURIComponent(c.nom)}/double-auth/reinitialiser`).then(r => r && charger())}
                               disabled={action.chargement} className={`${boutonSecondaire(dark)} flex items-center gap-1`}>
                               <Smartphone size={13} />{" "}{tx("Réinit. 2FA")}</button>
+                          )}
+                          {["visiteur", "client"].includes(c.role) && (
+                            <button onClick={() => window.confirm(tx("Effacer le compte {nom} et ses données personnelles (demande de la personne) ? Ses paiements et son journal d'activité sont gardés sous un identifiant anonyme. C'est définitif.", { nom: c.nom }))
+                              && action.appeler("post", `/admin/utilisateurs/${encodeURIComponent(c.nom)}/effacer`).then(r => r && charger())}
+                              disabled={action.chargement} title={tx("Droit à l'effacement (loi n° 2024/017)")}
+                              className={`${boutonSecondaire(dark)} flex items-center gap-1 text-red-500`}>
+                              <Trash2 size={13} />{" "}{tx("Effacer")}</button>
                           )}
                           {!moi && (c.actif ? (
                             <button onClick={() => modifier(c, { actif: false }, tx("Désactiver {nom} ? Il est déconnecté immédiatement ; son historique est conservé.", { nom: c.nom }))}

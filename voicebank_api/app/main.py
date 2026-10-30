@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse, Response
 from slowapi.errors import RateLimitExceeded
 
 from . import alertes_erreurs, config, i18n, credit, fraude, maintenance, securite, taches, transcription
-from .api import abonnement, admin, assistant, auth, demo, organisation, sources, surveillance, systeme
+from .api import abonnement, admin, assistant, auth, demo, donnees, organisation, sources, surveillance, systeme
 from .api.commun import VERSION_API, _lire, _SQL_CREDIT, reponse_maintenance  # noqa: F401  (utilisés par les tests)
 from .limites import limiter
 
@@ -141,5 +141,5 @@ except Exception:
     log.exception("Amorçage des comptes impossible (base indisponible ?) : nouvel essai au prochain démarrage")
 
 
-for _r in (systeme, auth, abonnement, demo, assistant, admin, organisation, sources, surveillance):
+for _r in (systeme, auth, abonnement, demo, assistant, admin, organisation, sources, surveillance, donnees):
     app.include_router(_r.router)

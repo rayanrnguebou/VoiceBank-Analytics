@@ -55,7 +55,8 @@ def infos(u: Utilisateur) -> dict:
         "SELECT nom, nom_complet, email, role_org, actif, doit_changer_mdp, derniere_connexion, date_creation, "
         "COALESCE(doit_changer_mdp AND mdp_provisoire_expire < LOCALTIMESTAMP, FALSE) AS invitation_expiree, "
         "EXISTS (SELECT 1 FROM voicebank.double_authentification d WHERE d.utilisateur = utilisateurs.nom AND d.active) "
-        "AS double_auth FROM voicebank.utilisateurs WHERE id_org = :o ORDER BY actif DESC, role_org, nom", {"o": u.id_org}).lignes
+        "AS double_auth FROM voicebank.utilisateurs WHERE id_org = :o AND efface_le IS NULL "
+        "ORDER BY actif DESC, role_org, nom", {"o": u.id_org}).lignes
     actifs = sum(1 for m in membres if m.actif)
     acces = {}
     for l in db.ecrire("SELECT a.utilisateur, a.id_source FROM voicebank.acces_sources a JOIN voicebank.utilisateurs u "

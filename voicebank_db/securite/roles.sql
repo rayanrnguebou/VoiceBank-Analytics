@@ -92,3 +92,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON voicebank.double_authentification TO voi
 GRANT SELECT, INSERT, UPDATE, DELETE ON voicebank.echecs_connexion TO voicebank_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON voicebank.appareils_connus TO voicebank_app;
 REVOKE ALL ON voicebank.double_authentification, voicebank.echecs_connexion, voicebank.appareils_connus FROM voicebank_reader;
+
+-- Données personnelles : effacement d'un compte et durées de conservation, par des fonctions à droits limités
+GRANT EXECUTE ON FUNCTION voicebank.pseudonymiser_compte(VARCHAR, VARCHAR), voicebank.appliquer_conservation()
+      TO voicebank_app;
+GRANT DELETE ON voicebank.logs_vocaux TO voicebank_app;              -- questions d'un compte effacé
+GRANT DELETE ON voicebank.profils_facturation, voicebank.preferences_notifications TO voicebank_app;

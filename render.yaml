@@ -99,6 +99,8 @@ services:
         sync: false
       - key: REACT_APP_TURNSTILE_SITE_KEY   # anti-robot (Cloudflare Turnstile) : clé de site, publique
         sync: false
+      - key: REACT_APP_PAGE_ETAT_URL    # page d'état publique UptimeRobot (facultatif, voir README « Surveillance »)
+        sync: false
 
 # La base gratuite de Render expire au bout de 30 jours : la base de données est chez Neon (gratuite, sans expiration).
 # Retirer la base de ce fichier ne la supprime pas chez Render (« Changes to a Blueprint never cause a resource to be

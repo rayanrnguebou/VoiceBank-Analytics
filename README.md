@@ -307,6 +307,44 @@ paiements et journaux d'audit ne sont jamais copiés.** À relancer quand tes do
 | Site hors ligne | [UptimeRobot](https://uptimerobot.com) | *New monitor* → HTTP(s), toutes les 5 min : `https://voicebank-api.onrender.com/health/pret` (répond 503 si la base est inaccessible) et `https://voicebank-ui.onrender.com`. Ajoute ton e-mail (et l'application mobile) comme contact d'alerte. Effet bonus : l'API reste éveillée. |
 | Sauvegarde de la nuit | GitHub Actions + Brevo | Voir « Sauvegarder la base → En ligne » (e-mail en cas d'échec). |
 | Tâches automatiques | GitHub Actions | GitHub prévient par e-mail quand le workflow « Tâches automatiques » échoue (réglage par défaut des notifications). |
+| Page d'état publique | [UptimeRobot](https://uptimerobot.com) | *Status pages → Create status page* → ajoute les deux sondes ci-dessus → copie l'adresse (`https://stats.uptimerobot.com/…`) dans `REACT_APP_PAGE_ETAT_URL` (Render → voicebank-ui) puis *Clear build cache & deploy*. Un lien « État du service » apparaît alors en bas de l'application, sur l'accueil, la page de maintenance et le bandeau de reconnexion. |
+
+**Vérifier que tout fonctionne** : *Administration → Maintenance → Surveillance du service → Envoyer une erreur
+de test*. Une erreur de test part chez Sentry depuis l'API **et** depuis l'interface (l'application continue
+normalement) : l'e-mail de Sentry doit arriver dans les minutes qui suivent. Si un des deux n'est pas configuré,
+le bouton le dit.
+
+## Questions favorites
+
+L'étoile ☆ sur une réponse de l'assistant garde la question (20 au maximum, par base). Les favoris de la base
+choisie s'affichent sous la zone de saisie : un clic relance la question. Dans leurs réglages (⋯), **« chaque lundi
+par e-mail »** : le lundi après 7 h (heure de Douala), les tâches automatiques rejouent la question avec les droits
+du moment (rôle, données personnelles masquées, accès à la base) et envoient le résumé, les 10 premières lignes et
+un fichier CSV complet. Plus d'envoi si le compte est désactivé, l'essai terminé ou la base retirée.
+
+## Nom de domaine à toi
+
+L'application fonctionne avec les adresses `onrender.com`. Pour une adresse à toi (plus crédible, et des e-mails
+qui arrivent mieux grâce à l'authentification du domaine chez Brevo) :
+
+| Option | Coût | Remarques |
+|---|---|---|
+| [GitHub Student Developer Pack](https://education.github.com/pack) | gratuit 1 an (étudiants) | Un vrai domaine (`.me`, `.tech`…) puis renouvellement payant. |
+| [DigitalPlat FreeDomain](https://github.com/DigitalPlatDev/FreeDomain) | gratuit | Adresse en `.dpdns.org` (ex. `voicebank.dpdns.org`), inscription sur `dash.domain.digitalplat.org` avec GitHub, DNS chez Cloudflare possible ; à renouveler (gratuitement, à la main), une adresse par compte, pensé pour les projets personnels. |
+| Domaine `.com` (Cloudflare Registrar) | ≈ 10 $ / an | Aucune contrainte, prix coûtant. |
+
+Une fois le domaine obtenu (exemple `voicebank.exemple.org`) :
+1. Render → voicebank-ui → *Settings → Custom Domains* : `voicebank.exemple.org` ; voicebank-api :
+   `api.voicebank.exemple.org` (l'offre gratuite inclut 2 domaines). Crée chez ton DNS les enregistrements CNAME
+   indiqués par Render ; le certificat HTTPS est automatique.
+2. Render → voicebank-api → *Environment* : `ALLOWED_ORIGINS` et `URL_INTERFACE` = `https://voicebank.exemple.org`.
+   voicebank-ui : `REACT_APP_API_URL` = `https://api.voicebank.exemple.org`, et ajoute cette adresse dans la ligne
+   `connect-src` de `render.yaml`.
+3. Mets à jour les adresses de retour : Google Cloud (*Authorized redirect URIs* et domaine autorisé), Microsoft
+   Entra (*Redirect URI*), NotchPay (*webhook* : `https://api.voicebank.exemple.org/paiements/notchpay/webhook`),
+   Cloudflare Turnstile (*Hostnames*), UptimeRobot (sondes).
+4. Brevo → *Senders, Domains & Dedicated IPs → Domains* : ajoute le domaine, crée les enregistrements DKIM, SPF et
+   DMARC demandés, puis un expéditeur `no-reply@voicebank.exemple.org` (`EMAIL_EXPEDITEUR`).
 
 ## Connecteur : brancher les données d'une organisation
 

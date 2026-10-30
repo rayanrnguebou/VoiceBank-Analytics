@@ -7,6 +7,8 @@ import { Logo } from "./panneaux/BarreLaterale";
 import { useAPI } from "./useAPI";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire } from "./ui";
 import { LOCALE, tx } from "./i18n";
+import { CarteSurveillance } from "./panneaux/TestSurveillance";
+import { PAGE_ETAT } from "./etatService";
 
 const heure = v => {
   if (!v) return null;
@@ -69,6 +71,7 @@ export function EcranMaintenance({ etat, onAccesAdmin }) {
           <button onClick={() => { setVerif(true); etat.verifier(); setTimeout(() => setVerif(false), 1500); }}
             className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15">{verif ? tx("Vérification…") : tx("Réessayer maintenant")}</button>
           {onAccesAdmin && <button onClick={onAccesAdmin} className="text-foret-100/50 hover:text-white hover:underline">{tx("Accès administrateur")}</button>}
+          {PAGE_ETAT && <a href={PAGE_ETAT} target="_blank" rel="noopener noreferrer" className="text-foret-100/50 hover:text-white hover:underline">{tx("État du service")}</a>}
         </div>
       </div>
     </div>
@@ -114,7 +117,8 @@ export function BandeauReconnexion() {
     <div role="status" className="fixed top-3 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100%-2rem)] flex items-center gap-3 px-4 py-2.5 rounded-xl
       bg-gray-900/95 border border-laiton-400/40 text-white text-sm shadow-2xl">
       <WifiOff size={16} className="text-laiton-300 flex-shrink-0" />
-      <span>{tx("Le serveur ne répond pas : mise à jour ou redémarrage en cours.")}{" "}<span className="text-gray-400">{tx("Reconnexion automatique…")}</span></span>
+      <span>{tx("Le serveur ne répond pas : mise à jour ou redémarrage en cours.")}{" "}<span className="text-gray-400">{tx("Reconnexion automatique…")}</span>
+        {PAGE_ETAT && <>{" "}<a href={PAGE_ETAT} target="_blank" rel="noopener noreferrer" className="underline text-laiton-300">{tx("État du service")}</a></>}</span>
       <RefreshCw size={14} className="animate-spin text-gray-400 flex-shrink-0" />
     </div>
   );
@@ -142,7 +146,7 @@ export function IndicateurCalcul() {
 const versLocal = v => (v ? String(v).slice(0, 16) : "");
 
 // Réglages (administrateur de la plateforme)
-export function PanelMaintenance({ dark }) {
+export function PanelMaintenance({ dark, utilisateur }) {
   const { appeler, chargement, erreur } = useAPI();
   const [e, setE] = useState(null);
   const [f, setF] = useState(null);
@@ -228,6 +232,7 @@ export function PanelMaintenance({ dark }) {
       </div>
       {enregistre && <p role="status" className="text-sm text-emerald-500">{tx("Enregistré.")}</p>}
       {erreur && <p role="alert" className="text-sm text-red-500">{erreur}</p>}
+      <CarteSurveillance dark={dark} utilisateur={utilisateur} />
     </div>
   );
 }

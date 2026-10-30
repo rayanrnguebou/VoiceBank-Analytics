@@ -12,6 +12,7 @@ import { Prix } from "./Abonnement";
 import { SelecteurDevise } from "../devise";
 import { BandeauAnnonce } from "../maintenance";
 import { SaisieCodeConnexion } from "./DoubleAuth";
+import { PAGE_ETAT } from "../etatService";
 import { LANGUE, tx } from "../i18n";
 import SelecteurLangue from "../SelecteurLangue";
 
@@ -480,6 +481,7 @@ export default function EcranAccueil({ onConnecte, annonce }) {
           )}
           <p className="mt-6 text-[11px] text-gray-500">
             <a href={`/confidentialite/${LANGUE === "en" ? "#en" : ""}`} className="hover:underline">{tx("Politique de confidentialité")}</a>
+            {PAGE_ETAT && <>{" · "}<a href={PAGE_ETAT} target="_blank" rel="noopener noreferrer" className="hover:underline">{tx("État du service")}</a></>}
           </p>
         </section>
       </div>

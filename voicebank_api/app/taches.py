@@ -262,6 +262,12 @@ def executer(force: bool = False, maintenant: datetime | None = None) -> dict:
             return {"deja_en_cours": True}
         try:
             rapport = {"sources": {}, "attente_calme_s": 0.0, "conservation": conservation_quotidienne()}
+            try:
+                from . import favoris
+                rapport["favoris"] = favoris.envoyer_du_lundi(local)
+            except Exception as e:
+                log.exception("Favoris du lundi : échec")
+                rapport["favoris"] = {"erreur": str(e)[:200]}
             for src in sources_surveillees():
                 rapport["attente_calme_s"] += attendre_calme(90)     # une base à la fois, entre deux visites
                 etapes = {}

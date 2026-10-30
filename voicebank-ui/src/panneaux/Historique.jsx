@@ -5,6 +5,7 @@ import { FormulaireSignalement, EditeurCorrection } from "./Admin";
 import { lireAVoixHaute, telechargerCsv, nomFichier } from "../ui";
 import { RefreshCw, Trash2, ChevronDown, ChevronUp, Download, History, CheckSquare, Square, FileText, AlertTriangle, Volume2, Flag, Wrench, CornerDownRight, Calendar, Clock, Timer, ChartColumn, ChartLine, ChartPie, ChartArea, Gauge, Table2, BookCheck, Zap, Sparkles } from "lucide-react";
 import { LOCALE, tx } from "../i18n";
+import { BoutonFavori } from "./Favoris";
 import { SOURCES, detecterTypeGraphique, GraphiqueDynamique, GraphiquePourPDF } from "../graphiques";
 
 export const CLE_STORAGE  = "voicebank_historique";
@@ -29,7 +30,7 @@ export function sauverHistorique(utilisateur, historique) {
 // UTILITAIRES
 // ════════════════════════════════════════
 
-export function CarteResultat({ item, dark, onSupprimer, role }) {
+export function CarteResultat({ item, dark, onSupprimer, role, favori, onFavori }) {
   const lectureSeule = useLectureSeule();
   const [ouvert, setOuvert] = useState(true);
   const [action, setAction] = useState(null);   // "signaler" | "corriger"
@@ -71,6 +72,7 @@ export function CarteResultat({ item, dark, onSupprimer, role }) {
               <Download size={13} />{" "}{tx("CSV")}
             </button>
           )}
+          {onFavori && item.sql && <BoutonFavori actif={favori} onClick={onFavori} dark={dark} />}
           <button onClick={e => { e.stopPropagation(); onSupprimer(item.id); }} aria-label={tx("Supprimer ce résultat")}
             className={`p-1.5 rounded-lg ${dark ? "hover:bg-gray-600 text-gray-400" : "hover:bg-gray-100 text-gray-400"}`}>
             <Trash2 size={13} />

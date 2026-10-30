@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0E332D" />
+  <title>VoiceBank : hors ligne</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0B1F17; color: #E8EFE9;
+           font: 16px/1.5 "Segoe UI", Roboto, Helvetica, Arial, sans-serif; text-align: center; padding: 24px; box-sizing: border-box; }
+    .logo { width: 56px; height: 56px; border-radius: 14px; background: #C9A13B; margin: 0 auto 18px; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    p { color: #A7B8AE; margin: 0 0 20px; max-width: 320px; }
+    button { background: #1F654D; color: #fff; border: 0; border-radius: 12px; padding: 12px 22px; font-size: 15px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="logo" aria-hidden="true"></div>
+    <h1>Pas de connexion Internet</h1>
+    <p>VoiceBank a besoin d'Internet pour interroger tes données. Vérifie ta connexion (données mobiles ou Wi-Fi), puis réessaie.</p>
+    <p lang="en">No Internet connection. Check your connection, then try again.</p>
+    <button onclick="location.reload()">Réessayer · Retry</button>
+  </main>
+</body>
+</html>

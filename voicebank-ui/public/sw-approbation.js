@@ -1,7 +1,23 @@
-// VoiceBank : notifications « approuver la connexion » (double authentification sur le téléphone).
-// Le contenu arrive chiffré ; seul ce téléphone peut le lire. Toucher la notification ouvre l'écran d'approbation.
-self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
+// VoiceBank : travailleur du site (enregistré à chaque visite, nom gardé pour les téléphones déjà inscrits).
+// 1. Notifications « approuver la connexion » (double authentification sur le téléphone) : le contenu arrive chiffré.
+// 2. Page « hors ligne » quand il n'y a pas d'Internet (application Android et icône sur l'écran d'accueil).
+// Rien d'autre n'est mis en cache : les données restent toujours celles du serveur.
+const CACHE = "voicebank-hors-ligne-v1";
+self.addEventListener("install", e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.add(new Request("/hors-ligne.html", { cache: "reload" }))).then(() => self.skipWaiting()));
+});
+self.addEventListener("activate", e => {
+  e.waitUntil((async () => {
+    for (const nom of await caches.keys()) if (nom !== CACHE) await caches.delete(nom);
+    await self.clients.claim();
+  })());
+});
+
+// Pages seulement (pas l'API, pas les fichiers) : le réseau d'abord, la page « hors ligne » s'il ne répond pas
+self.addEventListener("fetch", e => {
+  if (e.request.mode !== "navigate" || new URL(e.request.url).origin !== self.location.origin) return;
+  e.respondWith(fetch(e.request).catch(async () => (await caches.match("/hors-ligne.html")) || Response.error()));
+});
 
 self.addEventListener("push", e => {
   let d = {};

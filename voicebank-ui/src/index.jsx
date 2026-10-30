@@ -6,6 +6,12 @@ import { demarrerAlertesErreurs } from "./alertesErreurs";
 
 demarrerAlertesErreurs();
 
+// Travailleur du site : notifications d'approbation et page « hors ligne » (application Android, écran d'accueil).
+// Seulement sur le site construit : en développement, il gênerait le rechargement automatique.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => { navigator.serviceWorker.register("/sw-approbation.js").catch(() => {}); });
+}
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <App />

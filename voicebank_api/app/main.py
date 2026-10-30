@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from slowapi.errors import RateLimitExceeded
 
-from . import alertes_erreurs, config, i18n, credit, fraude, maintenance, securite, taches, transcription
+from . import alertes_erreurs, config, i18n, credit, fraude, maintenance, securite, sessions, taches, transcription
 from .api import abonnement, admin, assistant, auth, demo, donnees, organisation, sources, surveillance, systeme
 from .api.commun import VERSION_API, _lire, _SQL_CREDIT, reponse_maintenance  # noqa: F401  (utilisés par les tests)
 from .limites import limiter
@@ -87,6 +87,7 @@ async def langue_des_reponses(request: Request, call_next):
     """Langue de l'interface (Accept-Language) : messages, erreurs et textes des réponses JSON traduits."""
     code = i18n.depuis_entete(request.headers.get("accept-language"))
     jeton = i18n.definir(code)
+    sessions.noter_requete(request.headers.get("user-agent"), request.headers.get("x-appareil"))
     try:
         rep = await call_next(request)
     finally:
@@ -108,7 +109,7 @@ app.add_middleware(
     allow_origins=config.ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["GET", "POST"],
-    allow_headers=["Authorization", "Content-Type", "Accept-Language"],
+    allow_headers=["Authorization", "Content-Type", "Accept-Language", "X-Appareil"],
     expose_headers=["Content-Disposition"],      # nom des fichiers téléchargés (rapports PDF)
 )
 

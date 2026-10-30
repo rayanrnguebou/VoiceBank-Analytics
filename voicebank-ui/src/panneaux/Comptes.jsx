@@ -10,6 +10,7 @@ import { appliquerJeton, http } from "../api";
 import { Logo } from "./BarreLaterale";
 import { SectionDoubleAuth } from "./DoubleAuth";
 import { SectionMesDonnees } from "./MesDonnees";
+import { SectionAppareils } from "./Appareils";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate } from "../ui";
 import { tx } from "../i18n";
 
@@ -122,6 +123,7 @@ export function FenetreMotDePasse({ dark, session, onTermine, onFermer }) {
           <button onClick={onFermer} aria-label={tx("Fermer")} className={boutonSecondaire(dark)}><X size={14} /></button>
         </div>
         <SectionDoubleAuth dark={dark} onSession={onTermine} />
+        <SectionAppareils dark={dark} onSession={onTermine} />
         <EmailRecuperation dark={dark} session={session} />
         {fait ? (
           <div className="space-y-3">

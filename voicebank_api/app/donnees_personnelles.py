@@ -23,6 +23,7 @@ log = logging.getLogger("voicebank")
 ESSAI_OUBLIE_JOURS = 90
 CONSERVATION = {
     "questions": "12 mois", "journal_audit": "5 ans", "paiements": "10 ans", "appareils_connus": "180 jours",
+    "sessions": "180 jours",
     "tentatives_de_connexion": "24 heures", "essai_sans_abonnement": f"{ESSAI_OUBLIE_JOURS} jours après la fin de l'essai",
 }
 
@@ -54,6 +55,8 @@ def exporter(nom: str) -> dict:
                                                    "WHERE utilisateur = :n", n=nom) or [{"active": False}])[0],
             "appareils_connus": _lignes(c, "SELECT ip AS adresse_ip, derniere_connexion FROM voicebank.appareils_connus "
                                            "WHERE utilisateur = :n ORDER BY derniere_connexion DESC", n=nom),
+            "sessions": _lignes(c, "SELECT navigateur AS appareil, adresse_ip, methode, debut, derniere_activite, revoquee "
+                                   "FROM voicebank.sessions WHERE utilisateur = :n ORDER BY debut DESC", n=nom),
             "preferences_e_mails": _lignes(c, "SELECT alertes_critiques, resume_quotidien, rapport_hebdo, rapport_mensuel "
                                               "FROM voicebank.preferences_notifications WHERE utilisateur = :n", n=nom),
             "facturation": _lignes(c, "SELECT type_client, informations, date_maj FROM voicebank.profils_facturation "
@@ -101,7 +104,7 @@ def effacer(nom: str, par: str, ip: str | None = None) -> str:
         x = lambda sql, **p: c.execute(text(sql), {"n": nom, **p})  # noqa: E731
         x("DELETE FROM voicebank.logs_vocaux WHERE utilisateur = :n")
         for table in ("codes_recuperation", "acces_sources", "preferences_notifications", "double_authentification",
-                      "appareils_connus"):
+                      "appareils_connus", "sessions"):
             x(f"DELETE FROM voicebank.{table} WHERE utilisateur = :n")
         x("DELETE FROM voicebank.echecs_connexion WHERE identifiant IN (:n, :e)", e=(l["email"] or "").lower())
         if not c.execute(text("SELECT 1 FROM voicebank.paiements WHERE utilisateur = :n AND statut = 'paye' LIMIT 1"),

@@ -6,7 +6,7 @@ from dataclasses import replace
 import jwt
 from pydantic import BaseModel, Field
 
-from .. import antirobot, double_auth, protection, sso
+from .. import antirobot, double_auth, protection, sessions, sso
 
 from .commun import (  # noqa: F401
     ChangementMdp,
@@ -54,7 +54,8 @@ def _fin_connexion(u: Utilisateur, version: int, ip: str, identifiant: str, meth
     securite.noter_connexion(u.nom)
     securite.noter_langue(u.nom)
     if securite.mode_base():
-        u = replace(u, doit_configurer_2fa=double_auth.requise(u.role, u.role_org) and not double_auth.active(u.nom))
+        u = replace(u, doit_configurer_2fa=double_auth.requise(u.role, u.role_org) and not double_auth.active(u.nom),
+                    session=sessions.ouvrir(u.nom, ip, methode, version))
     audit.journaliser(u.nom, "connexion", {"role": u.role, "methode": methode}, ip)
     return _reponse_jeton(u, version)
 
@@ -322,7 +323,8 @@ def inscription_essai(request: Request, body: InscriptionEssai):
     if courriel.disponible():
         courriel.envoyer_en_arriere_plan(u.nom, organisations.message_bienvenue_essai(body.nom_complet.strip(),
                                                                                       config.ESSAI_JOURS))
-    return _reponse_jeton(u, securite.version_jeton(u.nom))
+    version = securite.version_jeton(u.nom)
+    return _reponse_jeton(replace(u, session=sessions.ouvrir(u.nom, ip_client(request), "essai", version)), version)
 
 
 class RetourSSO(BaseModel):

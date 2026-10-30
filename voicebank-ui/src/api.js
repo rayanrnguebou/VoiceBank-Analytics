@@ -23,6 +23,19 @@ function ecrireSession(s) {
 }
 
 // 90 s : sur le serveur gratuit (une fraction de processeur), une analyse peut prendre près d'une minute.
+// Identifiant aléatoire de cet appareil (navigateur), gardé localement : l'API n'en conserve qu'une empreinte.
+// Il sert à prévenir par e-mail d'une connexion depuis un appareil inconnu.
+export function identifiantAppareil() {
+  try {
+    let id = localStorage.getItem("voicebank_appareil");
+    if (!id) {
+      id = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      localStorage.setItem("voicebank_appareil", id);
+    }
+    return id;
+  } catch (e) { return null; }
+}
+
 export const http = axios.create({ baseURL: API, timeout: 90000 });
 
 // Requête longue (plus de 5 s) : l'interface affiche « calcul en cours » au lieu de laisser croire à une panne.
@@ -45,6 +58,8 @@ http.interceptors.request.use(config => {
   const s = lireSession();
   if (s) config.headers.Authorization = `Bearer ${s.token}`;
   config.headers["Accept-Language"] = LANGUE;      // messages de l'API dans la langue de l'interface
+  const appareil = identifiantAppareil();
+  if (appareil) config.headers["X-Appareil"] = appareil;   // reconnaître cet appareil (« Mes appareils »)
   return config;
 });
 

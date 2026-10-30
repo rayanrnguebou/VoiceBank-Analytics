@@ -694,6 +694,10 @@ BEGIN
     GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('echecs_connexion', n);
     DELETE FROM voicebank.appareils_connus WHERE derniere_connexion < LOCALTIMESTAMP - INTERVAL '180 days';
     GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('appareils', n);
+    IF to_regclass('voicebank.sessions') IS NOT NULL THEN
+        DELETE FROM voicebank.sessions WHERE derniere_activite < LOCALTIMESTAMP - INTERVAL '180 days';
+        GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('sessions', n);
+    END IF;
     DELETE FROM voicebank.codes_recuperation WHERE expire < LOCALTIMESTAMP - INTERVAL '1 day';
     GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('codes', n);
     DELETE FROM voicebank.paiements WHERE statut <> 'paye' AND date_creation < LOCALTIMESTAMP - INTERVAL '30 days';
@@ -703,3 +707,21 @@ BEGIN
     RETURN res;
 END $$;
 REVOKE ALL ON FUNCTION voicebank.appliquer_conservation() FROM PUBLIC;
+
+-- ══════════════════════════════════════════════════════════
+-- SESSIONS : « Mes appareils », déconnexion à distance, e-mail lors d'une connexion depuis un appareil inconnu
+-- (appareil : empreinte HMAC d'un identifiant aléatoire du navigateur, jamais l'identifiant lui-même)
+-- ══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS voicebank.sessions (
+    id_session          VARCHAR(32)  PRIMARY KEY,
+    utilisateur         VARCHAR(64)  NOT NULL REFERENCES voicebank.utilisateurs(nom) ON DELETE CASCADE,
+    appareil            VARCHAR(64),
+    navigateur          VARCHAR(120),
+    adresse_ip          VARCHAR(64),
+    methode             VARCHAR(20),
+    version_jeton       INTEGER      NOT NULL DEFAULT 0,
+    debut               TIMESTAMP    NOT NULL DEFAULT LOCALTIMESTAMP,
+    derniere_activite   TIMESTAMP    NOT NULL DEFAULT LOCALTIMESTAMP,
+    revoquee            BOOLEAN      NOT NULL DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_utilisateur ON voicebank.sessions (utilisateur, derniere_activite DESC);

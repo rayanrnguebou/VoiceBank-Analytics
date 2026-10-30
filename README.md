@@ -151,6 +151,14 @@ Envoi des e-mails (sans configuration, le lien est remplacé par « demande à t
 - ou **SMTP** (`SMTP_HOTE`, `SMTP_PORT`, `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE`, `EMAIL_EXPEDITEUR`),
   par exemple Gmail avec un « mot de passe d'application ». Render bloque le SMTP en offre gratuite.
 
+#### Mes appareils et alerte de nouvelle connexion
+
+*Sécurité de mon compte → Mes appareils* liste les connexions des 30 derniers jours (navigateur, adresse IP,
+dernière activité). On peut **déconnecter un appareil** à distance (refusé dès sa requête suivante) ou **tous les
+autres**. À chaque connexion depuis un appareil jamais vu, un **e-mail** prévient la personne (date, appareil,
+adresse IP) avec la marche à suivre si ce n'était pas elle. L'appareil est reconnu par un identifiant aléatoire
+gardé dans le navigateur ; l'API n'en conserve qu'une empreinte.
+
 #### Données personnelles (loi camerounaise n° 2024/017)
 
 - **Télécharger mes données** (*Sécurité de mon compte*) : fichier JSON avec tout ce que VoiceBank garde sur le

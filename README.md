@@ -333,6 +333,33 @@ par e-mail »** : le lundi après 7 h (heure de Douala), les tâches automatique
 du moment (rôle, données personnelles masquées, accès à la base) et envoient le résumé, les 10 premières lignes et
 un fichier CSV complet. Plus d'envoi si le compte est désactivé, l'essai terminé ou la base retirée.
 
+## Application Android (Play Store)
+
+Le site est une application web installable (manifeste complet, icône adaptative, page « hors ligne », notifications) :
+on en fait une vraie application Android avec [PWABuilder](https://www.pwabuilder.com), qui l'emballe dans une
+*Trusted Web Activity* (Chrome sans barre d'adresse). Tout le site, ses mises à jour et les notifications
+d'approbation fonctionnent tels quels : pas de second code à maintenir.
+
+1. pwabuilder.com → adresse du site (`https://voicebank-ui.onrender.com`) → **Start** → **Package for stores** →
+   **Android** → **Generate package** → *Options* :
+   - **Package ID** : `com.rayannguebou.voicebank` (définitif : ne plus le changer ensuite) ;
+   - **App name** `VoiceBank Analytics`, **Launcher name** `VoiceBank` ;
+   - **Notification delegation** : activé (les notifications d'approbation s'affichent au nom de l'application) ;
+   - **Signing key** : *Create new* (nom et mot de passe à toi).
+2. Télécharge le .zip. **Range en lieu sûr `signing.keystore` et `signing-key-info.txt`** (hors du dépôt GitHub) :
+   sans eux, impossible de publier une mise à jour de l'application.
+3. Envoie le fichier `assetlinks.json` du .zip (il ne contient rien de secret) : il est publié dans
+   `voicebank-ui/public/.well-known/assetlinks.json`. Tant qu'il manque, l'application s'ouvre avec une barre
+   d'adresse en haut.
+4. Essai : copie le fichier `.apk` sur le téléphone et ouvre-le (autoriser « sources inconnues » pour ce fichier).
+5. Play Store (25 $ une fois) : play.google.com/console → *Créer une application* → envoie le fichier `.aab`. Si
+   Google signe l'application (*Play App Signing*), ajoute aussi son empreinte SHA-256 (*Intégrité de l'application*)
+   dans `assetlinks.json`.
+
+**Changement de nom de domaine** : refaire l'étape 1 avec la nouvelle adresse, **le même Package ID et la même clé
+de signature**, et un numéro de version plus grand ; publier `assetlinks.json` sur le nouveau domaine ; envoyer la
+mise à jour sur le Play Store. Les personnes qui ont l'application reçoivent la mise à jour normalement.
+
 ## Nom de domaine à toi
 
 L'application fonctionne avec les adresses `onrender.com`. Pour une adresse à toi (plus crédible, et des e-mails

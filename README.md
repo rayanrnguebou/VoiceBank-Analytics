@@ -16,7 +16,7 @@ des corrections, mesure de la fiabilité et journal d'audit.
 | API | FastAPI, SQLAlchemy, sqlglot (validation SQL), JWT, bcrypt |
 | IA | Gemini (texte → SQL, résumés), Whisper (Groq ou local faster-whisper), scikit-learn, XGBoost (SHAP natif) |
 | Données | PostgreSQL 15 (pg_trgm pour le RAG), Power BI |
-| Qualité | 330 tests API, 26 tests d'interface, 23 parcours dans un vrai navigateur + 70 attaques, GitHub Actions, jeu d'évaluation de 50 questions |
+| Qualité | 330 tests API, 30 tests d'interface, 24 parcours dans un vrai navigateur + 70 attaques, GitHub Actions, jeu d'évaluation de 50 questions |
 
 ## Fonctionnalités
 
@@ -123,6 +123,17 @@ prochaine connexion, ils scannent un QR code avant de pouvoir continuer ; facult
 - 10 **codes de secours** à usage unique, affichés une fois (téléphone perdu) ; régénérables.
 - Téléphone et codes perdus : un autre administrateur clique **Réinit. 2FA** (Comptes, ou Mon organisation → Membres).
 - Un code déjà utilisé est refusé ; 5 codes faux bloquent l'adresse de l'essayeur.
+
+**Approuver depuis le téléphone (notification)** : au lieu de taper le code, la personne reçoit une notification
+« VoiceBank : connexion demandée » et touche, parmi trois, le nombre affiché sur l'ordinateur (comme Microsoft
+Authenticator) ; l'ordinateur se connecte tout seul.
+- Mise en place, une fois, **sur le téléphone** : VoiceBank ajouté à l'écran d'accueil (obligatoire sur iPhone,
+  iOS 16.4 ou plus), *Sécurité de mon compte → Double authentification → Utiliser cet appareil pour approuver*, code
+  à 6 chiffres, puis autoriser les notifications. 5 téléphones au plus par compte.
+- Mauvais nombre ou **« Ce n'était pas moi »** : connexion refusée (dans le second cas, e-mail d'alerte) ; une demande
+  vit 2 minutes et ne sert qu'une fois. Le code à 6 chiffres et les codes de secours restent toujours possibles.
+- Rien à configurer : les clés des notifications (Web Push / VAPID) sont créées par l'API et gardées chiffrées dans la
+  base. Réinitialiser ou désactiver la double authentification retire aussi les téléphones.
 
 #### Mots de passe faux : l'attaquant se bloque lui-même, pas sa victime
 
@@ -651,10 +662,10 @@ audio dangereux, CORS, limitation des tentatives de connexion.
 
 ### Tests de bout en bout (vrai navigateur)
 
-`tests_e2e/` rejoue 23 parcours complets dans Chromium (Playwright) contre l'API et l'interface lancées en local :
+`tests_e2e/` rejoue 24 parcours complets dans Chromium (Playwright) contre l'API et l'interface lancées en local :
 connexion, assistant vocal et conversation, essai gratuit et paiement simulé, organisation et invitations par
 e-mail, rôles, connecteur (base PostgreSQL et fichier Excel), surveillance des alertes, maintenance, double
-authentification, Google / Microsoft, anglais, favoris, appareils… puis **70 attaques** contre l'API (isolation
+authentification (code et approbation sur le téléphone), Google / Microsoft, anglais, favoris, appareils… puis **70 attaques** contre l'API (isolation
 entre organisations, élévation de privilèges, jetons falsifiés, SQL, SSRF, paiement).
 
 ```bash

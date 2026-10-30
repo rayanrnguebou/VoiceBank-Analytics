@@ -80,5 +80,9 @@ def modifier(par: str, active: bool, message: str | None, fin_prevue: str | None
 
 
 # Routes toujours accessibles pendant la maintenance
+# /auth/2fa, /auth/sso, /approbation : étapes de connexion qui n'existent qu'après le mot de passe (ou Google /
+# Microsoft), lequel est déjà refusé aux non-administrateurs pendant la maintenance : l'administrateur doit pouvoir
+# finir de se connecter avec sa double authentification.
 OUVERTES = ("/health", "/maintenance", "/auth/login", "/auth/options", "/auth/moi", "/auth/renouveler",
+            "/auth/2fa/connexion", "/auth/2fa/approbation", "/auth/sso", "/approbation", "/auth/approbation/cle",
             "/devises", "/abonnement/formules", "/paiements/notchpay/webhook", "/docs", "/openapi.json")

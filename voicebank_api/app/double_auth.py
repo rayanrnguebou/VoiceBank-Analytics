@@ -152,4 +152,6 @@ def nouveaux_codes_secours(nom: str) -> list[str]:
 
 
 def desactiver(nom: str):
+    """Désactivation ou réinitialisation (téléphone perdu) : les téléphones d'approbation sont retirés aussi."""
     db.ecrire("DELETE FROM voicebank.double_authentification WHERE utilisateur = :n", {"n": nom})
+    db.ecrire("DELETE FROM voicebank.appareils_approbation WHERE utilisateur = :n", {"n": nom})

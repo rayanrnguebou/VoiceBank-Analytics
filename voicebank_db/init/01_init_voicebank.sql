@@ -694,6 +694,9 @@ BEGIN
     GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('echecs_connexion', n);
     DELETE FROM voicebank.appareils_connus WHERE derniere_connexion < LOCALTIMESTAMP - INTERVAL '180 days';
     GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('appareils', n);
+    IF to_regclass('voicebank.demandes_approbation') IS NOT NULL THEN
+        DELETE FROM voicebank.demandes_approbation WHERE date_creation < LOCALTIMESTAMP - INTERVAL '1 day';
+    END IF;
     IF to_regclass('voicebank.sessions') IS NOT NULL THEN
         DELETE FROM voicebank.sessions WHERE derniere_activite < LOCALTIMESTAMP - INTERVAL '180 days';
         GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('sessions', n);
@@ -741,3 +744,33 @@ CREATE TABLE IF NOT EXISTS voicebank.questions_favorites (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_favoris_unique
     ON voicebank.questions_favorites (utilisateur, COALESCE(id_source, 0), LOWER(question));
+
+-- ══════════════════════════════════════════════════════════
+-- APPROBATION SUR LE TÉLÉPHONE (double authentification par notification, avec choix du nombre)
+-- Le téléphone garde un secret aléatoire ; seule son empreinte est ici. Une demande vit 2 minutes.
+-- ══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS voicebank.appareils_approbation (
+    id_appareil         SERIAL       PRIMARY KEY,
+    utilisateur         VARCHAR(64)  NOT NULL REFERENCES voicebank.utilisateurs(nom) ON DELETE CASCADE,
+    nom                 VARCHAR(120) NOT NULL,
+    abonnement          JSONB        NOT NULL,                     -- point d'envoi des notifications (Web Push)
+    empreinte_secret    CHAR(64)     NOT NULL UNIQUE,
+    date_ajout          TIMESTAMP    NOT NULL DEFAULT LOCALTIMESTAMP,
+    derniere_utilisation TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_appareils_approbation ON voicebank.appareils_approbation (utilisateur);
+CREATE TABLE IF NOT EXISTS voicebank.demandes_approbation (
+    id_demande          VARCHAR(32)  PRIMARY KEY,
+    utilisateur         VARCHAR(64)  NOT NULL REFERENCES voicebank.utilisateurs(nom) ON DELETE CASCADE,
+    empreinte_connexion CHAR(64)     NOT NULL,                     -- lie la demande à la tentative de connexion
+    nombre              SMALLINT     NOT NULL,
+    choix               JSONB        NOT NULL,
+    statut              VARCHAR(12)  NOT NULL DEFAULT 'attente'
+                        CHECK (statut IN ('attente', 'approuvee', 'refusee', 'utilisee')),
+    motif               VARCHAR(30),
+    navigateur          VARCHAR(120),
+    adresse_ip          VARCHAR(64),
+    date_creation       TIMESTAMP    NOT NULL DEFAULT LOCALTIMESTAMP,
+    expire              TIMESTAMP    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_demandes_approbation ON voicebank.demandes_approbation (utilisateur, date_creation DESC);

@@ -33,6 +33,7 @@ import { BoutonMicro } from "./panneaux/Micro";
 import { KpiCard, PanelAnalyse, BarreSourceRisque } from "./panneaux/Analyse";
 import { PAGE_ETAT } from "./etatService";
 import { useFavoris, BarreFavoris } from "./panneaux/Favoris";
+import { EcranApprobation } from "./panneaux/Approbation";
 
 export default function App() {
   const [session, setSession] = useState(() => lireSession());
@@ -54,6 +55,10 @@ export default function App() {
   const maintenance = useMaintenance();
   const [accesAdmin, setAccesAdmin] = useState(false);
   const bloque = maintenance.active && session?.role !== "admin" && !(accesAdmin && !session);
+
+  // Téléphone ouvert depuis la notification « connexion demandée » : écran d'approbation, sans session
+  const idApprobation = new URLSearchParams(window.location.search).get("approbation");
+  if (idApprobation) return <EcranApprobation idDemande={idApprobation} onFermer={() => window.location.replace("/")} />;
 
   return (
     <FournisseurDevise>

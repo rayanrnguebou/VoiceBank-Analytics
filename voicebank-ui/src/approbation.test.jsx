@@ -70,3 +70,27 @@ test("le téléphone montre la demande, trois nombres et « Ce n'était pas moi 
   await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Connexion approuvée"));
   expect(appels.at(-1)).toBe(`/approbation/demande-1234/repondre {"secret":"${"s".repeat(43)}","nombre":47}`);
 });
+
+test("connexion depuis le téléphone enregistré lui-même : approbation sur place", async () => {
+  localStorage.setItem("voicebank_approbation_secret", "s".repeat(43));
+  reponses = {
+    "post /auth/2fa/approbation/demander": { id: "demande-5678", nombre: 31 },
+    "post /approbation/demande-5678": { statut: "attente", choix: [12, 31, 80] },
+    "post /approbation/demande-5678/repondre": { statut: "approuvee" },
+  };
+  render(<AttenteApprobation etape={{ jeton: "j2fa" }} onConnecte={() => {}} onCode={() => {}} />);
+  fireEvent.click(await screen.findByRole("button", { name: "C'est moi : approuver sur cet appareil" }));
+  await waitFor(() => expect(appels).toContain(`/approbation/demande-5678/repondre {"secret":"${"s".repeat(43)}","nombre":31}`));
+});
+
+test("demande affichée par-dessus la page en cours, qui reste intacte", async () => {
+  localStorage.setItem("voicebank_approbation_secret", "s".repeat(43));
+  reponses = { "post /approbation/demande-9999": { compte: "rayan", navigateur: "Chrome · Windows", adresse_ip: "1.2.3.4",
+    date: "2026-10-30T14:00:00", choix: [11, 22, 33], statut: "attente" } };
+  const fermer = vi.fn();
+  render(<><p>page en cours</p><EcranApprobation idDemande="demande-9999" superpose onFermer={fermer} /></>);
+  expect(await screen.findByRole("dialog", { name: "Connexion demandée" })).toBeInTheDocument();
+  expect(screen.getByText("page en cours")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Fermer" }));
+  expect(fermer).toHaveBeenCalled();
+});

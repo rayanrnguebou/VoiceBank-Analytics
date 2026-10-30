@@ -992,5 +992,8 @@
  "Touche le nombre affiché sur l'ordinateur :": "Tap the number shown on the computer:",
  "Utiliser cet appareil pour approuver": "Use this device to approve",
  "Utiliser plutôt le code à 6 chiffres": "Use the 6-digit code instead",
- "ajouté le {date}": "added on {date}"
+ "ajouté le {date}": "added on {date}",
+ "C'est moi : approuver sur cet appareil": "It's me: approve on this device",
+ "Retourne sur l'appareil où tu te connectes : il s'ouvre tout seul.": "Go back to the device you are signing in on: it opens by itself.",
+ "Terminé": "Done"
 }

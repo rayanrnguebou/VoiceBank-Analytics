@@ -21,6 +21,7 @@ export default [
       "react/jsx-uses-vars": "error",
       "react/jsx-uses-react": "error",
       "react/jsx-key": "error",
+      "react/jsx-no-undef": "error",            // composant utilisé sans être importé
       "react/jsx-no-target-blank": "error",
       "react/no-danger": "error",
       "react-hooks/rules-of-hooks": "error",

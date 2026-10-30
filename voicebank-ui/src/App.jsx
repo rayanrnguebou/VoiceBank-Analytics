@@ -51,6 +51,17 @@ export default function App() {
     setSession(null);
   }, [session]);
 
+  // Notification touchée alors que VoiceBank est déjà ouvert : la demande s'affiche par-dessus, la page reste
+  const [approbationSuperposee, setApprobationSuperposee] = useState(null);
+  useEffect(() => {
+    const sw = typeof navigator !== "undefined" ? navigator.serviceWorker : null;
+    if (!sw) return undefined;
+    const surMessage = e => { if (e.data?.type === "voicebank-approbation" && e.data.id) setApprobationSuperposee(e.data.id); };
+    sw.addEventListener("message", surMessage);
+    sw.startMessages?.();
+    return () => sw.removeEventListener("message", surMessage);
+  }, []);
+
   // Maintenance : page dédiée pour tous, sauf l'administrateur de la plateforme (qui peut se connecter)
   const maintenance = useMaintenance();
   const [accesAdmin, setAccesAdmin] = useState(false);
@@ -62,6 +73,8 @@ export default function App() {
 
   return (
     <FournisseurDevise>
+      {approbationSuperposee && <EcranApprobation key={approbationSuperposee} idDemande={approbationSuperposee} superpose
+        onFermer={() => setApprobationSuperposee(null)} />}
       <BandeauReconnexion />
       <IndicateurCalcul />
       {bloque ? <EcranMaintenance etat={maintenance} onAccesAdmin={session ? undefined : () => setAccesAdmin(true)} />

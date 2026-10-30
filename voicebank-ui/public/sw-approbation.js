@@ -17,14 +17,19 @@ self.addEventListener("push", e => {
   }));
 });
 
+// Toucher la notification : si VoiceBank est déjà ouvert (par exemple sur l'écran de connexion qui attend), on affiche
+// la demande PAR-DESSUS, sans quitter la page en cours ; sinon on ouvre l'écran d'approbation.
 self.addEventListener("notificationclick", e => {
   e.notification.close();
-  const url = new URL(e.notification.data?.url || "/", self.location.origin).href;
+  const url = new URL(e.notification.data?.url || "/", self.location.origin);
+  const id = url.searchParams.get("approbation");
   e.waitUntil((async () => {
     const fenetres = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    for (const f of fenetres) {
-      if ("navigate" in f) { await f.navigate(url); return f.focus(); }
+    const ouverte = fenetres.find(f => f.focused) || fenetres[0];
+    if (ouverte && id) {
+      ouverte.postMessage({ type: "voicebank-approbation", id });
+      return ouverte.focus();
     }
-    return self.clients.openWindow(url);
+    return self.clients.openWindow(url.href);
   })());
 });

@@ -18,15 +18,29 @@ export function AttenteApprobation({ etape, onConnecte, onCode }) {
   const [demande, setDemande] = useState(null);
   const [statut, setStatut] = useState("envoi");      // envoi | attente | refusee | expiree | erreur
   const [message, setMessage] = useState(null);
+  const [ici, setIci] = useState(false);              // cet appareil est lui-même un téléphone d'approbation du compte
   const minuteur = useRef(null);
 
   const demander = useCallback(async () => {
-    setStatut("envoi"); setMessage(null);
+    setStatut("envoi"); setMessage(null); setIci(false);
     try {
       const { data } = await http.post("/auth/2fa/approbation/demander", { jeton_2fa: etape.jeton }, { silencieux: true });
       setDemande(data); setStatut("attente");
+      // Connexion depuis le téléphone enregistré lui-même : pas besoin d'aller dans la notification
+      const secret = lireSecret();
+      if (secret) {
+        http.post(`/approbation/${encodeURIComponent(data.id)}`, { secret }, { silencieux: true })
+          .then(r => setIci(r.data?.statut === "attente")).catch(() => {});
+      }
     } catch (e) { setStatut("erreur"); setMessage(messageErreur(e)); }
   }, [etape.jeton]);
+  const approuverIci = async () => {
+    try {
+      await http.post(`/approbation/${encodeURIComponent(demande.id)}/repondre`, { secret: lireSecret(), nombre: demande.nombre },
+        { silencieux: true });
+      setIci(false);
+    } catch (e) { setMessage(messageErreur(e)); }
+  };
   useEffect(() => { demander(); }, [demander]);
 
   useEffect(() => {
@@ -59,6 +73,11 @@ export function AttenteApprobation({ etape, onConnecte, onCode }) {
           <p className="text-6xl font-bold text-white tracking-wider" aria-live="polite" aria-label={tx("Nombre à choisir : {n}", { n: demande.nombre })}>
             {demande.nombre}</p>
           <p className="text-xs text-gray-500">{tx("En attente de ton téléphone… (2 minutes au plus)")}</p>
+          {ici && (
+            <button type="button" onClick={approuverIci}
+              className="w-full py-3 bg-foret-600 hover:bg-foret-700 text-white font-semibold rounded-xl">
+              {tx("C'est moi : approuver sur cet appareil")}</button>
+          )}
         </>
       )}
       {statut === "envoi" && <p className="text-xs text-gray-400">{tx("Envoi de la notification…")}</p>}
@@ -76,7 +95,7 @@ export function AttenteApprobation({ etape, onConnecte, onCode }) {
 }
 
 // ── Téléphone : écran ouvert depuis la notification ───────────────────
-export function EcranApprobation({ idDemande, onFermer }) {
+export function EcranApprobation({ idDemande, onFermer, superpose = false }) {
   const secret = lireSecret();
   const [d, setD] = useState(null);
   const [erreur, setErreur] = useState(secret ? null : tx("Ce téléphone n'est pas enregistré pour approuver les connexions."));
@@ -98,7 +117,8 @@ export function EcranApprobation({ idDemande, onFermer }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B1F17] flex items-center justify-center px-4 text-white">
+    <div className={`${superpose ? "fixed inset-0 z-[60] overflow-y-auto" : "min-h-screen"} bg-[#0B1F17] flex items-center justify-center px-4 py-6 text-white`}
+      role={superpose ? "dialog" : undefined} aria-modal={superpose || undefined} aria-label={tx("Connexion demandée")}>
       <div className="w-full max-w-sm bg-gray-900/60 border border-white/10 rounded-2xl p-6 space-y-5 text-center">
         <div className="flex items-center justify-center gap-2"><Logo /><span className="font-bold">VoiceBank</span></div>
         <h1 className="text-lg font-bold">{tx("Connexion demandée")}</h1>
@@ -127,7 +147,10 @@ export function EcranApprobation({ idDemande, onFermer }) {
               className="w-full py-3 rounded-xl border border-red-500/60 text-red-300 hover:bg-red-500/10">{tx("Ce n'était pas moi")}</button>
           </>
         ))}
-        <button type="button" onClick={onFermer} className="text-xs text-gray-400 hover:underline">{tx("Ouvrir VoiceBank")}</button>
+        {resultat === "approuvee" && !superpose && <p className="text-xs text-gray-400">{tx("Retourne sur l'appareil où tu te connectes : il s'ouvre tout seul.")}</p>}
+        <button type="button" onClick={onFermer}
+          className={resultat ? "w-full py-3 rounded-xl bg-white/10 hover:bg-white/15 text-sm" : "text-xs text-gray-400 hover:underline"}>
+          {superpose ? tx("Fermer") : resultat ? tx("Terminé") : tx("Ouvrir VoiceBank")}</button>
       </div>
     </div>
   );

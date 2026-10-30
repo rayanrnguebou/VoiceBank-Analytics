@@ -104,6 +104,16 @@ try:
         ordi.screenshot(path="approbation_reglages.png", full_page=True)
         print("4. le téléphone enregistré est listé dans les réglages")
 
+        # 5. Connexion depuis le téléphone enregistré lui-même : approbation sur place, sans passer par la notification
+        tele.goto(URL); tele.evaluate("sessionStorage.clear()"); tele.reload()
+        tele.get_by_role("button", name="Organisation").click()
+        tele.get_by_label("Identifiant ou e-mail").fill(COMPTE); tele.get_by_label("Mot de passe").fill(MDP)
+        tele.get_by_role("button", name="Se connecter").click()
+        tele.get_by_role("button", name="C'est moi : approuver sur cet appareil").click(timeout=20000)
+        expect(tele.get_by_role("button", name=re.compile("Se déconnecter|Menu"))).to_be_visible(timeout=15000)
+        tele.screenshot(path="approbation_meme_telephone.png")
+        print("5. connexion sur le téléphone lui-même : approuvée sur place, puis l'application s'ouvre")
+
         print("Erreurs JS :", erreurs or "aucune")
         assert not erreurs
         b.close()

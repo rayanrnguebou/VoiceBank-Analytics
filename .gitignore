@@ -53,3 +53,5 @@ Thumbs.db
 /sauvegardes/
 *.dump
 /sauvegarde/copies/
+/tests_e2e/sortie/
+!tests_e2e/donnees/*.xlsx

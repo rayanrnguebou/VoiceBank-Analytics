@@ -86,3 +86,49 @@ jobs:
       - run: npm run build
         env:
           CI: "true"
+
+  bout-en-bout:
+    name: Bout en bout (navigateur réel, 23 scénarios + attaques)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine   # la base « externe » du connecteur est vérifiée en version 16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            voicebank_api/requirements*.txt
+            tests_e2e/requirements.txt
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: voicebank-ui/package-lock.json
+      - name: Outils système
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+      - name: Dépendances
+        run: |
+          pip install -r voicebank_api/requirements-dev.txt -r tests_e2e/requirements.txt
+          python -m playwright install --with-deps chromium
+          npm ci --no-audit --no-fund --prefix voicebank-ui
+      - name: Scénarios
+        run: python tests_e2e/lancer.py --pg postgresql://postgres:postgres@localhost:5432/postgres
+      - name: Captures et journal de l'API (en cas d'échec)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bout-en-bout
+          path: |
+            tests_e2e/sortie/captures
+            tests_e2e/sortie/api.log
+          retention-days: 7

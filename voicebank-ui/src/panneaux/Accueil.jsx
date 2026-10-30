@@ -11,7 +11,7 @@ import { reglesMotDePasse } from "./Comptes";
 import { Prix } from "./Abonnement";
 import { SelecteurDevise } from "../devise";
 import { BandeauAnnonce } from "../maintenance";
-import { SaisieCodeConnexion } from "./DoubleAuth";
+import { EtapeDoubleAuth } from "./DoubleAuth";
 import { PAGE_ETAT } from "../etatService";
 import { LANGUE, tx } from "../i18n";
 import SelecteurLangue from "../SelecteurLangue";
@@ -221,7 +221,7 @@ function RetourSSO({ onConnecte, onEchec }) {
     terminerSSO(q.get("code"), q.get("state")).then(r => (r.etape2fa ? setEtape(r.etape2fa) : onConnecte(r)))
       .catch(err => setErreur(messageErreur(err)));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  if (etape) return <SaisieCodeConnexion etape={etape} onConnecte={onConnecte} onAnnuler={onEchec} />;
+  if (etape) return <EtapeDoubleAuth etape={etape} onConnecte={onConnecte} onAnnuler={onEchec} />;
   if (!erreur) {
     return <p role="status" className="flex items-center gap-2 text-sm text-gray-300"><RefreshCw size={14} className="animate-spin" />{" "}{tx("Connexion en cours…")}</p>;
   }
@@ -253,7 +253,7 @@ function Connexion({ onConnecte, oubliDisponible, sso, message }) {
     finally { setEnvoi(false); }
   };
 
-  if (etape) return <SaisieCodeConnexion etape={etape} onConnecte={onConnecte} onAnnuler={() => setEtape(null)} />;
+  if (etape) return <EtapeDoubleAuth etape={etape} onConnecte={onConnecte} onAnnuler={() => setEtape(null)} />;
   if (oubli) {
     return <MotDePasseOublie identifiantInitial={nom} onRetour={(message, identifiant) => {
       setOubli(false); setSucces(message); if (identifiant) setNom(identifiant); setMdp(""); setErreur(null);

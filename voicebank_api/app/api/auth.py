@@ -1,12 +1,13 @@
 """Connexion, sessions, mot de passe, essai gratuit."""
 from fastapi import APIRouter
 
+import secrets
 from dataclasses import replace
 
 import jwt
 from pydantic import BaseModel, Field
 
-from .. import antirobot, double_auth, protection, sessions, sso
+from .. import antirobot, approbation, double_auth, protection, sessions, sso
 
 from .commun import (  # noqa: F401
     ChangementMdp,
@@ -14,6 +15,7 @@ from .commun import (  # noqa: F401
     ConfirmationCode,
     DemandeCode,
     Depends,
+    Path,
     EmailRecuperation,
     HTTPException,
     Identifiants,
@@ -66,9 +68,13 @@ def _etape_suivante(u: Utilisateur, version: int, ip: str, identifiant: str, met
     if etat["active"] and u.role != "admin":
         return reponse_maintenance(etat)
     if securite.mode_base() and double_auth.active(u.nom):
+        # « n » : aléa propre à cette tentative (deux connexions dans la même seconde n'ont pas le même jeton, donc pas
+        # la même demande d'approbation sur le téléphone)
         jeton = jwt.encode({"sub": u.nom, "ver": version, "usage": "2fa", "m": methode, "id": identifiant[:254],
-                            "exp": int(time.time()) + 300}, config.JWT_SECRET, algorithm="HS256")
-        return {"double_auth": True, "jeton_2fa": jeton, "utilisateur": u.nom}
+                            "n": secrets.token_urlsafe(8), "exp": int(time.time()) + 300}, config.JWT_SECRET,
+                           algorithm="HS256")
+        return {"double_auth": True, "jeton_2fa": jeton, "utilisateur": u.nom,
+                "approbation": approbation.possible(u.nom)}      # téléphone enregistré : notification à approuver
     return _fin_connexion(u, version, ip, identifiant, methode)
 
 
@@ -103,12 +109,10 @@ class CodeConnexion(BaseModel):
     code: str = Field(min_length=6, max_length=12)
 
 
-@router.post("/auth/2fa/connexion")
-@limiter.limit("10/minute")
-def connexion_code(request: Request, body: CodeConnexion):
-    ip = ip_client(request)
+def _jeton_2fa(jeton_2fa: str, ip: str):
+    """Tentative de connexion en attente de la double authentification : (utilisateur, version, jeton, clé)."""
     try:
-        d = jwt.decode(body.jeton_2fa, config.JWT_SECRET, algorithms=["HS256"], options={"require": ["exp", "sub"]})
+        d = jwt.decode(jeton_2fa, config.JWT_SECRET, algorithms=["HS256"], options={"require": ["exp", "sub"]})
     except jwt.PyJWTError:
         raise HTTPException(401, "Délai dépassé : reconnecte-toi.")
     if d.get("usage") != "2fa":
@@ -124,6 +128,14 @@ def connexion_code(request: Request, body: CodeConnexion):
         raise HTTPException(401, "Délai dépassé : reconnecte-toi.")
     if version != d.get("ver"):
         raise HTTPException(401, "Délai dépassé : reconnecte-toi.")
+    return u, version, d, cle
+
+
+@router.post("/auth/2fa/connexion")
+@limiter.limit("10/minute")
+def connexion_code(request: Request, body: CodeConnexion):
+    ip = ip_client(request)
+    u, version, d, cle = _jeton_2fa(body.jeton_2fa, ip)
     try:
         moyen = double_auth.verifier(u.nom, body.code)
     except double_auth.DoubleAuthRefusee as e:
@@ -134,6 +146,116 @@ def connexion_code(request: Request, body: CodeConnexion):
     if moyen == "secours":
         audit.journaliser(u.nom, "code_secours_utilise", None, ip)
     return _fin_connexion(u, version, ip, d.get("id") or u.nom, f"{d.get('m', 'mot_de_passe')}+2fa")
+
+
+# ── Approbation sur le téléphone ───────────────────────────────────────
+class JetonConnexion(BaseModel):
+    jeton_2fa: str = Field(min_length=1, max_length=2048)
+
+
+class SuiviApprobation(JetonConnexion):
+    id_demande: str = Field(min_length=8, max_length=32)
+
+
+class AjoutTelephone(BaseModel):
+    code: str = Field(min_length=6, max_length=12)
+    nom: str = Field(min_length=1, max_length=120)
+    abonnement: dict
+
+
+class SecretTelephone(BaseModel):
+    secret: str = Field(min_length=20, max_length=100)
+
+
+class ReponseTelephone(SecretTelephone):
+    nombre: int | None = Field(None, ge=10, le=99)
+    refuser: bool = False
+
+
+def _approbation(action):
+    try:
+        return action()
+    except approbation.ApprobationRefusee as e:
+        raise HTTPException(404 if "introuvable" in str(e) else 400, str(e))
+
+
+@router.post("/auth/2fa/approbation/demander")
+@limiter.limit("10/minute")
+def demander_approbation(request: Request, body: JetonConnexion):
+    """L'ordinateur demande l'approbation : notification sur les téléphones, nombre à toucher affiché ici."""
+    ip = ip_client(request)
+    u, _, _, _ = _jeton_2fa(body.jeton_2fa, ip)
+    navigateur = sessions.resume_navigateur(sessions._requete.get()[0])
+    return _approbation(lambda: approbation.demander(u.nom, body.jeton_2fa, navigateur, ip))
+
+
+@router.post("/auth/2fa/approbation/etat")
+@limiter.limit("60/minute")
+def suivre_approbation(request: Request, body: SuiviApprobation):
+    """L'ordinateur attend (toutes les 2 s) : la session s'ouvre dès que le téléphone a approuvé."""
+    ip = ip_client(request)
+    u, version, d, cle = _jeton_2fa(body.jeton_2fa, ip)
+    statut, nom = _approbation(lambda: approbation.etat(body.id_demande, body.jeton_2fa))
+    if nom != u.nom:
+        raise HTTPException(404, "Demande introuvable")
+    if statut == "approuvee":
+        protection.effacer_echecs(cle, ip)
+        return _fin_connexion(u, version, ip, d.get("id") or u.nom, f"{d.get('m', 'mot_de_passe')}+telephone")
+    if statut in ("mauvais_nombre", "pas_moi"):
+        protection.echec(cle, ip)
+    return {"statut": statut}
+
+
+@router.get("/auth/approbation/cle")
+def cle_notifications():
+    """Clé publique des notifications (le navigateur du téléphone en a besoin pour s'abonner)."""
+    if not securite.mode_base():
+        raise HTTPException(409, "Indisponible sans base de comptes.")
+    return {"cle_publique": approbation.cle_publique()}
+
+
+@router.get("/auth/approbation/telephones")
+def mes_telephones(u: Utilisateur = Depends(utilisateur_valide)):
+    return {"status": "ok", "data": approbation.appareils(u.nom)}
+
+
+@router.post("/auth/approbation/telephones")
+@limiter.limit("5/hour")
+def ajouter_telephone(request: Request, body: AjoutTelephone, u: Utilisateur = Depends(utilisateur_valide)):
+    """Enregistre ce téléphone pour approuver les connexions (code à 6 chiffres redemandé)."""
+    if not double_auth.active(u.nom):
+        raise HTTPException(400, "Active d'abord la double authentification avec une application (code à 6 chiffres).")
+    try:
+        double_auth.verifier(u.nom, body.code)
+    except double_auth.DoubleAuthRefusee as e:
+        raise HTTPException(400, str(e))
+    secret = _approbation(lambda: approbation.enregistrer(u.nom, body.nom, body.abonnement))
+    audit.journaliser(u.nom, "telephone_approbation_ajoute", {"nom": body.nom[:60]}, ip_client(request))
+    return {"status": "ok", "secret": secret}
+
+
+@router.post("/auth/approbation/telephones/{id_appareil}/retirer")
+def retirer_telephone(request: Request, id_appareil: int = Path(ge=1), u: Utilisateur = Depends(utilisateur_valide)):
+    _approbation(lambda: approbation.retirer(u.nom, id_appareil))
+    audit.journaliser(u.nom, "telephone_approbation_retire", None, ip_client(request))
+    return {"status": "ok"}
+
+
+@router.post("/approbation/{id_demande}")
+@limiter.limit("30/minute")
+def voir_demande(request: Request, body: SecretTelephone, id_demande: str = Path(min_length=8, max_length=32)):
+    """Le téléphone (sans session : il prouve qu'il est enregistré par son secret) affiche la demande."""
+    return _approbation(lambda: approbation.detail(id_demande, body.secret))
+
+
+@router.post("/approbation/{id_demande}/repondre")
+@limiter.limit("30/minute")
+def repondre_demande(request: Request, body: ReponseTelephone, id_demande: str = Path(min_length=8, max_length=32)):
+    if not body.refuser and body.nombre is None:
+        raise HTTPException(422, "Choisis un nombre.")
+    statut = _approbation(lambda: approbation.repondre(id_demande, body.secret, body.nombre, body.refuser,
+                                                       ip_client(request)))
+    return {"statut": statut}
 
 
 class LienDeblocage(BaseModel):

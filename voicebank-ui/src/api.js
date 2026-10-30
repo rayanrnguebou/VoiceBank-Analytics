@@ -108,7 +108,7 @@ export async function connexion(nom, motDePasse) {
 
 // Double authentification active : pas encore de session, il faut le code à 6 chiffres
 function suiteConnexion(data) {
-  if (data.double_auth) return { etape2fa: { jeton: data.jeton_2fa, utilisateur: data.utilisateur } };
+  if (data.double_auth) return { etape2fa: { jeton: data.jeton_2fa, utilisateur: data.utilisateur, approbation: !!data.approbation } };
   return appliquerJeton(data);
 }
 

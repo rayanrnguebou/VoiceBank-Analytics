@@ -55,6 +55,8 @@ def exporter(nom: str) -> dict:
                                                    "WHERE utilisateur = :n", n=nom) or [{"active": False}])[0],
             "appareils_connus": _lignes(c, "SELECT ip AS adresse_ip, derniere_connexion FROM voicebank.appareils_connus "
                                            "WHERE utilisateur = :n ORDER BY derniere_connexion DESC", n=nom),
+            "telephones_d_approbation": _lignes(c, "SELECT nom, date_ajout, derniere_utilisation "
+                                                   "FROM voicebank.appareils_approbation WHERE utilisateur = :n", n=nom),
             "sessions": _lignes(c, "SELECT navigateur AS appareil, adresse_ip, methode, debut, derniere_activite, revoquee "
                                    "FROM voicebank.sessions WHERE utilisateur = :n ORDER BY debut DESC", n=nom),
             "questions_favorites": _lignes(c, "SELECT question, envoi_hebdo, date_creation, dernier_envoi "
@@ -106,7 +108,8 @@ def effacer(nom: str, par: str, ip: str | None = None) -> str:
         x = lambda sql, **p: c.execute(text(sql), {"n": nom, **p})  # noqa: E731
         x("DELETE FROM voicebank.logs_vocaux WHERE utilisateur = :n")
         for table in ("codes_recuperation", "acces_sources", "preferences_notifications", "double_authentification",
-                      "appareils_connus", "sessions", "questions_favorites"):
+                      "appareils_connus", "sessions", "questions_favorites", "appareils_approbation",
+                      "demandes_approbation"):
             x(f"DELETE FROM voicebank.{table} WHERE utilisateur = :n")
         x("DELETE FROM voicebank.echecs_connexion WHERE identifiant IN (:n, :e)", e=(l["email"] or "").lower())
         if not c.execute(text("SELECT 1 FROM voicebank.paiements WHERE utilisateur = :n AND statut = 'paye' LIMIT 1"),

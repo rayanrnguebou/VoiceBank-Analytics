@@ -107,3 +107,8 @@ REVOKE ALL ON voicebank.sessions FROM voicebank_reader;
 GRANT SELECT, INSERT, UPDATE, DELETE ON voicebank.questions_favorites TO voicebank_app;
 GRANT USAGE ON SEQUENCE voicebank.questions_favorites_id_favori_seq TO voicebank_app;
 REVOKE ALL ON voicebank.questions_favorites FROM voicebank_reader;
+
+-- Approbation sur le téléphone : invisibles pour le lecteur et l'IA
+GRANT SELECT, INSERT, UPDATE, DELETE ON voicebank.appareils_approbation, voicebank.demandes_approbation TO voicebank_app;
+GRANT USAGE ON SEQUENCE voicebank.appareils_approbation_id_appareil_seq TO voicebank_app;
+REVOKE ALL ON voicebank.appareils_approbation, voicebank.demandes_approbation FROM voicebank_reader;

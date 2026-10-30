@@ -6,6 +6,7 @@ import { appliquerJeton, http, messageErreur } from "../api";
 import { Logo } from "./BarreLaterale";
 import { champ, etiquette, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate } from "../ui";
 import { tx } from "../i18n";
+import { AttenteApprobation, SectionTelephones } from "./Approbation";
 
 const CHAMP_SOMBRE = "w-full px-4 py-3 rounded-xl bg-gray-700 border border-gray-600 text-white text-sm outline-none focus:border-foret-500";
 
@@ -163,6 +164,13 @@ export function SaisieCodeConnexion({ etape, onConnecte, onAnnuler }) {
   );
 }
 
+// Étape après le mot de passe : notification sur le téléphone si un téléphone est enregistré, sinon code à 6 chiffres
+export function EtapeDoubleAuth({ etape, onConnecte, onAnnuler }) {
+  const [code, setCode] = useState(!etape.approbation);
+  return code ? <SaisieCodeConnexion etape={etape} onConnecte={onConnecte} onAnnuler={onAnnuler} />
+    : <AttenteApprobation etape={etape} onConnecte={onConnecte} onCode={() => setCode(true)} />;
+}
+
 // Réglages du compte : état, activation, nouveaux codes de secours, désactivation (si non obligatoire)
 export function SectionDoubleAuth({ dark, onSession }) {
   const { appeler, chargement, erreur, setErreur } = useAPI();
@@ -220,6 +228,7 @@ export function SectionDoubleAuth({ dark, onSession }) {
               <button type="button" onClick={() => setMode("codes")} className={boutonSecondaire(dark)}>{tx("Nouveaux codes de secours")}</button>
               {!etat.requise && <button type="button" onClick={() => setMode("desactiver")} className={boutonSecondaire(dark)}>{tx("Désactiver")}</button>}
             </div>
+            <SectionTelephones dark={dark} />
           </>
         ) : (
           <>

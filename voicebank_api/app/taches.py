@@ -269,7 +269,9 @@ def executer(force: bool = False, maintenant: datetime | None = None) -> dict:
                 log.exception("Favoris du lundi : échec")
                 rapport["favoris"] = {"erreur": str(e)[:200]}
             for src in sources_surveillees():
-                rapport["attente_calme_s"] += attendre_calme(90)     # une base à la fois, entre deux visites
+                # Une base à la fois, entre deux visites ; 2 minutes d'attente au plus en tout (l'appel de GitHub
+                # Actions abandonne au bout de 400 s)
+                rapport["attente_calme_s"] += attendre_calme(min(90, max(0.0, 120 - rapport["attente_calme_s"])))
                 etapes = {}
                 for etape in (lambda: analyser_source(src, maintenant.replace(tzinfo=None), force),
                               lambda: resume_du_matin(src, local), lambda: rapports_periodiques(src, local),

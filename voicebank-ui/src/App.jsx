@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { LienCookies } from "./consentement";
 import { PanelRecouvrement } from "./panneaux/Recouvrement";
 import { PanelValeur } from "./panneaux/Valeur";
-import { ClesApi } from "./panneaux/ClesApi";
+import { PanelLogiciels } from "./panneaux/Logiciels";
 import { http, lireSession, deconnexion, messageErreur, appliquerJeton } from "./api";
 import EcranAccueil from "./panneaux/Accueil";
 import { BandeauAcces, PanelAbonnement, PanelAbonnements } from "./panneaux/Abonnement";
@@ -105,7 +105,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
   const [dashboard, setDashboard]   = useState(null);
   const [onglet, setOnglet]         = useState("assistant");
   const [menuOuvert, setMenuOuvert] = useState(false);
-  const [compteurs, setCompteurs]   = useState({ alertes: 0, signalements: 0 });
+  const [compteurs, setCompteurs]   = useState({ alertes: 0, signalements: 0, logiciels: 0 });
   const [stats, setStats]           = useState(null);
   const [message, setMessage]       = useState(null);
   const [info, setInfo]             = useState(null);
@@ -262,6 +262,24 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
       .then(r => r && setCompteurs(c => ({ ...c, signalements: r.total || 0 })));
   }, [appeler, voitAdmin, idSourceAlertes, externe]);
   useEffect(() => { rafraichirCompteurs(); }, [rafraichirCompteurs]);
+
+  // Logiciels bancaires branchés : nombre en ligne (menu) et annonce du premier appel d'un nouveau logiciel
+  useEffect(() => {
+    const verifier = () => http.get(`/sources/${idSourceAlertes}/logiciels`, { silencieux: true }).then(r => {
+      const l = r.data.data || [];
+      setCompteurs(c => ({ ...c, logiciels: l.filter(x => x.en_ligne).length }));
+      let vus = [];
+      try { vus = JSON.parse(localStorage.getItem("voicebank_logiciels_vus") || "[]"); } catch (e) { /* rien */ }
+      const nouveau = l.find(x => x.premiere_utilisation && !vus.includes(x.id));
+      if (nouveau) {
+        setInfo(tx("Logiciel « {nom} » branché : ses opérations arrivent en direct dans « Logiciel bancaire ».", { nom: nouveau.nom }));
+        try { localStorage.setItem("voicebank_logiciels_vus", JSON.stringify([...vus, ...l.filter(x => x.premiere_utilisation).map(x => x.id)])); } catch (e) { /* rien */ }
+      }
+    }).catch(() => {});
+    verifier();
+    const t = setInterval(verifier, 30000);
+    return () => clearInterval(t);
+  }, [idSourceAlertes]);
 
   useEffect(() => { sauverHistorique(session.utilisateur, historique); }, [historique, session.utilisateur]);
   useEffect(() => { if (erreur) setMessage(erreur); }, [erreur]);
@@ -624,7 +642,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
                                                   : <PanelAlertes dark={dark} onChange={rafraichirCompteurs} />)}
           {page === "analyse"    && (sourceActive ? <PanelAnalyseSource key={sourceActive.id} source={sourceActive} dark={dark} />
                                                   : <PanelAnalyse dark={dark} />)}
-          {page === "api"        && <ClesApi key={sourceActive?.id || 0} source={sourceActive || { id: 0 }} dark={dark} onMesDonnees={() => allerA("donnees")} />}
+          {page === "api"        && <PanelLogiciels key={sourceActive?.id || 0} source={sourceActive} dark={dark} onMesDonnees={() => allerA("donnees")} />}
           {page === "credit"     && (sourceActive ? <PanelCreditSource key={sourceActive.id} source={sourceActive} dark={dark} />
                                                   : <PanelCredit dark={dark} />)}
           {page === "recouvrement" && <PanelRecouvrement key={sourceActive?.id || 0} source={sourceActive} dark={dark} onValeur={() => allerA("valeur")} />}

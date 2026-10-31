@@ -165,6 +165,16 @@ def test_cles_api_et_score_en_temps_reel(client, admin, analyste):
                        json={"reference": "OP-2", "montant": 950_000_000, "heure": 3}).json()
     assert gros["decision"] in ("verifier", "bloquer") and gros["raisons"] and gros["score"] > ok.json()["score"]
     assert client.get("/sources/0/cles-api", headers=admin).json()["data"][0]["nb_appels"] == 2
+    assert ok.headers["content-type"] == "application/json; charset=utf-8"
+    # Suivi en direct : logiciel en ligne, chiffres du jour, 24 heures, derniers appels (visible par les membres)
+    logiciels = client.get("/sources/0/logiciels", headers=analyste).json()["data"]
+    assert logiciels[0]["en_ligne"] and logiciels[0]["premiere_utilisation"] and "cree_par" not in logiciels[0]
+    act = client.get(f"/sources/0/cles-api/{liste[0]['id']}/activite", headers=analyste).json()["data"]
+    assert act["aujourdhui"]["appels"] == 2 and act["aujourdhui"]["acceptees"] + act["aujourdhui"]["a_verifier"] + act["aujourdhui"]["bloquees"] == 2
+    assert len(act["par_heure"]) == 24 and sum(h["accepter"] + h["verifier"] + h["bloquer"] for h in act["par_heure"]) == 2
+    assert [a["reference"] for a in act["appels"]] == ["OP-2", "OP-1"] and act["appels"][0]["duree_ms"] >= 0
+    nouveaux = client.get(f"/sources/0/cles-api/{liste[0]['id']}/activite?apres={act['appels'][0]['id']}", headers=analyste).json()
+    assert nouveaux["data"]["appels"] == []
     # Révocation : la clé ne marche plus
     assert client.post(f"/sources/0/cles-api/{liste[0]['id']}/revoquer", headers=admin).status_code == 200
     assert client.post("/api/v1/operations/score", json=corps, headers={"Authorization": f"Bearer {cle}"}).status_code == 401

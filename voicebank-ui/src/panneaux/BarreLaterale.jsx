@@ -19,7 +19,7 @@ export function Logo() {
   );
 }
 
-function Lien({ id, libelle, Icone, page, allerA, badge, badgeAlerte }) {
+function Lien({ id, libelle, Icone, page, allerA, badge, badgeAlerte, badgeVert }) {
   const actif = page === id;
   return (
     <button
@@ -34,7 +34,7 @@ function Lien({ id, libelle, Icone, page, allerA, badge, badgeAlerte }) {
       <span className="flex-1 text-left">{libelle}</span>
       {badge > 0 && (
         <span className={`min-w-[1.5rem] px-1.5 py-0.5 rounded-full text-[11px] font-semibold tabular-nums text-center ${
-          badgeAlerte ? "bg-red-500 text-white" : "bg-white/10 text-foret-100"}`}>
+          badgeAlerte ? "bg-red-500 text-white" : badgeVert ? "bg-emerald-500 text-white" : "bg-white/10 text-foret-100"}`}>
           {badge > 999 ? "999+" : badge}
         </span>
       )}
@@ -76,7 +76,7 @@ export default function BarreLaterale({ page, allerA, estAdmin, voitAdmin, exter
           <Lien id="assistant" libelle={tx("Assistant vocal")} Icone={AudioLines} {...props} />
           <Lien id="tableau" libelle={tx("Tableau de bord")} Icone={LayoutDashboard} {...props} />
           <Lien id="donnees" libelle={tx("Mes données")} Icone={DatabaseZap} {...props} />
-          <Lien id="api" libelle={tx("Logiciel bancaire")} Icone={Plug} {...props} />
+          <Lien id="api" libelle={tx("Logiciel bancaire")} Icone={Plug} badge={compteurs.logiciels} badgeVert {...props} />
 
           <p className="px-4 pt-5 pb-1.5 text-xs text-foret-100/45">{tx("Risques")}</p>
           <Lien id="alertes" libelle={tx("Alertes de fraude")} Icone={ShieldAlert}

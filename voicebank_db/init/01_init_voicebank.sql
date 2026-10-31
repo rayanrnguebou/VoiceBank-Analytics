@@ -701,6 +701,10 @@ BEGIN
         DELETE FROM voicebank.sessions WHERE derniere_activite < LOCALTIMESTAMP - INTERVAL '180 days';
         GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('sessions', n);
     END IF;
+    IF to_regclass('voicebank.appels_api') IS NOT NULL THEN
+        DELETE FROM voicebank.appels_api WHERE date_appel < LOCALTIMESTAMP - INTERVAL '90 days';
+        GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('appels_api', n);
+    END IF;
     DELETE FROM voicebank.codes_recuperation WHERE expire < LOCALTIMESTAMP - INTERVAL '1 day';
     GET DIAGNOSTICS n = ROW_COUNT; res := res || jsonb_build_object('codes', n);
     DELETE FROM voicebank.paiements WHERE statut <> 'paye' AND date_creation < LOCALTIMESTAMP - INTERVAL '30 days';
@@ -830,3 +834,23 @@ CREATE TABLE IF NOT EXISTS voicebank.cles_api (
     revoquee             BOOLEAN      NOT NULL DEFAULT FALSE
 );
 CREATE INDEX IF NOT EXISTS idx_cles_api_source ON voicebank.cles_api (id_source);
+
+-- Appels reçus par l'API de score (suivi en direct du logiciel bancaire branché) : gardés 90 jours.
+ALTER TABLE voicebank.cles_api ADD COLUMN IF NOT EXISTS premiere_utilisation TIMESTAMP;
+CREATE TABLE IF NOT EXISTS voicebank.appels_api (
+    id_appel     BIGSERIAL     PRIMARY KEY,
+    id_cle       INTEGER       NOT NULL REFERENCES voicebank.cles_api(id_cle) ON DELETE CASCADE,
+    id_source    INTEGER       NOT NULL,
+    date_appel   TIMESTAMP     NOT NULL DEFAULT LOCALTIMESTAMP,
+    reference    VARCHAR(120),
+    montant      NUMERIC(20, 2),
+    devise       VARCHAR(3),
+    decision     VARCHAR(10)   NOT NULL,
+    niveau       VARCHAR(10)   NOT NULL,
+    score        NUMERIC(6, 4) NOT NULL,
+    raisons      JSONB,
+    duree_ms     INTEGER,
+    id_alerte    INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_appels_api_cle ON voicebank.appels_api (id_cle, id_appel DESC);
+CREATE INDEX IF NOT EXISTS idx_appels_api_date ON voicebank.appels_api (date_appel);

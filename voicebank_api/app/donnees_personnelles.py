@@ -23,7 +23,7 @@ log = logging.getLogger("voicebank")
 ESSAI_OUBLIE_JOURS = 90
 CONSERVATION = {
     "questions": "12 mois", "journal_audit": "5 ans", "paiements": "10 ans", "appareils_connus": "180 jours",
-    "sessions": "180 jours",
+    "sessions": "180 jours", "appels_api_du_logiciel_bancaire": "90 jours",
     "tentatives_de_connexion": "24 heures", "essai_sans_abonnement": f"{ESSAI_OUBLIE_JOURS} jours après la fin de l'essai",
 }
 

@@ -124,10 +124,24 @@ with sync_playwright() as p:
     assert r.json()["decision"] in ("verifier", "bloquer") and r.json()["raisons"], r.json()
     assert requests.post(f"{API}/api/v1/operations/score", json={"montant": 1}, timeout=30).status_code == 401
     page.reload()
+    # Annonce du premier appel, badge vert « en ligne » dans le menu
+    expect(page.get_by_text(re.compile(r"Logiciel « Logiciel de la coopérative » branché"))).to_be_visible(timeout=30000)
     nav("Logiciel bancaire").click()                     # page dédiée du menu
-    expect(page.get_by_text("Brancher votre logiciel bancaire")).to_be_visible(timeout=20000)
-    expect(page.get_by_text(re.compile(r"1 appel\(s\)"))).to_be_visible(timeout=60000)
+    carte_logiciel = page.get_by_role("button", name=re.compile("Logiciel de la coopérative.*En ligne"))
+    expect(carte_logiciel).to_be_visible(timeout=20000)
+    expect(page.get_by_text(re.compile(r"1 appel\(s\)")).first).to_be_visible(timeout=60000)
     page.screenshot(path="logiciel_bancaire.png", full_page=True)
+    # Tableau de bord en direct : l'appel déjà fait, puis un nouvel appel qui arrive pendant qu'on regarde
+    carte_logiciel.click()
+    expect(page.get_by_text("Fil des opérations")).to_be_visible(timeout=20000)
+    expect(page.get_by_role("cell", name="CORE-0001")).to_be_visible()
+    requests.post(f"{API}/api/v1/operations/score", headers={"Authorization": f"Bearer {cle}"},
+                  json={"reference": "CORE-0002", "montant": 5000, "heure": 11}, timeout=60)
+    expect(page.get_by_role("cell", name="CORE-0002")).to_be_visible(timeout=15000)
+    expect(page.get_by_text(re.compile(r"Dernière opération : CORE-0002"))).to_be_visible()
+    page.wait_for_timeout(1300)
+    page.screenshot(path="logiciel_en_direct.png", full_page=True)
+    print("5 quinquies. logiciel « en ligne », tableau de bord en direct : le nouvel appel apparaît sans recharger")
     print(f"5 quater. clé d'API créée ; score en temps réel : décision « {r.json()['decision']} », appel compté")
 
     # 6. Mobile

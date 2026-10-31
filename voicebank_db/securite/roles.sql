@@ -93,7 +93,9 @@ REVOKE ALL ON voicebank.dossiers_recouvrement, voicebank.actions_recouvrement FR
 -- Clés d'API : empreintes seulement
 GRANT SELECT, INSERT, UPDATE, DELETE ON voicebank.cles_api TO voicebank_app;
 GRANT USAGE ON SEQUENCE voicebank.cles_api_id_cle_seq TO voicebank_app;
-REVOKE ALL ON voicebank.cles_api FROM voicebank_reader;
+GRANT SELECT, INSERT ON voicebank.appels_api TO voicebank_app;
+GRANT USAGE ON SEQUENCE voicebank.appels_api_id_appel_seq TO voicebank_app;
+REVOKE ALL ON voicebank.cles_api, voicebank.appels_api FROM voicebank_reader;
 -- Le journal d'audit est en ajout seul : ni UPDATE ni DELETE pour l'application.
 ALTER ROLE voicebank_app SET statement_timeout = '15s';
 

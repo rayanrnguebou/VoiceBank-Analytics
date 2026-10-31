@@ -117,3 +117,22 @@ def test_colonne_binaire_dans_l_analyse():
     assert col["nature"] == "texte"
     with pytest.raises(UnicodeDecodeError):                     # ce qui se passait avant
         pd.Series([b"\x1f\x8b\x08"]).astype(str)
+
+
+def test_messages_azure_sql():
+    m = C.message_erreur(Exception("(40615, b\"Cannot open server 'vb' requested by the login. Client with IP address "
+                                   "'20.40.228.15' is not allowed to access the server.\")"))
+    assert "pare-feu Azure" in m and "20.40.228.15" in m
+    assert "adresse complète" in C.message_erreur(Exception("(40532, b'DB-Lib error message 20018')"))
+
+
+def test_azure_sql_par_son_nom():
+    from sqlalchemy.engine import Engine
+    faux = [(None, None, None, None, ("20.40.228.15", 1433))]
+    with patch("socket.getaddrinfo", return_value=faux):
+        eng = C.moteur("sqlserver", {"hote": "vb-test.database.windows.net", "port": 1433, "base": "b",
+                                     "utilisateur": "u", "mot_de_passe": "p", "ssl": "exige"})
+        autre = C.moteur("sqlserver", {"hote": "sql.exemple.cm", "port": 1433, "base": "b", "utilisateur": "u",
+                                       "mot_de_passe": "p", "ssl": "exige"})
+    assert isinstance(eng, Engine) and eng.url.host == "vb-test.database.windows.net"
+    assert autre.url.host == "20.40.228.15"

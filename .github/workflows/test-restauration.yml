@@ -61,7 +61,7 @@ jobs:
           echo "Sauvegarde du run $RUN, il y a $AGE_H h"
           [ "$AGE_H" -le 48 ] || { echo "::error::Dernière sauvegarde trop ancienne ($AGE_H h) : la sauvegarde de la nuit ne tourne plus"; exit 1; }
           gh run download "$RUN" -R "$GITHUB_REPOSITORY" -D sauvegarde
-          FICHIER=$(find sauvegarde -name '*.dump.enc' | head -1)
+          FICHIER=$(find sauvegarde -type f -name '*.dump.enc' | head -1)
           [ -n "$FICHIER" ] || { echo "::error::Fichier de sauvegarde introuvable dans l'artefact"; exit 1; }
           echo "FICHIER=$FICHIER" >> "$GITHUB_ENV"
           echo "AGE_H=$AGE_H" >> "$GITHUB_ENV"

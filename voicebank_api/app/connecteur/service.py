@@ -11,7 +11,8 @@ from ..garde_sql import message_refus
 from ..masquage import est_colonne_personnelle, masquer_valeur
 from . import analyse, fichiers, garde
 from . import questions as Q
-from .connexion import TYPES, chiffrer, connexion_lecture, dechiffrer, executer, message_erreur, moteur
+from .connexion import (TYPES, _lieu, chiffrer, connexion_lecture, dechiffrer, est_erreur_encodage, executer,
+                        message_erreur, moteur)
 
 log = logging.getLogger("voicebank")
 
@@ -135,6 +136,22 @@ def _droits_ecriture(conn, type_source: str, schema: str | None) -> bool | None:
 
 
 def tester(type_source: str, cfg: dict) -> dict:
+    """Essaie la connexion ; un vieux serveur MySQL dont le texte n'est pas en UTF-8 est relu en Latin-1 (le réglage
+    retenu est rangé dans `cfg`, puis gardé avec la source)."""
+    try:
+        return _tester(type_source, cfg)
+    except SourceRefusee as e:
+        if type_source != "mysql" or cfg.get("jeu_caracteres") or "encodage inattendu" not in str(e):
+            raise
+        cfg["jeu_caracteres"] = "latin1"
+        try:
+            return _tester(type_source, cfg)
+        except SourceRefusee:
+            cfg.pop("jeu_caracteres", None)
+            raise e
+
+
+def _tester(type_source: str, cfg: dict) -> dict:
     if type_source not in ("postgresql", "mysql", "sqlserver", "oracle"):
         raise SourceRefusee("Type de base inconnu")
     try:
@@ -167,7 +184,8 @@ def _verifier_quota(proprietaire: str, role: str):
 def creer(proprietaire: str, role: str, nom: str, type_source: str, cfg: dict) -> int:
     _verifier_quota(proprietaire, role)
     tester(type_source, cfg)                       # on n'enregistre que ce qui fonctionne
-    garde_cfg = {k: cfg.get(k) for k in ("hote", "port", "base", "utilisateur", "mot_de_passe", "ssl", "schema")}
+    garde_cfg = {k: cfg.get(k) for k in ("hote", "port", "base", "utilisateur", "mot_de_passe", "ssl", "schema",
+                                         "jeu_caracteres") if k != "jeu_caracteres" or cfg.get(k)}
     r = db.ecrire("INSERT INTO voicebank.sources_donnees (proprietaire, nom, type_source, config_chiffree, resume_connexion, "
                   f"id_org) VALUES (:p, :n, :t, :c, :r, {_ORG}) RETURNING id_source",
                   {"p": proprietaire, "n": nom, "t": type_source, "c": chiffrer(garde_cfg),
@@ -204,7 +222,18 @@ def analyser(id_source: int, proprietaire: str):
         l = _ligne(id_source, proprietaire)
         cfg = dechiffrer(l.config_chiffree) if l.config_chiffree else {}
         eng = _moteur_source(l)
-        profil = analyse.analyser(eng, l.type_source, TYPES[l.type_source]["dialecte"], _schema(l.type_source, cfg))
+        try:
+            profil = analyse.analyser(eng, l.type_source, TYPES[l.type_source]["dialecte"], _schema(l.type_source, cfg))
+        except Exception as e:
+            # Vieux serveur MySQL au texte hors UTF-8 : nouvel essai en Latin-1, gardé pour la suite si ça marche
+            if l.type_source != "mysql" or cfg.get("jeu_caracteres") or not est_erreur_encodage(e):
+                raise
+            log.warning("Source %s : texte hors UTF-8%s ; nouvel essai en Latin-1", id_source, _lieu(e))
+            cfg["jeu_caracteres"] = "latin1"
+            eng = moteur("mysql", cfg)
+            profil = analyse.analyser(eng, l.type_source, TYPES[l.type_source]["dialecte"], _schema(l.type_source, cfg))
+            db.ecrire("UPDATE voicebank.sources_donnees SET config_chiffree = :c WHERE id_source = :i",
+                      {"c": chiffrer(cfg), "i": id_source})
         profil["devise_detectee"] = devises.detecter_devise(profil)
         db.ecrire("UPDATE voicebank.sources_donnees SET statut = 'pret', profil = CAST(:p AS JSONB), date_analyse = NOW() "
                   "WHERE id_source = :i", {"i": id_source, "p": json.dumps(profil, ensure_ascii=False, default=str)})

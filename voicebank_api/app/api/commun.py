@@ -10,8 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from slowapi.errors import RateLimitExceeded
-from .. import audit, config, credit, db, devises, evaluation, fraude, nl2sql, paiement, resume, transcription
-from ..garde_sql import SQLRefuse, valider_sql
+from .. import audit, catalogue, config, credit, db, devises, evaluation, fraude, nl2sql, paiement, resume, transcription
+from ..garde_sql import SQLRefuse, message_refus, valider_sql
 from ..masquage import masquer_ligne, masquer_lignes
 from .. import courriel, maintenance, organisations, recuperation, securite, sessions
 from ..connecteur import service as sources
@@ -252,7 +252,7 @@ def _executer_sql_valide(sql: str) -> tuple[str, list, list]:
     try:
         sql_sur = valider_sql(sql, config.SQL_MAX_LIGNES)
     except SQLRefuse as e:
-        raise HTTPException(400, f"Requête refusée : {e}")
+        raise HTTPException(400, message_refus(e))
     try:
         colonnes, lignes = db.lire(sql_sur, brut=True)
     except Exception as e:
@@ -316,6 +316,11 @@ def _question_vers_resultat(texte: str, u: Utilisateur, contexte: ContexteQuesti
     debut = time.time()
     question = nl2sql.normaliser_question(texte)
     ctx = contexte.model_dump() if contexte else None
+    if catalogue.est_question_structure(question):
+        res = catalogue.reponse(sources.profil_demo(), texte, "Base VoiceBank")
+        res["duree_ms"] = int((time.time() - debut) * 1000)
+        _journaliser(texte, None, True, res["duree_ms"], u)
+        return {**res, "score_rag": 0.0, "question_precedente": None, "devise": devise}
     try:
         sql, source, score, avertissement, suite = nl2sql.texte_vers_sql_avec_contexte(
             question, ctx, lambda: _colonnes_de(ctx["sql"]))

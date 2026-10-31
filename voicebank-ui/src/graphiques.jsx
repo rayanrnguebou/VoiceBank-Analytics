@@ -7,7 +7,7 @@ export const COULEURS     = ["#1F654D","#C9A13B","#3E6FB0","#B5523B","#6A8F3A","
 export const SOURCES = {
   rag:    { label: "RAG",    classe: "bg-emerald-100 text-emerald-700" },
   rule:   { label: tx("Règle"),  classe: "bg-amber-100 text-amber-700" },
-  gemini: { label: "Gemini", classe: "bg-foret-100 text-foret-700" },
+  gemini: { label: tx("IA"), classe: "bg-foret-100 text-foret-700" },
 };
 
 export function detecterTypeGraphique(colonnes, data) {

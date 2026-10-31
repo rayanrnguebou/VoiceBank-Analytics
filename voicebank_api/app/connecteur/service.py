@@ -6,7 +6,8 @@ import logging
 import threading
 import time
 
-from .. import config, db, devises, resume
+from .. import catalogue, config, db, devises, resume
+from ..garde_sql import message_refus
 from ..masquage import est_colonne_personnelle, masquer_valeur
 from . import analyse, fichiers, garde
 from . import questions as Q
@@ -318,6 +319,10 @@ def repondre(id_source: int, proprietaire: str, role: str, question: str, devise
             eng = _moteur_source(l)
         except Exception as e:
             raise SourceRefusee(message_erreur(e))
+    if catalogue.est_question_structure(question):
+        nom = "Démonstration VoiceBank" if id_source == DEMO_ID else l.nom
+        return {**catalogue.reponse(profil, question, nom), "source_donnees": id_source,
+                "duree_ms": int((time.time() - debut) * 1000), "devise": devise, "devise_base": devise_base}
     dialecte = profil["dialecte"]
     autorisees = {t["nom"].lower() for t in profil["tables"] if not t.get("erreur")}
     schemas = {(profil.get("schema") or "").lower()} - {""}
@@ -343,7 +348,7 @@ def repondre(id_source: int, proprietaire: str, role: str, question: str, devise
             colonnes, lignes = executer(eng, type_source, sur, 1000)
             break
         except garde.SQLRefuse as e:
-            derniere_erreur = f"Requête refusée : {e}"
+            derniere_erreur = message_refus(e)
             log.info("Requête %s refusée sur la source %s : %s", source, id_source, e)
         except Exception as e:
             derniere_erreur = "La requête n'a pas pu être exécutée sur la base."

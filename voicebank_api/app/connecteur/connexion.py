@@ -180,9 +180,28 @@ def _fonctions_sqlite(conn):
     conn.create_function("DAY", 1, partie((8, 10)), deterministic=True)
 
 
+import contextvars
+
+# Délai maximal d'une requête : court pour l'interactif ; plus long pour les calculs de fond (tableau de bord complet)
+_DELAI = contextvars.ContextVar("delai_requete_s", default=None)
+
+
+def delai_s() -> int:
+    return _DELAI.get() or config.CONNECTEUR_TIMEOUT_S
+
+
+@contextmanager
+def delai_long(secondes: int):
+    jeton = _DELAI.set(secondes)
+    try:
+        yield
+    finally:
+        _DELAI.reset(jeton)
+
+
 def moteur(type_source: str, cfg: dict, chemin_fichier: Path | None = None):
     """Crée un moteur SQLAlchemy sans pool (aucune connexion gardée ouverte)."""
-    t = config.CONNECTEUR_TIMEOUT_S
+    t = delai_s()
     if type_source == "demo":
         from .. import db
         return db.moteur_lecture
@@ -256,7 +275,7 @@ def moteur(type_source: str, cfg: dict, chemin_fichier: Path | None = None):
 
 def _preparer_session(conn, type_source: str):
     """Lecture seule et délai maximal, selon ce que le moteur permet."""
-    t = config.CONNECTEUR_TIMEOUT_S
+    t = delai_s()
     if type_source == "mysql":
         for instruction in ("SET SESSION TRANSACTION READ ONLY", f"SET SESSION MAX_EXECUTION_TIME = {t * 1000}",
                             f"SET SESSION max_statement_time = {t}"):
@@ -277,7 +296,7 @@ def connexion_lecture(eng, type_source: str):
     with eng.connect() as conn:
         if type_source == "demo":
             conn.execute(text("SET TRANSACTION READ ONLY"))
-            conn.execute(text(f"SET LOCAL statement_timeout = {config.CONNECTEUR_TIMEOUT_S * 1000}"))
+            conn.execute(text(f"SET LOCAL statement_timeout = {delai_s() * 1000}"))
         else:
             _preparer_session(conn, type_source)
         try:

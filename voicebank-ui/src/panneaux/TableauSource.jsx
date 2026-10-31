@@ -38,7 +38,7 @@ export function kpisSource(donnees, devise) {
     const [icone, couleur] = i.titre === "Fraudes" ? ICONES.alertes
       : i.type === "montant" ? [CreditCard, "#A9852A"] : (ICONES[i.entite] || [Table2, "#1F654D"]);
     return {
-      titre: i.titre, icone, couleur,
+      titre: i.echantillon ? tx("{titre} (échantillon)", { titre: i.titre }) : i.titre, icone, couleur,
       valeur: i.type === "montant" ? devise.formaterValeur(i.valeur, { compact: true }) : Number(i.valeur || 0).toLocaleString(LOCALE),
     };
   });
@@ -89,7 +89,9 @@ export function PanelTableauSource({ dark, etat, devise }) {
         const Graphique = g.type === "line" ? LineChart : BarChart;
         return (
           <section key={g.id} className={carte} aria-label={g.titre}>
-            <h3 className={`text-sm font-bold mb-4 ${dark ? "text-white" : "text-gray-900"}`}>{g.titre}</h3>
+            <h3 className={`text-sm font-bold ${g.echantillon ? "mb-1" : "mb-4"} ${dark ? "text-white" : "text-gray-900"}`}>{g.titre}</h3>
+            {g.echantillon && <p className={`text-xs mb-3 ${dark ? "text-gray-400" : "text-gray-500"}`}>
+              {tx("Grande table : calculé sur {x} lignes, pour un affichage rapide.", { x: Number(g.echantillon).toLocaleString(LOCALE) })}</p>}
             <ResponsiveContainer width="100%" height={220}>
               <Graphique data={donnees}>
                 <CartesianGrid strokeDasharray="3 3" stroke={dark ? "#374151" : "#F3F4F6"} />

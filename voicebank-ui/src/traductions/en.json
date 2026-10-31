@@ -1,4 +1,6 @@
 {
+ "{titre} (échantillon)": "{titre} (sample)",
+ "Grande table : calculé sur {x} lignes, pour un affichage rapide.": "Large table: computed on {x} rows for a quick display.",
  "risque {x}": "{x} risk",
  "analyse": "analysis",
  "Logiciel « {nom} » branché : ses opérations arrivent en direct dans « Logiciel bancaire ».": "Software “{nom}” connected: its transactions now arrive live in “Banking software”.",

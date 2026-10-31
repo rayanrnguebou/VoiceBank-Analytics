@@ -136,3 +136,27 @@ def test_azure_sql_par_son_nom():
                                        "mot_de_passe": "p", "ssl": "exige"})
     assert isinstance(eng, Engine) and eng.url.host == "vb-test.database.windows.net"
     assert autre.url.host == "20.40.228.15"
+
+
+def test_tableau_de_bord_grande_table_sur_echantillon(tmp_path):
+    """Grande table : répartitions et montants calculés sur un échantillon limité, signalé dans le résultat."""
+    import sqlite3
+
+    from app.connecteur import analyse, tableau
+    chemin = tmp_path / "banque.sqlite"
+    c = sqlite3.connect(chemin)
+    c.execute("CREATE TABLE transactions (id INTEGER PRIMARY KEY, montant REAL, ville TEXT, date_operation TEXT)")
+    c.executemany("INSERT INTO transactions VALUES (?, ?, ?, ?)",
+                  [(i, 1000.0, ["Douala", "Yaoundé", "Bafoussam"][i % 3], f"2026-{1 + i % 9:02d}-15") for i in range(300)])
+    c.commit(); c.close()
+    eng = C.moteur("fichier", {}, chemin)
+    profil = analyse.analyser(eng, "fichier", "sqlite", None)
+    profil["tables"][0]["lignes"] = 300                    # nombre de lignes connu (ici fixé pour le test)
+    with patch.object(tableau, "GRANDE_TABLE", 100), patch.object(tableau, "ECHANTILLON_TABLEAU", 120):
+        res = tableau.calculer(eng, "fichier", profil)
+    montant = next(i for i in res["indicateurs"] if i["type"] == "montant")
+    assert montant["echantillon"] == 120 and montant["valeur"] == 120 * 1000.0
+    rep = next(g for g in res["graphiques"] if g["id"].startswith("repartition"))
+    assert rep["echantillon"] == 120 and sum(p["nb"] for p in rep["donnees"]) == 120
+    petit = tableau.calculer(eng, "fichier", profil)                       # seuil normal : toute la table
+    assert next(i for i in petit["indicateurs"] if i["type"] == "montant")["valeur"] == 300 * 1000.0

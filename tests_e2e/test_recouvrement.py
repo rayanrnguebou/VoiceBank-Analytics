@@ -113,6 +113,9 @@ with sync_playwright() as p:
 
     # 5 quater. Clé d'API et score en temps réel depuis « le logiciel bancaire »
     nav("Analyse de transaction").click()
+    expect(page.get_by_role("button", name="Analyser")).to_be_visible(timeout=60000)
+    assert page.get_by_text("Brancher votre logiciel bancaire").count() == 0      # désormais dans « Logiciel bancaire »
+    nav("Logiciel bancaire").click()
     page.get_by_label("Nom de la clé").fill("Logiciel de la coopérative")
     page.get_by_role("button", name="Créer une clé").click()
     cle = page.locator("code", has_text=re.compile(r"^vb_")).first.inner_text(timeout=20000)

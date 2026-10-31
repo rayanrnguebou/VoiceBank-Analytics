@@ -8,7 +8,6 @@ import { Choix } from "../ChampListe";
 import ResultatRisque from "./Explication";
 import { SuiviAlerte, ChipStatut, BoutonsRapport, OUVERTS } from "./Surveillance";
 import { telechargerCsv, nomFichier } from "../ui";
-import { ClesApi } from "./ClesApi";
 import { LOCALE, tx } from "../i18n";
 
 const pct = v => `${(Number(v) * 100).toFixed(1).replace(".", ",")} %`;
@@ -211,7 +210,6 @@ export function PanelAnalyseSource({ source, dark }) {
       {res && <p className={`${texteDiscret(dark)} mt-4`}>{res.explication}</p>}
       <ResultatRisque resultat={res} dark={dark} type="fraude" />
     </div>
-    <ClesApi source={source} dark={dark} categories={f.categories} />
     </>
   );
 }

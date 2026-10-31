@@ -3,8 +3,10 @@ import ReactDOM from "react-dom/client";
 import "./index.css";
 import App from "./App";
 import { demarrerAlertesErreurs } from "./alertesErreurs";
+import { BandeauCookies, lireConsentement } from "./consentement";
 
-demarrerAlertesErreurs();
+// Rapports d'erreurs (Sentry) : seulement avec l'accord donné dans le bandeau des cookies
+if (lireConsentement()?.erreurs) demarrerAlertesErreurs();
 
 // Travailleur du site : notifications d'approbation et page « hors ligne » (application Android, écran d'accueil).
 // Seulement sur le site construit : en développement, il gênerait le rechargement automatique.
@@ -15,5 +17,6 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <App />
+    <BandeauCookies />
   </React.StrictMode>
 );

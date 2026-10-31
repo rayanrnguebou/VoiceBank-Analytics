@@ -3,6 +3,7 @@
 // v3 : connexion sécurisée, corrections de bugs, analyse de transaction IA
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { LienCookies } from "./consentement";
 import { http, lireSession, deconnexion, messageErreur, appliquerJeton } from "./api";
 import EcranAccueil from "./panneaux/Accueil";
 import { BandeauAcces, PanelAbonnement, PanelAbonnements } from "./panneaux/Abonnement";
@@ -244,11 +245,19 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
   useEffect(() => () => ecouteRef.current?.annuler?.(), []);
 
   // Compteurs de la barre latérale : alertes à traiter, signalements en attente (admin)
+  // Base connectée choisie : uniquement ses alertes ouvertes, jamais celles de la démonstration.
+  const idSourceAlertes = sourceActive?.id || 0;
   const rafraichirCompteurs = useCallback(() => {
-    appeler("get", "/alertes/stats").then(r => r && setCompteurs(c => ({ ...c, alertes: Number(r.a_traiter) || 0 })));
+    if (idSourceAlertes) {
+      http.get(`/sources/${idSourceAlertes}/suivi`, { silencieux: true })
+        .then(r => setCompteurs(c => ({ ...c, alertes: Number(r.data?.statistiques?.ouvertes) || 0 })))
+        .catch(() => setCompteurs(c => ({ ...c, alertes: 0 })));
+    } else if (!externe) {
+      appeler("get", "/alertes/stats").then(r => r && setCompteurs(c => ({ ...c, alertes: Number(r.a_traiter) || 0 })));
+    } else setCompteurs(c => ({ ...c, alertes: 0 }));
     if (voitAdmin) appeler("get", "/signalements?statut=Ouvert&limit=200")
       .then(r => r && setCompteurs(c => ({ ...c, signalements: r.total || 0 })));
-  }, [appeler, voitAdmin]);
+  }, [appeler, voitAdmin, idSourceAlertes, externe]);
   useEffect(() => { rafraichirCompteurs(); }, [rafraichirCompteurs]);
 
   useEffect(() => { sauverHistorique(session.utilisateur, historique); }, [historique, session.utilisateur]);
@@ -605,7 +614,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
             <BarreSourceRisque dark={dark} sourceActive={sourceActive} sourcesPretes={sourcesPretes} externe={externe}
               onChoisir={s => choisirSource(s, null, true)} onMesDonnees={() => allerA("donnees")} />
           )}
-          {page === "alertes"    && (sourceActive ? <PanelOperationsSource key={sourceActive.id} source={sourceActive} dark={dark} />
+          {page === "alertes"    && (sourceActive ? <PanelOperationsSource key={sourceActive.id} source={sourceActive} dark={dark} onChange={rafraichirCompteurs} />
                                                   : <PanelAlertes dark={dark} onChange={rafraichirCompteurs} />)}
           {page === "analyse"    && (sourceActive ? <PanelAnalyseSource key={sourceActive.id} source={sourceActive} dark={dark} />
                                                   : <PanelAnalyse dark={dark} />)}
@@ -631,6 +640,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
         <footer className={`px-4 sm:px-8 py-4 text-xs ${dark ? "text-gray-600" : "text-gray-400"}`}>
           {tx("© {x} VoiceBank Analytics — Rayan Nguebou Temgoua", { x: new Date().getFullYear() })}
           {" · "}<a href={`/confidentialite/${LANGUE === "en" ? "#en" : ""}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{tx("Politique de confidentialité")}</a>
+          {" · "}<LienCookies />
           {PAGE_ETAT && <>{" · "}<a href={PAGE_ETAT} target="_blank" rel="noopener noreferrer" className="hover:underline">{tx("État du service")}</a></>}
         </footer>
       </div>

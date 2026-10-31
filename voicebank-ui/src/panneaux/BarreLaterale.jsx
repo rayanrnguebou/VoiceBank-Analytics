@@ -79,7 +79,7 @@ export default function BarreLaterale({ page, allerA, estAdmin, voitAdmin, exter
 
           <p className="px-4 pt-5 pb-1.5 text-xs text-foret-100/45">{tx("Risques")}</p>
           <Lien id="alertes" libelle={tx("Alertes de fraude")} Icone={ShieldAlert}
-            badge={externe ? 0 : compteurs.alertes} badgeAlerte {...props} />
+            badge={compteurs.alertes} badgeAlerte {...props} />
           <Lien id="analyse" libelle={tx("Analyse de transaction")} Icone={ScanSearch} {...props} />
           <Lien id="credit" libelle={tx("Score de crédit")} Icone={Landmark} {...props} />
           <Lien id="modeles" libelle={tx("Fiche des modèles")} Icone={ClipboardCheck} {...props} />

@@ -53,7 +53,12 @@ with sync_playwright() as p:
     expect(page.get_by_text("En cours → Fausse alerte")).to_be_visible(timeout=10000)
     page.get_by_role("tab", name=re.compile(r"^Fausses alertes \(1\)")).click()
     expect(page.locator("button", has_text="Plus atypique que")).to_have_count(1)
-    print("1. alerte assignée à Nadège, verdict « fausse alerte » expliqué, historique et onglets à jour")
+    # Compteur du menu : les alertes ouvertes de CETTE base, jamais celles de la démonstration
+    a_traiter = int(re.search(r"\((\d+)\)", page.get_by_role("tab", name=re.compile(r"^À traiter")).inner_text()).group(1))
+    if a_traiter:
+        expect(nav("Alertes de fraude")).to_contain_text(str(a_traiter) if a_traiter <= 999 else "999+", timeout=10000)
+    print(f"1. alerte assignée à Nadège, verdict « fausse alerte » expliqué, historique et onglets à jour ; "
+          f"compteur du menu = {a_traiter} alertes de la base connectée")
 
     # 2. Rapport PDF
     with page.expect_download(timeout=120000) as tel:

@@ -26,9 +26,27 @@ RACINE_API = ICI.parent / "voicebank_api"
 NAVIGATEUR = {"executable_path": os.environ["E2E_CHROMIUM"]} if os.environ.get("E2E_CHROMIUM") else {}
 
 
+# Choix de cookies déjà fait (refus) : le bandeau ne recouvre pas les écrans testés. test_cookies.py le vérifie à part.
+CONSENTEMENT = ("try { localStorage.setItem('voicebank_consentement', JSON.stringify("
+                "{version: 1, erreurs: false, date: new Date().toISOString()})) } catch (e) {}")
+
+
 def lancer(p, args=None):
-    """Chromium sans interface, avec les options éventuelles (micro simulé…)."""
-    return p.chromium.launch(**NAVIGATEUR, **({"args": args} if args else {}))
+    """Chromium sans interface, avec les options éventuelles (micro simulé…). Chaque page et chaque contexte
+    créés ensuite ont déjà répondu au bandeau des cookies ; `sans_consentement()` donne un contexte vierge."""
+    b = p.chromium.launch(**NAVIGATEUR, **({"args": args} if args else {}))
+    contexte_brut = b.new_context
+
+    def new_context(**kw):
+        c = contexte_brut(**kw)
+        c.add_init_script(CONSENTEMENT)
+        return c
+
+    def new_page(**kw):
+        return new_context(**kw).new_page()
+
+    b.new_context, b.new_page, b.sans_consentement = new_context, new_page, contexte_brut
+    return b
 
 
 def sql(req: str):

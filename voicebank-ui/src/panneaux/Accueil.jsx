@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import AntiRobot, { CLE_SITE } from "../AntiRobot";
 import { http, connexion, inscriptionEssai, messageErreur, lireMotifDeconnexion, appliquerJeton, demarrerSSO, terminerSSO } from "../api";
+import { LienCookies } from "../consentement";
 import { Logo } from "./BarreLaterale";
 import { reglesMotDePasse } from "./Comptes";
 import { Prix } from "./Abonnement";
@@ -481,6 +482,7 @@ export default function EcranAccueil({ onConnecte, annonce }) {
           )}
           <p className="mt-6 text-[11px] text-gray-500">
             <a href={`/confidentialite/${LANGUE === "en" ? "#en" : ""}`} className="hover:underline">{tx("Politique de confidentialité")}</a>
+            {" · "}<LienCookies />
             {PAGE_ETAT && <>{" · "}<a href={PAGE_ETAT} target="_blank" rel="noopener noreferrer" className="hover:underline">{tx("État du service")}</a></>}
           </p>
         </section>

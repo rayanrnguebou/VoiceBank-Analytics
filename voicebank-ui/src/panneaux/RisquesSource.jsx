@@ -29,7 +29,7 @@ function Indisponible({ dark, message }) {
 }
 
 // ── Opérations atypiques (page « Alertes de fraude ») ────────────────
-export function PanelOperationsSource({ source, dark }) {
+export function PanelOperationsSource({ source, dark, onChange }) {
   const devise = useDevise();
   const { appeler, chargement, erreur } = useAPI();
   const [d, setD] = useState(null);
@@ -54,7 +54,7 @@ export function PanelOperationsSource({ source, dark }) {
   const compte = n => d.operations.filter(o => (n === "Tous" || o.niveau_risque === n) && selonStatut(o)).length;
   const compteStatut = st => d.operations.filter(o => st === "toutes" || (st === "a_traiter"
     ? o.suivi && OUVERTS.includes(o.suivi.statut) : o.suivi?.statut === st)).length;
-  const majSuivi = (i, a) => (setGardees(g => new Set(g).add(a.id_suivi)), setD(x => ({ ...x, operations: x.operations.map((o, j) => (j === i ? {
+  const majSuivi = (i, a) => (onChange?.(), setGardees(g => new Set(g).add(a.id_suivi)), setD(x => ({ ...x, operations: x.operations.map((o, j) => (j === i ? {
     ...o, suivi: { ...o.suivi, statut: a.statut, assigne_a: a.assigne_a,
       commentaires: a.historique.filter(h => h.nature === "commentaire").length } } : o)) })));
   const exporter = () => telechargerCsv(nomFichier(`operations atypiques ${source.nom}`, "csv"),

@@ -1,5 +1,6 @@
 """API de score de fraude en temps réel (appelée par le logiciel bancaire) et gestion des clés d'API."""
 import time
+from typing import Literal
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Request
@@ -17,6 +18,15 @@ router = APIRouter()
 
 class NouvelleCle(BaseModel):
     nom: str = Field(min_length=2, max_length=80)
+    test: bool = False
+    mode: Literal["actif", "observation"] = "actif"
+    ips_autorisees: str | None = Field(None, max_length=1000)
+
+
+class ModifCle(BaseModel):
+    mode: Literal["actif", "observation"] | None = None
+    ips_autorisees: str | None = Field(None, max_length=1000)
+    changer_ips: bool = False
 
 
 class OperationAScorer(BaseModel):
@@ -50,11 +60,26 @@ def lister_cles(id_source: int = Path(ge=0), u: Utilisateur = Depends(utilisateu
 def creer_cle(request: Request, body: NouvelleCle, id_source: int = Path(ge=0), u: Utilisateur = Depends(utilisateur_courant)):
     _gestionnaire(id_source, u)
     try:
-        c = cles_api.creer(id_source, body.nom, u.nom)
+        c = cles_api.creer(id_source, body.nom, u.nom, test=body.test, mode=body.mode, ips=body.ips_autorisees)
     except cles_api.CleRefusee as e:
         raise HTTPException(400, str(e))
-    audit.journaliser(u.nom, "cle_api_creee", {"id_source": id_source, "nom": c["nom"], "prefixe": c["prefixe"]}, ip_client(request))
+    audit.journaliser(u.nom, "cle_api_creee", {"id_source": id_source, "nom": c["nom"], "prefixe": c["prefixe"],
+                                               "test": c["test"], "mode": c["mode"], "ips": c["ips_autorisees"]}, ip_client(request))
     return {"status": "ok", "data": c}
+
+
+@router.patch("/sources/{id_source}/cles-api/{id_cle}")
+def modifier_cle(request: Request, body: ModifCle, id_source: int = Path(ge=0), id_cle: int = Path(ge=1),
+                 u: Utilisateur = Depends(utilisateur_courant)):
+    """Passer une clé de l'observation au blocage réel (ou l'inverse), changer les adresses IP autorisées."""
+    _gestionnaire(id_source, u)
+    try:
+        c = cles_api.modifier(id_source, id_cle, body.mode, body.ips_autorisees, body.changer_ips)
+    except cles_api.CleRefusee as e:
+        raise HTTPException(400 if "introuvable" not in str(e) else 404, str(e))
+    audit.journaliser(u.nom, "cle_api_modifiee", {"id_source": id_source, "id_cle": id_cle, "mode": c["mode"],
+                                                  "ips": c["ips_autorisees"]}, ip_client(request))
+    return {"status": "ok", "data": {k: v for k, v in c.items() if k != "cree_par"}}
 
 
 @router.post("/sources/{id_source}/cles-api/{id_cle}/revoquer")
@@ -82,12 +107,19 @@ async def scorer_operation(request: Request, body: OperationAScorer, authorizati
                            x_cle_api: str | None = Header(None)):
     """Score de fraude d'une opération AVANT sa validation. Réponse : décision (accepter, vérifier, bloquer), score
     (rang parmi les opérations habituelles de la base, de 0 à 1), niveau et raisons lisibles. Une opération jugée
-    Élevée ou Critique crée une alerte dans VoiceBank pour l'équipe."""
+    Élevée ou Critique crée une alerte dans VoiceBank pour l'équipe.
+
+    Clé en mode « observation » : la décision renvoyée est toujours « accepter » (rien n'est bloqué) et celle de
+    VoiceBank est dans `decision_voicebank`, pour comparer avant d'activer. Clé de test (« vb_test_… ») : même
+    réponse qu'en réel, mais aucune alerte n'est créée."""
     debut = time.perf_counter()
     try:
-        id_source, compte, id_cle = await run_in_threadpool(cles_api.verifier, _cle(authorization, x_cle_api))
+        k = await run_in_threadpool(cles_api.verifier, _cle(authorization, x_cle_api), ip_client(request))
+    except cles_api.IpRefusee as e:
+        raise HTTPException(403, str(e))
     except cles_api.CleRefusee as e:
         raise HTTPException(401, str(e), headers={"WWW-Authenticate": "Bearer"})
+    id_source, compte, id_cle = k["source"], k["nom"], k["id_cle"]
     base = sources.monnaie(id_source, compte)
     devise = (body.devise or base).upper()
     if devise not in devises.DEVISES:
@@ -106,19 +138,21 @@ async def scorer_operation(request: Request, body: OperationAScorer, authorizati
     niveau = r["niveau_risque"]
     decision = cles_api.DECISIONS.get(niveau, "accepter")
     alerte = None
-    if decision != "accepter" and id_source != sources.DEMO_ID:
+    if decision != "accepter" and id_source != sources.DEMO_ID and not k["test"]:
         op = {"id": f"api:{body.reference}" if body.reference else None, "date": (body.date or datetime.now()).isoformat(),
               "montant": devises.convertir(body.montant, devise, base), "niveau_risque": niveau, "score": r["score_anomalie"],
               "raisons": r["facteurs"], "categories": categories}
         nouvelles = await run_in_threadpool(suivi.enregistrer, id_source, [op])
         alerte = nouvelles[0]["id_suivi"] if nouvelles else None
-    reponse = {"reference": body.reference, "decision": decision, "niveau": niveau, "score": r["score_anomalie"],
+    observation = k["mode"] == "observation"
+    reponse = {"reference": body.reference, "decision": "accepter" if observation else decision,
+               "decision_voicebank": decision, "mode": "test" if k["test"] else k["mode"], "niveau": niveau, "score": r["score_anomalie"],
                "raisons": [{"variable": x["variable"], "detail": x.get("detail") or x.get("valeur")} for x in r["facteurs"]],
                "recommandation": (r.get("recommandations") or [None])[0], "explication": r.get("explication"),
                "alerte_creee": alerte is not None, "id_alerte": alerte, "valeurs_supposees": supposees,
                "colonnes_attendues": [c["colonne"] for c in f["categories"]]}
     duree = int((time.perf_counter() - debut) * 1000)
-    await run_in_threadpool(cles_api.noter_appel, id_cle, id_source, reponse, body.montant, devise, duree)
+    await run_in_threadpool(cles_api.noter_appel, id_cle, id_source, reponse, body.montant, devise, duree, reponse["mode"])
     # Jeu de caractères explicite : sinon certains clients (PowerShell 5) lisent l'UTF-8 comme du Latin-1 (« Ã© »)
     return JSONResponse(reponse, media_type="application/json; charset=utf-8")
 

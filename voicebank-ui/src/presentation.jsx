@@ -158,7 +158,7 @@ export function PresentationApplications() {
     setOuvert(false);
     window.dispatchEvent(new Event(EVENEMENT_FERMEE));       // au tour du bandeau des cookies
   }
-  const finFilm = son => { setPhase("fin"); if (son) dire(tx(TEXTE_FIN)); };
+  const finFilm = son => { setPhase("fin"); if (son) dire(tx(TEXTE_FIN), undefined, "fin"); };
   const plateformes = [["android", "Android"], ["ios", "iPhone"], ["ordinateur", tx("Ordinateur")]];
 
   return (

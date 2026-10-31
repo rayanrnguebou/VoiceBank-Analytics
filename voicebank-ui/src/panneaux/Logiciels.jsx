@@ -37,9 +37,20 @@ export function Etat({ cle }) {
   return <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-500/15 text-gray-500">{tx("Hors ligne")}</span>;
 }
 
-function Chip({ decision }) {
+function Chip({ decision, mode }) {
   const d = DECISIONS[decision] || DECISIONS.accepter;
-  return <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${d.classe}`}><d.Icone size={11} />{tx(d.libelle)}</span>;
+  // En observation, rien n'a été bloqué : on montre ce que VoiceBank AURAIT décidé
+  const libelle = mode === "observation" && decision !== "accepter"
+    ? (decision === "bloquer" ? tx("Aurait bloqué") : tx("Aurait fait vérifier")) : tx(d.libelle);
+  return <span className={`inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold px-2 py-0.5 rounded-full ${d.classe} ${mode === "observation" && decision !== "accepter" ? "border border-dashed border-current" : ""}`}><d.Icone size={11} />{libelle}</span>;
+}
+
+function Mode({ cle }) {
+  const base = "whitespace-nowrap text-[11px] font-semibold px-2 py-0.5 rounded-full";
+  return <>
+    {cle.test && <span className={`${base} bg-purple-500/15 text-purple-600`}>{tx("Test")}</span>}
+    {cle.mode === "observation" && <span className={`${base} bg-amber-500/15 text-amber-700`}>{tx("Observation")}</span>}
+  </>;
 }
 
 // Parcours d'une opération : une impulsion traverse le schéma à chaque nouvel appel
@@ -130,7 +141,7 @@ function TableauLogiciel({ source, idCle, dark, onRetour }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <button onClick={onRetour} className={`${texteDiscret(dark)} inline-flex items-center gap-1 hover:underline`}><ArrowLeft size={13} />{tx("Tous les logiciels")}</button>
-            <h2 className={`${titre(dark)} mt-1 flex flex-wrap items-center gap-2`}><Plug size={18} />{d.cle.nom}<Etat cle={d.cle} /></h2>
+            <h2 className={`${titre(dark)} mt-1 flex flex-wrap items-center gap-2`}><Plug size={18} />{d.cle.nom}<Etat cle={d.cle} /><Mode cle={d.cle} /></h2>
             <p className={`${texteDiscret(dark)} mt-1`}>
               {d.cle.premiere_utilisation ? tx("Branché le {x}", { x: new Date(d.cle.premiere_utilisation).toLocaleString(LOCALE) }) : tx("Pas encore d'appel : la clé attend son premier appel.")}
               {d.cle.derniere_utilisation ? tx(" · dernier appel {x}", { x: depuis(d.cle.derniere_utilisation) }) : ""}
@@ -141,12 +152,20 @@ function TableauLogiciel({ source, idCle, dark, onRetour }) {
             {direct ? <><Radio size={13} className="text-red-500 animate-pulse" />{tx("En direct")}<Pause size={12} /></> : <><Play size={12} />{tx("Reprendre le direct")}</>}
           </button>
         </div>
+        {d.cle.mode === "observation" && (
+          <p role="note" className={`mt-4 text-xs rounded-lg px-3 py-2 ${dark ? "bg-amber-900/30 text-amber-200" : "bg-amber-50 text-amber-800"}`}>
+            {tx("Mode observation : le logiciel reçoit toujours « accepter », rien n'est bloqué. Les chiffres ci-dessous montrent ce que VoiceBank aurait fait : comparez-les avec vos propres contrôles, puis activez le blocage dans la carte des clés.")}
+          </p>)}
+        {d.cle.test && (
+          <p role="note" className={`mt-4 text-xs rounded-lg px-3 py-2 ${dark ? "bg-purple-900/30 text-purple-200" : "bg-purple-50 text-purple-800"}`}>
+            {tx("Clé de test : les réponses sont réelles, mais aucune alerte n'est créée pour l'équipe.")}
+          </p>)}
         <div className="mt-4"><Parcours nom={d.cle.nom} dernier={appels[0]} impulsion={impulsion} dark={dark} /></div>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-4">
           {tuile(tx("Appels aujourd'hui"), j.appels.toLocaleString(LOCALE), tx("{x} alerte(s) créée(s)", { x: j.alertes }))}
           {tuile(tx("Acceptées"), j.acceptees.toLocaleString(LOCALE), null, DECISIONS.accepter.couleur)}
-          {tuile(tx("À vérifier"), j.a_verifier.toLocaleString(LOCALE), devise.formaterValeur(j.montant_a_verifier, { compact: true }), DECISIONS.verifier.couleur)}
-          {tuile(tx("Bloquées"), j.bloquees.toLocaleString(LOCALE), devise.formaterValeur(j.montant_bloque, { compact: true }), DECISIONS.bloquer.couleur)}
+          {tuile(d.cle.mode === "observation" ? tx("Aurait fait vérifier") : tx("À vérifier"), j.a_verifier.toLocaleString(LOCALE), devise.formaterValeur(j.montant_a_verifier, { compact: true }), DECISIONS.verifier.couleur)}
+          {tuile(d.cle.mode === "observation" ? tx("Aurait bloqué") : tx("Bloquées"), j.bloquees.toLocaleString(LOCALE), devise.formaterValeur(j.montant_bloque, { compact: true }), DECISIONS.bloquer.couleur)}
           {tuile(tx("Temps de réponse"), j.duree_moyenne_ms != null ? tx("{x} ms", { x: Math.round(j.duree_moyenne_ms) }) : "--",
             j.duree_p95_ms != null ? tx("95 % en moins de {x} ms", { x: Math.round(j.duree_p95_ms) }) : null)}
         </div>
@@ -185,7 +204,7 @@ function TableauLogiciel({ source, idCle, dark, onRetour }) {
                     <td className="py-2 pr-3 whitespace-nowrap tabular-nums">{new Date(a.date).toLocaleTimeString(LOCALE)}</td>
                     <td className="py-2 pr-3 font-mono text-xs">{a.reference || "—"}</td>
                     <td className="py-2 pr-3 text-right tabular-nums whitespace-nowrap">{a.montant != null ? `${a.montant.toLocaleString(LOCALE)} ${["XAF", "XOF"].includes(a.devise) ? "FCFA" : a.devise || ""}` : "—"}</td>
-                    <td className="py-2 pr-3"><Chip decision={a.decision} /></td>
+                    <td className="py-2 pr-3"><Chip decision={a.decision} mode={a.mode} /></td>
                     <td className={`py-2 pr-3 ${texteDiscret(dark)}`}>{a.raisons?.[0]?.detail || tx("habituelle")}</td>
                     <td className={`py-2 text-right tabular-nums ${texteDiscret(dark)}`}>{tx("{x} ms", { x: a.duree_ms ?? "?" })}</td>
                   </tr>
@@ -227,7 +246,7 @@ export function PanelLogiciels({ source, dark, onMesDonnees }) {
                 className={`text-left rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-md ${dark ? "border-gray-700 bg-gray-800/60 hover:border-laiton-400/50" : "border-gray-200 bg-white hover:border-laiton-400"} ${c.en_ligne ? "ring-1 ring-emerald-500/40" : ""}`}>
                 <div className="flex items-start justify-between gap-2">
                   <span className="flex items-center gap-2 font-semibold"><Building2 size={16} className="text-foret-500" />{c.nom}</span>
-                  <Etat cle={c} />
+                  <span className="flex flex-wrap justify-end gap-1"><Mode cle={c} /><Etat cle={c} /></span>
                 </div>
                 <p className={`${texteDiscret(dark)} mt-2`}>{tx("{x} appel(s)", { x: c.nb_appels.toLocaleString(LOCALE) })}
                   {c.derniere_utilisation ? tx(" · dernier {x}", { x: depuis(c.derniere_utilisation) }) : ""}</p>

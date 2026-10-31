@@ -180,6 +180,41 @@ def test_cles_api_et_score_en_temps_reel(client, admin, analyste):
     assert client.post("/api/v1/operations/score", json=corps, headers={"Authorization": f"Bearer {cle}"}).status_code == 401
 
 
+def test_cles_api_observation_test_et_adresses_ip(client, admin):
+    gros = {"reference": "OP-N", "montant": 950_000_000, "heure": 3}
+    # Mode observation : rien n'est bloqué, la décision de VoiceBank est donnée à part (pour comparer)
+    obs = client.post("/sources/0/cles-api", headers=admin, json={"nom": "Observation", "mode": "observation"}).json()["data"]
+    assert obs["mode"] == "observation" and not obs["test"]
+    r = client.post("/api/v1/operations/score", json=gros, headers={"X-Cle-API": obs["cle"]}).json()
+    assert r["mode"] == "observation" and r["decision"] == "accepter" and r["decision_voicebank"] in ("verifier", "bloquer")
+    act = client.get(f"/sources/0/cles-api/{obs['id']}/activite", headers=admin).json()["data"]
+    assert act["appels"][0]["decision"] == r["decision_voicebank"] and act["appels"][0]["mode"] == "observation"
+    # Activation : même opération, désormais bloquée ou à vérifier
+    m = client.patch(f"/sources/0/cles-api/{obs['id']}", headers=admin, json={"mode": "actif"})
+    assert m.status_code == 200 and m.json()["data"]["mode"] == "actif"
+    r = client.post("/api/v1/operations/score", json=gros, headers={"X-Cle-API": obs["cle"]}).json()
+    assert r["mode"] == "actif" and r["decision"] == r["decision_voicebank"] != "accepter"
+    # Clé de test : reconnaissable, aucune alerte
+    t = client.post("/sources/0/cles-api", headers=admin, json={"nom": "Recette", "test": True}).json()["data"]
+    assert t["cle"].startswith("vb_test_") and t["prefixe"] == t["cle"][:16]
+    r = client.post("/api/v1/operations/score", json=gros, headers={"X-Cle-API": t["cle"]}).json()
+    assert r["mode"] == "test" and r["decision"] != "accepter" and not r["alerte_creee"]
+    # Adresses IP : réseau autorisé seulement (403 ailleurs), adresses invalides refusées à la saisie
+    assert client.post("/sources/0/cles-api", headers=admin, json={"nom": "Mauvaise", "ips_autorisees": "41.202.300.1"}).status_code == 400
+    ip = client.post("/sources/0/cles-api", headers=admin,
+                     json={"nom": "Agence", "ips_autorisees": "41.202.0.0/16; 102.244.1.7"}).json()["data"]
+    assert ip["ips_autorisees"] == "41.202.0.0/16, 102.244.1.7/32"
+    dedans = client.post("/api/v1/operations/score", json=gros, headers={"X-Cle-API": ip["cle"], "X-Forwarded-For": "41.202.10.5"})
+    assert dedans.status_code == 200
+    dehors = client.post("/api/v1/operations/score", json=gros, headers={"X-Cle-API": ip["cle"], "X-Forwarded-For": "8.8.8.8"})
+    assert dehors.status_code == 403 and "8.8.8.8" in dehors.json()["detail"]
+    m = client.patch(f"/sources/0/cles-api/{ip['id']}", headers=admin, json={"changer_ips": True, "ips_autorisees": ""})
+    assert m.json()["data"]["ips_autorisees"] is None
+    assert client.post("/api/v1/operations/score", json=gros, headers={"X-Cle-API": ip["cle"], "X-Forwarded-For": "8.8.8.8"}).status_code == 200
+    for c in (obs, t, ip):
+        client.post(f"/sources/0/cles-api/{c['id']}/revoquer", headers=admin)
+
+
 # ── Documents réglementaires ─────────────────────────────────────────
 
 def test_etat_du_portefeuille(client, analyste):

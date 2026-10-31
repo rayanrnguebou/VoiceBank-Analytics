@@ -1,6 +1,7 @@
 // Petit film de présentation (environ 30 s), dessiné en code : léger, net sur tous les écrans, traduit, sans fichier
-// vidéo à télécharger. Une voix lit chaque scène (synthèse vocale du navigateur) dès que l'utilisateur active le son :
-// les navigateurs interdisent le son automatique, le film démarre donc en muet avec ses sous-titres.
+// vidéo à télécharger. Une voix lit chaque scène dès que l'utilisateur active le son : voix humaine enregistrée si elle
+// existe (public/film/voix), sinon synthèse vocale du navigateur.
+// Les navigateurs interdisent le son automatique, le film démarre donc en muet avec ses sous-titres.
 import { useEffect, useRef, useState } from "react";
 import { BellRing, Check, Mic, ShieldCheck, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { LOCALE_VOIX, tx } from "./i18n";
@@ -23,7 +24,22 @@ function meilleureVoix() {
   return candidates.find(v => naturelle.test(v.name)) || candidates.find(v => v.lang === LOCALE_VOIX) || candidates[0] || null;
 }
 
-export function dire(texte, finie) {
+// Voix humaine enregistrée : un fichier par scène et par langue (public/film/voix/<langue>/<scène>.mp3), déclaré dans
+// voix.json. Sans fichier (ou s'il ne se lit pas), la synthèse vocale du navigateur prend le relais.
+const LANGUE_VOIX = LOCALE_VOIX.slice(0, 2);
+let clips = null;
+let audio = null;
+export function chargerVoix() {
+  if (!clips) {
+    clips = fetch("/film/voix/voix.json", { cache: "no-cache" })
+      .then(r => (r.ok ? r.json() : {})).then(j => new Set(j?.[LANGUE_VOIX] || [])).catch(() => new Set());
+  }
+  return clips;
+}
+
+export function oublierVoix() { clips = null; }   // (tests, ou après l'ajout de nouvelles voix)
+
+function synthese(texte, finie) {
   const s = window.speechSynthesis;
   if (!s || typeof window.SpeechSynthesisUtterance === "undefined") { finie?.(); return; }
   s.cancel();
@@ -35,7 +51,23 @@ export function dire(texte, finie) {
   s.speak(u);
 }
 
+export function dire(texte, finie, clip) {
+  taire();
+  if (!clip) { synthese(texte, finie); return; }
+  chargerVoix().then(dispo => {
+    if (!dispo.has(clip)) { synthese(texte, finie); return; }
+    const a = new Audio(`/film/voix/${LANGUE_VOIX}/${clip}.mp3`);
+    audio = a;
+    let fini = false;
+    const terminer = () => { if (!fini) { fini = true; if (audio === a) audio = null; finie?.(); } };
+    a.onended = terminer;
+    a.onerror = () => { if (!fini && audio === a) { fini = true; audio = null; synthese(texte, finie); } };
+    a.play().catch(() => { if (!fini && audio === a) { fini = true; audio = null; synthese(texte, finie); } });
+  });
+}
+
 export function taire() {
+  if (audio) { const a = audio; audio = null; a.onended = a.onerror = null; try { a.pause(); } catch (e) { /* rien */ } }
   try { window.speechSynthesis?.cancel(); } catch (e) { /* rien */ }
 }
 
@@ -179,6 +211,7 @@ export function Film({ onFin }) {
   const [son, setSon] = useState(false);
   const fin = useRef(onFin);
   fin.current = onFin;
+  useEffect(() => { chargerVoix(); }, []);   // liste des voix enregistrées, prête avant que le son soit activé
 
   useEffect(() => {
     const scene = SCENES[etape];
@@ -190,7 +223,7 @@ export function Film({ onFin }) {
     const t = setTimeout(() => { tempsFini = true; suivante(); }, scene.duree);
     // Garde-fou : une voix qui ne répond pas ne bloque jamais le film
     const g = son ? setTimeout(() => { voixFinie = true; suivante(); }, scene.duree + 9000) : null;
-    if (son) dire(tx(scene.texte), () => { voixFinie = true; setTimeout(suivante, 350); });
+    if (son) dire(tx(scene.texte), () => { voixFinie = true; setTimeout(suivante, 350); }, scene.id);
     return () => { arretee = true; clearTimeout(t); clearTimeout(g); };
   }, [etape, son]);
   useEffect(() => taire, []);

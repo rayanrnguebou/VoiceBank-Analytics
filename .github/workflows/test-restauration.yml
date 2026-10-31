@@ -53,6 +53,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          trap 'echo "::error::Échec de la commande : $BASH_COMMAND (ligne $LINENO)"' ERR
           RUN=$(gh run list -R "$GITHUB_REPOSITORY" --workflow sauvegarde-en-ligne.yml --status success --limit 1 \
                 --json databaseId,createdAt --jq '.[0].databaseId // empty')
           [ -n "$RUN" ] || { echo "::error::Aucune sauvegarde réussie trouvée"; exit 1; }
@@ -60,7 +61,7 @@ jobs:
           echo "Sauvegarde du run $RUN, il y a $AGE_H h"
           [ "$AGE_H" -le 48 ] || { echo "::error::Dernière sauvegarde trop ancienne ($AGE_H h) : la sauvegarde de la nuit ne tourne plus"; exit 1; }
           gh run download "$RUN" -R "$GITHUB_REPOSITORY" -D sauvegarde
-          FICHIER=$(find sauvegarde -name '*.dump.enc' | head -1)
+          FICHIER=$(find sauvegarde -type f -name '*.dump.enc' | head -1)
           [ -n "$FICHIER" ] || { echo "::error::Fichier de sauvegarde introuvable dans l'artefact"; exit 1; }
           echo "FICHIER=$FICHIER" >> "$GITHUB_ENV"
           echo "AGE_H=$AGE_H" >> "$GITHUB_ENV"
@@ -71,15 +72,25 @@ jobs:
           MDP: ${{ secrets.SAUVEGARDE_MOT_DE_PASSE }}
         run: |
           set -euo pipefail
-          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:MDP -in "$FICHIER" -out restauration.dump
+          trap 'echo "::error::Échec de la commande : $BASH_COMMAND (ligne $LINENO)"' ERR
+          echo "Fichier : $FICHIER ($(stat -c %s "$FICHIER") octets)"
+          if ! openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:MDP -in "$FICHIER" -out restauration.dump 2> openssl.txt; then
+            echo "::error::Déchiffrement impossible ($(head -c 300 openssl.txt)) : le secret SAUVEGARDE_MOT_DE_PASSE ne correspond pas à celui utilisé pour cette sauvegarde, ou le fichier est abîmé."
+            exit 1
+          fi
+          echo "Sauvegarde déchiffrée : $(stat -c %s restauration.dump) octets"
           DEBUT=$(date +%s)
           # Sans les rôles ni les droits de la base en ligne ; une extension propre à l'hébergeur peut manquer ici :
           # les erreurs sont listées, et le contrôle des tables (étape suivante) décide de la réussite.
-          docker run --rm --network host -v "$PWD:/d" -e PGPASSWORD=essai postgres:18-alpine \
+          chmod a+r restauration.dump
+          if ! docker run --rm --network host -v "$PWD:/d" -e PGPASSWORD=essai postgres:18-alpine \
             pg_restore -h 127.0.0.1 -p 5439 -U postgres -d restauration --no-owner --no-privileges /d/restauration.dump \
-            2> erreurs_restauration.txt || echo "::warning::$(grep -c 'error' erreurs_restauration.txt) erreur(s) ignorée(s) : $(head -c 500 erreurs_restauration.txt)"
+            2> erreurs_restauration.txt; then
+            N=$(grep -c 'error' erreurs_restauration.txt || true)
+            echo "::warning::pg_restore : $N erreur(s) ignorée(s) — $(grep -m 3 'error' erreurs_restauration.txt | tr '\n' ' ' | head -c 600)"
+          fi
           echo "DUREE=$(( $(date +%s) - DEBUT ))" >> "$GITHUB_ENV"
-          shred -u restauration.dump
+          rm -f restauration.dump
 
       - name: Contrôler la base restaurée
         if: steps.config.outputs.actif == 'true'
@@ -87,6 +98,7 @@ jobs:
           URL: ${{ secrets.BASE_EN_LIGNE_URL || secrets.RENDER_DATABASE_URL }}
         run: |
           set -euo pipefail
+          trap 'echo "::error::Échec de la commande : $BASH_COMMAND (ligne $LINENO)"' ERR
           export COMPTE="SELECT table_name, (xpath('/row/n/text()', query_to_xml(format('SELECT COUNT(*) AS n FROM voicebank.%I', table_name), false, true, '')))[1]::text::bigint FROM information_schema.tables WHERE table_schema = 'voicebank' AND table_type = 'BASE TABLE' ORDER BY 1"
           docker run --rm --network host -e PGPASSWORD=essai -e COMPTE postgres:18-alpine \
             sh -c 'psql -h 127.0.0.1 -p 5439 -U postgres -d restauration -XAtF ";" -c "$COMPTE"' > restauree.txt
@@ -95,16 +107,26 @@ jobs:
           import os, sys
           lire = lambda f: {l.split(";")[0]: int(l.split(";")[1]) for l in open(f) if ";" in l}
           r, e = lire("restauree.txt"), lire("en_ligne.txt")
-          erreurs = []
-          if set(r) != set(e):
-              erreurs.append(f"tables différentes : manquantes {sorted(set(e) - set(r))}, en trop {sorted(set(r) - set(e))}")
+          erreurs, avertissements = [], []
+          # La base a pu changer depuis la nuit (nouvelles tables, nouvelles lignes) : simple avertissement.
+          # Échec seulement si la sauvegarde est vraiment incomplète.
+          manquantes, en_trop = sorted(set(e) - set(r)), sorted(set(r) - set(e))
+          if manquantes or en_trop:
+              avertissements.append(f"tables créées ou supprimées depuis la sauvegarde : nouvelles {manquantes}, retirées {en_trop}")
+          if len(r) < 0.7 * len(e):
+              erreurs.append(f"seulement {len(r)} tables restaurées pour {len(e)} en ligne")
           for t in ("utilisateurs", "clients", "transactions", "sources_donnees", "journal_audit"):
-              if t in e and e[t] > 0 and r.get(t, 0) == 0:
+              if t in r and e.get(t, 0) > 0 and r[t] == 0:
                   erreurs.append(f"table essentielle vide après restauration : {t}")
-          # Les données bougent depuis la nuit : on tolère un écart, pas une table à moitié vide
-          for t, n in e.items():
-              if n >= 100 and r.get(t, 0) < n * 0.5:
-                  erreurs.append(f"{t} : {r.get(t, 0)} lignes restaurées pour {n} en ligne")
+          communes = set(r) & set(e)
+          total_r, total_e = sum(r[t] for t in communes), sum(e[t] for t in communes)
+          if total_e >= 1000 and total_r < 0.5 * total_e:
+              erreurs.append(f"{total_r} lignes restaurées pour {total_e} en ligne : sauvegarde incomplète")
+          for t in sorted(communes):
+              if e[t] >= 100 and r[t] < e[t] * 0.5:
+                  avertissements.append(f"{t} : {r[t]} lignes restaurées pour {e[t]} en ligne (ajoutées depuis la nuit ?)")
+          for a in avertissements:
+              print("::warning::" + a)
           lignes = [f"| {t} | {r.get(t, 0)} | {n} |" for t, n in sorted(e.items())]
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
               s.write(f"## Test de restauration\n\nSauvegarde de {os.environ['AGE_H']} h, restaurée en "

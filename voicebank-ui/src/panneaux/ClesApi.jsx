@@ -14,7 +14,7 @@ function Copier({ texte, dark }) {
   );
 }
 
-export function ClesApi({ source, dark, categories = [], onMesDonnees }) {
+export function ClesApi({ source, dark, categories = [], onMesDonnees, onChange }) {
   const [cles, setCles] = useState(null);
   const [nom, setNom] = useState("");
   const [nouvelle, setNouvelle] = useState(null);
@@ -30,11 +30,11 @@ export function ClesApi({ source, dark, categories = [], onMesDonnees }) {
     e.preventDefault(); setErreur(null);
     try {
       const r = await http.post(`/sources/${source.id}/cles-api`, { nom });
-      setNouvelle(r.data.data); setNom(""); charger();
+      setNouvelle(r.data.data); setNom(""); charger(); onChange?.();
     } catch (x) { setErreur(messageErreur(x)); }
   };
   const revoquer = async id => {
-    try { await http.post(`/sources/${source.id}/cles-api/${id}/revoquer`); charger(); } catch (x) { setErreur(messageErreur(x)); }
+    try { await http.post(`/sources/${source.id}/cles-api/${id}/revoquer`); charger(); onChange?.(); } catch (x) { setErreur(messageErreur(x)); }
   };
   const exemple = `curl -X POST ${API}/api/v1/operations/score \\
   -H "Authorization: Bearer ${nouvelle?.cle || "vb_…"}" \\

@@ -1,7 +1,9 @@
 """API de score de fraude en temps réel (appelée par le logiciel bancaire) et gestion des clés d'API."""
+import time
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Request
+from fastapi.responses import JSONResponse
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
@@ -81,8 +83,9 @@ async def scorer_operation(request: Request, body: OperationAScorer, authorizati
     """Score de fraude d'une opération AVANT sa validation. Réponse : décision (accepter, vérifier, bloquer), score
     (rang parmi les opérations habituelles de la base, de 0 à 1), niveau et raisons lisibles. Une opération jugée
     Élevée ou Critique crée une alerte dans VoiceBank pour l'équipe."""
+    debut = time.perf_counter()
     try:
-        id_source, compte = await run_in_threadpool(cles_api.verifier, _cle(authorization, x_cle_api))
+        id_source, compte, id_cle = await run_in_threadpool(cles_api.verifier, _cle(authorization, x_cle_api))
     except cles_api.CleRefusee as e:
         raise HTTPException(401, str(e), headers={"WWW-Authenticate": "Bearer"})
     base = sources.monnaie(id_source, compte)
@@ -109,8 +112,41 @@ async def scorer_operation(request: Request, body: OperationAScorer, authorizati
               "raisons": r["facteurs"], "categories": categories}
         nouvelles = await run_in_threadpool(suivi.enregistrer, id_source, [op])
         alerte = nouvelles[0]["id_suivi"] if nouvelles else None
-    return {"reference": body.reference, "decision": decision, "niveau": niveau, "score": r["score_anomalie"],
-            "raisons": [{"variable": f["variable"], "detail": f.get("detail") or f.get("valeur")} for f in r["facteurs"]],
-            "recommandation": (r.get("recommandations") or [None])[0], "explication": r.get("explication"),
-            "alerte_creee": alerte is not None, "id_alerte": alerte, "valeurs_supposees": supposees,
-            "colonnes_attendues": [c["colonne"] for c in f["categories"]]}
+    reponse = {"reference": body.reference, "decision": decision, "niveau": niveau, "score": r["score_anomalie"],
+               "raisons": [{"variable": x["variable"], "detail": x.get("detail") or x.get("valeur")} for x in r["facteurs"]],
+               "recommandation": (r.get("recommandations") or [None])[0], "explication": r.get("explication"),
+               "alerte_creee": alerte is not None, "id_alerte": alerte, "valeurs_supposees": supposees,
+               "colonnes_attendues": [c["colonne"] for c in f["categories"]]}
+    duree = int((time.perf_counter() - debut) * 1000)
+    await run_in_threadpool(cles_api.noter_appel, id_cle, id_source, reponse, body.montant, devise, duree)
+    # Jeu de caractères explicite : sinon certains clients (PowerShell 5) lisent l'UTF-8 comme du Latin-1 (« Ã© »)
+    return JSONResponse(reponse, media_type="application/json; charset=utf-8")
+
+
+# ── Suivi en direct des logiciels branchés ───────────────────────────
+
+def _membre(id_source: int, u: Utilisateur) -> None:
+    try:
+        sources.detail(id_source, u.nom)
+    except sources.SourceRefusee as e:
+        raise HTTPException(404, str(e))
+
+
+@router.get("/sources/{id_source}/logiciels")
+def logiciels_branches(id_source: int = Path(ge=0), u: Utilisateur = Depends(utilisateur_courant)):
+    """Logiciels branchés sur la base (clés d'API) et leur état : en ligne si un appel a eu lieu dans les 10 minutes."""
+    _membre(id_source, u)
+    return {"status": "ok", "data": [{k: v for k, v in c.items() if k != "cree_par"} for c in cles_api.lister(id_source)
+                                     if c["premiere_utilisation"] or not c["revoquee"]]}
+
+
+@router.get("/sources/{id_source}/cles-api/{id_cle}/activite")
+@limiter.limit("60/minute")
+def activite_logiciel(request: Request, id_source: int = Path(ge=0), id_cle: int = Path(ge=1), apres: int = Query(0, ge=0),
+                      u: Utilisateur = Depends(utilisateur_courant)):
+    """Tableau de bord en direct : chiffres du jour, 24 dernières heures, derniers appels (ceux après `apres`)."""
+    _membre(id_source, u)
+    try:
+        return {"status": "ok", "data": cles_api.activite(id_source, id_cle, apres)}
+    except cles_api.CleRefusee as e:
+        raise HTTPException(404, str(e))

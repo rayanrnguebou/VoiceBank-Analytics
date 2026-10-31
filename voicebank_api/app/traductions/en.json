@@ -1,4 +1,11 @@
 {
+ "« {base} » contient {n} tables consultables : {noms}.": "“{base}” contains {n} tables you can query: {noms}.",
+ "« {base} » contient {n} table consultable : {noms}.": "“{base}” contains {n} table you can query: {noms}.",
+ "Aucune table consultable dans « {base} ».": "No queryable table in “{base}”.",
+ "Les tables internes du système ne sont jamais accessibles.": "Internal system tables are never accessible.",
+ "Base VoiceBank": "VoiceBank database",
+ "Je ne consulte pas les tables internes du système. Pour voir les données disponibles, demande « quelles tables contient la base ? ».": "I don't read internal system tables. To see the available data, ask “which tables does the database contain?”.",
+ "Cette question porte sur des données que je ne peux pas consulter. Pour voir les données disponibles, demande « quelles tables contient la base ? ».": "This question is about data I can't access. To see the available data, ask “which tables does the database contain?”.",
  "Filtre « {join} » non applicable à ce résultat.": "Filter “{join}” does not apply to this result.",
  "Réponse approximative : « {ignores} » n'a pas été pris en compte (IA indisponible).": "Approximate answer: “{ignores}” was not taken into account (AI unavailable).",
  "Réponse approximative : question la plus proche trouvée « {rag} » (IA indisponible).": "Approximate answer: closest question found “{rag}” (AI unavailable).",

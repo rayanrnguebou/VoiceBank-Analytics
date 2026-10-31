@@ -225,7 +225,7 @@ export function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffac
         pdf.text(tx("Date : {dateStr}", { dateStr }), margin, y);
         pdf.text(tx("Durée : {duree_ms} ms", { duree_ms: item.duree_ms }), margin + 55, y);
 
-        const sourceBadge = item.source === "rag" ? "RAG" : item.source === "rule" ? tx("Règle") : "Gemini";
+        const sourceBadge = item.source === "rag" ? "RAG" : item.source === "rule" ? tx("Règle") : tx("IA");
         pdf.setTextColor(255, 255, 255);
         const badgeColor = item.source === "rag" ? [16, 185, 129] : item.source === "rule" ? [245, 158, 11] : [59, 130, 246];
         pdf.setFillColor(...badgeColor);
@@ -539,7 +539,7 @@ export function PanelHistorique({ historique, dark, onSupprimerItem, onToutEffac
                           : dark ? "bg-foret-900/40 text-foret-400" : "bg-foret-100 text-foret-700"
                       }`}>
                         <span className="inline-flex items-center gap-1">
-                          {item.source === "rag" ? <><BookCheck size={11} />{" "}{tx("RAG")}</> : item.source === "rule" ? <><Zap size={11} />{" "}{tx("Règle")}</> : <><Sparkles size={11} />{" "}{tx("Gemini")}</>}
+                          {item.source === "rag" ? <><BookCheck size={11} />{" "}{tx("RAG")}</> : item.source === "rule" ? <><Zap size={11} />{" "}{tx("Règle")}</> : <><Sparkles size={11} />{" "}{tx("IA")}</>}
                         </span>
                       </span>
                     </div>

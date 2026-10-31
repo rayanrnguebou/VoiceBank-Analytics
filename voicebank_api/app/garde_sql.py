@@ -38,6 +38,18 @@ class SQLRefuse(ValueError):
     """Le SQL ne respecte pas les règles de sécurité."""
 
 
+def message_refus(e: Exception) -> str:
+    """Message montré à l'utilisateur : les tables système sont expliquées plutôt que citées."""
+    detail = str(e)
+    if re.search(r"information_schema|pg_catalog|\bpg_|sys\.|sqlite_master|all_tables|user_tables", detail, re.I):
+        return ("Je ne consulte pas les tables internes du système. Pour voir les données disponibles, "
+                "demande « quelles tables contient la base ? ».")
+    if detail.startswith(("Table non autorisée", "Table inconnue", "Accès à une autre base", "Schéma")):
+        return ("Cette question porte sur des données que je ne peux pas consulter. Pour voir les données "
+                "disponibles, demande « quelles tables contient la base ? ».")
+    return f"Requête refusée : {detail}"
+
+
 def _nettoyer(sql: str) -> str:
     sql = re.sub(r"```(?:sql)?", "", sql or "", flags=re.IGNORECASE).strip()
     return sql.rstrip(";").strip()

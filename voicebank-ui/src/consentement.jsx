@@ -1,17 +1,18 @@
 // Cookies et stockage sur l'appareil : bandeau au premier passage, choix modifiable à tout moment
 // (« Gérer les cookies » en bas de page). VoiceBank ne pose aucun cookie publicitaire ni traceur :
 // seul l'envoi de rapports d'erreurs anonymes (Sentry) est facultatif et attend l'accord de l'utilisateur.
-// Refuser est aussi simple qu'accepter ; le choix est redemandé au bout de 6 mois.
+// Refuser est aussi simple qu'accepter ; le choix est redemandé au bout de 6 mois. Tant qu'il n'est pas fait, le bandeau
+// revient à chaque ouverture, juste après la présentation des applications (jamais les deux l'un sur l'autre).
 import { useEffect, useRef, useState } from "react";
 import { ShieldCheck, X } from "lucide-react";
 import { LANGUE, tx } from "./i18n";
 import { demarrerAlertesErreurs } from "./alertesErreurs";
+import { EVENEMENT_FERMEE, doitPresenter } from "./presentation";
 
 const CLE = "voicebank_consentement";
 const VERSION = 1;
 const DUREE_MS = 182 * 24 * 3600 * 1000;          // environ 6 mois
 const EVENEMENT = "voicebank-cookies";
-export const EVENEMENT_CHOISI = "voicebank-cookies-choisis";
 
 export function lireConsentement() {
   try {
@@ -32,7 +33,6 @@ function enregistrer(erreurs) {
     // Retrait de l'accord : on arrête tout envoi immédiatement
     import("@sentry/browser").then(S => S.getClient()?.close()).catch(() => {});
   }
-  window.dispatchEvent(new Event(EVENEMENT_CHOISI));      // la présentation des applications peut s'afficher
   return c;
 }
 
@@ -97,7 +97,7 @@ const STYLE_COOKIES = `
 `;
 
 export function BandeauCookies() {
-  const [ouvert, setOuvert] = useState(() => lireConsentement() === null);
+  const [ouvert, setOuvert] = useState(() => lireConsentement() === null && !doitPresenter());
   const [details, setDetails] = useState(false);
   const [erreurs, setErreurs] = useState(() => !!lireConsentement()?.erreurs);
   const [sortie, setSortie] = useState(false);
@@ -105,8 +105,10 @@ export function BandeauCookies() {
 
   useEffect(() => {
     const ouvrir = () => { setErreurs(!!lireConsentement()?.erreurs); setDetails(true); setSortie(false); setOuvert(true); };
+    const apresPresentation = () => { if (lireConsentement() === null) { setSortie(false); setOuvert(true); } };
     window.addEventListener(EVENEMENT, ouvrir);
-    return () => window.removeEventListener(EVENEMENT, ouvrir);
+    window.addEventListener(EVENEMENT_FERMEE, apresPresentation);
+    return () => { window.removeEventListener(EVENEMENT, ouvrir); window.removeEventListener(EVENEMENT_FERMEE, apresPresentation); };
   }, []);
   useEffect(() => { if (ouvert) titre.current?.focus(); }, [ouvert, details]);
 

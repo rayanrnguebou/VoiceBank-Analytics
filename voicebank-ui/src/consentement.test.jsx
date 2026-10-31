@@ -5,7 +5,8 @@ import { BandeauCookies, lireConsentement, ouvrirGestionCookies } from "./consen
 const demarrer = vi.fn();
 vi.mock("./alertesErreurs", () => ({ demarrerAlertesErreurs: () => demarrer() }));
 
-beforeEach(() => { localStorage.clear(); demarrer.mockClear(); });
+// Appareil qui a déjà servi à un compte : pas de présentation des applications avant le bandeau
+beforeEach(() => { localStorage.clear(); localStorage.setItem("voicebank_compte_connu", "1"); demarrer.mockClear(); });
 
 test("premier passage : bandeau visible ; « Tout refuser » mémorise le refus sans démarrer Sentry", async () => {
   render(<BandeauCookies />);
@@ -43,4 +44,16 @@ test("choix de plus de 6 mois : redemandé", () => {
   localStorage.setItem("voicebank_consentement", JSON.stringify({ version: 1, erreurs: false, date: "2025-01-01T00:00:00Z" }));
   render(<BandeauCookies />);
   expect(screen.getByRole("dialog")).toBeInTheDocument();
+});
+
+test("visiteur : le bandeau attend la fin de la présentation des applications, puis revient tant qu'aucun choix n'est fait", () => {
+  localStorage.removeItem("voicebank_compte_connu");
+  const { unmount } = render(<BandeauCookies />);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  act(() => window.dispatchEvent(new Event("voicebank-presentation-fermee")));
+  expect(screen.getByRole("dialog", { name: "Ta vie privée, tes choix" })).toBeInTheDocument();
+  unmount();                                            // nouvelle ouverture sans avoir choisi
+  render(<BandeauCookies />);
+  act(() => window.dispatchEvent(new Event("voicebank-presentation-fermee")));
+  expect(screen.getByRole("dialog", { name: "Ta vie privée, tes choix" })).toBeInTheDocument();
 });

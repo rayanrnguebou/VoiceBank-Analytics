@@ -1,18 +1,17 @@
-// Présentation animée « VoiceBank aussi sur ton téléphone » : à chaque ouverture du site dans un navigateur, tant que
-// personne ne s'est encore connecté depuis cet appareil. Jamais dans l'application installée (Android, écran d'accueil),
-// jamais une fois connecté, jamais par-dessus le bandeau des cookies (elle attend que le choix soit fait).
+// Présentation animée « VoiceBank aussi sur ton téléphone » : à CHAQUE ouverture du site dans un navigateur (y compris
+// un rechargement), tant que personne ne s'est encore connecté depuis cet appareil. Jamais dans l'application installée
+// (Android, écran d'accueil), jamais une fois connecté. Le bandeau des cookies s'affiche juste après sa fermeture.
 // Motifs : géométrie originale inspirée des tissus d'Afrique (ndop camerounais : losanges, damiers, cercles indigo),
 // salutations africaines et internationales, silhouette de grande ville.
 import { useEffect, useRef, useState } from "react";
 import { Download, Monitor, Play, Share, Smartphone, SquarePlus, X } from "lucide-react";
 import { tx } from "./i18n";
 import { lireSession } from "./api";
-import { EVENEMENT_CHOISI, lireConsentement } from "./consentement";
 import { Film, STYLE_FILM, TEXTE_FIN, dire, taire } from "./film";
 
 const PLAY_STORE = import.meta.env.REACT_APP_PLAY_STORE_URL || "";
 const CLE_COMPTE = "voicebank_compte_connu";
-const CLE_VUE = "voicebank_presentation_vue";        // une fois par ouverture (onglet), pas à chaque rechargement
+export const EVENEMENT_FERMEE = "voicebank-presentation-fermee";
 
 export const SALUTATIONS = ["Bienvenue", "Mbolo", "Akwaba", "Jambo", "Sannu", "Dalal ak jamm", "Welcome", "Bienvenidos", "Willkommen"];
 
@@ -39,8 +38,7 @@ export function applicationInstallee() {
 }
 
 export function doitPresenter() {
-  return !lireSession() && lire(localStorage, CLE_COMPTE) !== "1" && lire(sessionStorage, CLE_VUE) !== "1"
-    && !applicationInstallee();
+  return !lireSession() && lire(localStorage, CLE_COMPTE) !== "1" && !applicationInstallee();
 }
 
 function Motif() {
@@ -149,11 +147,7 @@ export function PresentationApplications() {
   const type = appareil();
 
   useEffect(() => {
-    if (!doitPresenter()) return undefined;
-    if (lireConsentement()) { setOuvert(true); return undefined; }
-    const apresCookies = () => { if (doitPresenter()) setOuvert(true); };     // d'abord le bandeau des cookies
-    window.addEventListener(EVENEMENT_CHOISI, apresCookies);
-    return () => window.removeEventListener(EVENEMENT_CHOISI, apresCookies);
+    if (doitPresenter()) setOuvert(true);
   }, []);
   useEffect(() => {
     if (!ouvert) return undefined;
@@ -166,8 +160,8 @@ export function PresentationApplications() {
   if (!ouvert) return null;
   function fermer() {
     taire();
-    try { sessionStorage.setItem(CLE_VUE, "1"); } catch (e) { /* rien */ }
     setOuvert(false);
+    window.dispatchEvent(new Event(EVENEMENT_FERMEE));       // au tour du bandeau des cookies
   }
   const finFilm = son => { setPhase("fin"); if (son) dire(tx(TEXTE_FIN)); };
   const plateformes = [["android", "Android"], ["ios", "iPhone"], ["ordinateur", tx("Ordinateur")]];

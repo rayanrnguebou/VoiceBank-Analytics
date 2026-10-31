@@ -14,21 +14,11 @@ with sync_playwright() as p:
     erreurs = []; page.on("pageerror", lambda e: erreurs.append(str(e)))
 
     page.goto(URL)
-    bandeau = page.get_by_role("dialog", name="Ta vie privée, tes choix")
-    expect(bandeau).to_be_visible(timeout=20000)
-    for nom in ("Tout refuser", "Personnaliser", "Tout accepter"):
-        expect(bandeau.get_by_role("button", name=nom)).to_be_visible()
-    page.screenshot(path="cookies_bandeau.png")
-    deborde = page.evaluate("document.documentElement.scrollWidth > window.innerWidth")
-    assert not deborde, "débordement horizontal sur mobile"
-    print("1. premier passage : bandeau avec « Tout refuser », « Personnaliser », « Tout accepter »")
-
-    bandeau.get_by_role("button", name="Tout refuser").click()
-    expect(bandeau).to_be_hidden()
-    # Après les cookies : présentation des applications (visiteur sans compte), une fois par ouverture
+    # 1. Ouverture : d'abord la présentation des applications (film muet sous-titré, puis carte finale)
     pres = page.get_by_role("dialog", name="VoiceBank, aussi dans ta poche")
-    expect(pres).to_be_visible(timeout=10000)
-    # D'abord le film, muet avec sous-titres (les navigateurs bloquent le son automatique)
+    bandeau = page.get_by_role("dialog", name="Ta vie privée, tes choix")
+    expect(pres).to_be_visible(timeout=20000)
+    expect(bandeau).to_have_count(0)                         # jamais les deux l'un sur l'autre
     expect(pres.get_by_role("button", name="Activer le son")).to_be_visible()
     expect(pres.get_by_text("Bienvenue sur VoiceBank, la banque qui comprend ta voix.")).to_be_visible()
     page.wait_for_timeout(2200); page.screenshot(path="film_1_accueil.png")
@@ -41,13 +31,37 @@ with sync_playwright() as p:
     page.screenshot(path="presentation_telephone.png")
     pres.get_by_role("button", name="Continuer sur le site").click()
     expect(pres).to_be_hidden()
-    print("1 bis. présentation « aussi dans ta poche » après les cookies, fermée par « Continuer sur le site »")
+    print("1. ouverture : film de présentation, puis carte finale « aussi dans ta poche »")
+
+    # 2. Puis le bandeau des cookies
+    expect(bandeau).to_be_visible(timeout=5000)
+    for nom in ("Tout refuser", "Personnaliser", "Tout accepter"):
+        expect(bandeau.get_by_role("button", name=nom)).to_be_visible()
+    page.wait_for_timeout(1600)
+    page.screenshot(path="cookies_bandeau.png")
+    deborde = page.evaluate("document.documentElement.scrollWidth > window.innerWidth")
+    assert not deborde, "débordement horizontal sur mobile"
+    print("2. ensuite le bandeau des cookies : « Tout refuser », « Personnaliser », « Tout accepter »")
+
+    # 3. Nouvelle ouverture sans avoir choisi : présentation, puis bandeau de nouveau
     page.reload()
+    expect(pres).to_be_visible(timeout=20000)
+    pres.get_by_role("button", name="Fermer").click()
+    expect(bandeau).to_be_visible(timeout=5000)
+    print("3. sans choix : à la réouverture, la présentation puis le bandeau reviennent")
+
+    # 4. Refus : le bandeau ne revient plus, la présentation si (visiteur sans compte)
+    bandeau.get_by_role("button", name="Tout refuser").click()
+    expect(bandeau).to_be_hidden()
+    page.reload()
+    expect(pres).to_be_visible(timeout=20000)
+    pres.get_by_role("button", name="Fermer").click()
     expect(page.get_by_role("button", name="Organisation")).to_be_visible(timeout=20000)
-    expect(page.get_by_role("dialog", name="Ta vie privée, tes choix")).to_have_count(0)
+    page.wait_for_timeout(800)
+    expect(bandeau).to_have_count(0)
     choix = page.evaluate("JSON.parse(localStorage.getItem('voicebank_consentement'))")
     assert choix["erreurs"] is False, choix
-    print("2. refus mémorisé : le bandeau ne revient pas, aucun rapport d'erreurs")
+    print("4. refus mémorisé : le bandeau ne revient plus, la présentation revient à chaque ouverture")
 
     page.get_by_role("button", name="Gérer les cookies").click()
     gestion = page.get_by_role("dialog", name="Gérer les cookies")
@@ -58,7 +72,7 @@ with sync_playwright() as p:
     gestion.get_by_role("button", name="Enregistrer mes choix").click()
     expect(gestion).to_be_hidden()
     assert page.evaluate("JSON.parse(localStorage.getItem('voicebank_consentement')).erreurs") is True
-    print("3. « Gérer les cookies » en bas de page : accord modifiable à tout moment")
+    print("5. « Gérer les cookies » en bas de page : accord modifiable à tout moment")
 
     # Nouvelle ouverture sur ordinateur : la présentation revient ; après une connexion, plus jamais
     ordi = b.sans_consentement(viewport={"width": 1366, "height": 860})
@@ -88,12 +102,12 @@ with sync_playwright() as p:
     expect(nouvel_onglet.get_by_role("button", name="Organisation")).to_be_visible(timeout=20000)
     nouvel_onglet.wait_for_timeout(1500)
     expect(nouvel_onglet.get_by_role("dialog", name="VoiceBank, aussi dans ta poche")).to_have_count(0)
-    print("5. sur ordinateur : présentation à l'ouverture ; plus jamais après une connexion sur l'appareil")
+    print("6. sur ordinateur : présentation à l'ouverture ; plus jamais après une connexion sur l'appareil")
 
     page.goto(URL + "/confidentialite/#cookies")
     expect(page.locator("#cookies")).to_contain_text("Cookies et stockage")
     expect(page.get_by_text("Seulement avec votre accord")).to_be_visible()
-    print("4. politique de confidentialité : tableau détaillé des cookies et du stockage")
+    print("7. politique de confidentialité : tableau détaillé des cookies et du stockage")
 
     print("Erreurs JS :", erreurs or "aucune")
     assert not erreurs

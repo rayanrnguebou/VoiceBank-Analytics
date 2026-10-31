@@ -1,7 +1,6 @@
 // Présentation des applications : à chaque ouverture tant qu'aucun compte n'a servi sur l'appareil, après les cookies.
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { PresentationApplications, doitPresenter } from "./presentation";
-import { EVENEMENT_CHOISI } from "./consentement";
 
 vi.mock("./alertesErreurs", () => ({ demarrerAlertesErreurs: () => {} }));
 const consentir = () => localStorage.setItem("voicebank_consentement", JSON.stringify({ version: 1, erreurs: false, date: new Date().toISOString() }));
@@ -17,17 +16,16 @@ test("visiteur sans compte : présentation affichée, fermée par « Continuer s
   expect(screen.getByRole("heading", { name: "VoiceBank, aussi dans ta poche" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Continuer sur le site" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(doitPresenter()).toBe(false);                 // pas de nouveau dans le même onglet
-  sessionStorage.clear();
-  expect(doitPresenter()).toBe(true);                  // nouvelle ouverture : de nouveau
+  expect(doitPresenter()).toBe(true);                  // à la prochaine ouverture (ou rechargement) : de nouveau
 });
 
-test("attend le choix des cookies avant de s'afficher", () => {
+test("s'affiche même si les cookies ne sont pas encore choisis, et prévient le bandeau à la fermeture", () => {
+  const fermee = vi.fn();
+  window.addEventListener("voicebank-presentation-fermee", fermee);
   render(<PresentationApplications />);
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  consentir();
-  act(() => window.dispatchEvent(new Event(EVENEMENT_CHOISI)));
-  expect(screen.getByRole("dialog")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Fermer" }));
+  expect(fermee).toHaveBeenCalled();
+  window.removeEventListener("voicebank-presentation-fermee", fermee);
 });
 
 test("plus jamais une fois qu'un compte s'est connecté sur l'appareil", () => {

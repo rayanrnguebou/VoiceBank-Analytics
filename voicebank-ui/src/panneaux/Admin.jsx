@@ -252,6 +252,10 @@ export function PanelFiabilite({ dark }) {
 
 // ── Onglet Audit (admin) ─────────────────────────────
 const LIBELLES_ACTIONS = {
+  securite: tx("Sécurité : tous les événements"),
+  securite_connexion_refusee: tx("Sécurité : connexion refusée"), securite_cle_api_refusee: tx("Sécurité : clé d'API refusée"),
+  securite_ip_non_autorisee: tx("Sécurité : clé utilisée hors des adresses autorisées"),
+  securite_limite_compte: tx("Sécurité : limite du compte dépassée"),
   connexion: tx("Connexion"), connexion_refusee: tx("Connexion refusée"), consultation_client: tx("Fiche client consultée"),
   correction_rag: tx("Correction enregistrée"), correction_supprimee: tx("Correction supprimée"), signalement: tx("Réponse signalée"),
   signalement_traite: tx("Signalement traité"), alerte_traitee: tx("Alerte traitée"), evaluation_lancee: tx("Évaluation lancée"),
@@ -299,7 +303,7 @@ export function PanelAudit({ dark }) {
                 <tr key={e.id_evenement} className={`border-t ${dark ? "border-gray-700 text-gray-300" : "border-gray-100 text-gray-700"}`}>
                   <td className="p-2 whitespace-nowrap">{formaterDate(e.date_evenement)}</td>
                   <td className="p-2">{e.utilisateur}</td>
-                  <td className={`p-2 ${e.action === "connexion_refusee" ? "text-red-500" : ""}`}>{LIBELLES_ACTIONS[e.action] || e.action}</td>
+                  <td className={`p-2 ${e.action === "connexion_refusee" || e.action.startsWith("securite_") ? "text-red-500" : ""}`}>{LIBELLES_ACTIONS[e.action] || e.action}</td>
                   <td className="p-2 font-mono">{e.detail && Object.keys(e.detail).length ? JSON.stringify(e.detail).slice(0, 80) : ""}</td>
                   <td className="p-2">{e.adresse_ip}</td>
                 </tr>

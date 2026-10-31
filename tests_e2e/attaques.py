@@ -204,6 +204,9 @@ r = c.post("/api/v1/operations/score", headers={"X-Cle-API": k["cle"]}, json=cor
 verifier("clé limitée par adresse IP : appel depuis une autre adresse refusé", r.status_code == 403, r.status_code)
 r = c.post("/api/v1/operations/score", headers={"X-Cle-API": k["cle"], "X-Forwarded-For": "41.202.10.5, 127.0.0.1"}, json=corps_op)
 verifier("clé limitée par adresse IP : X-Forwarded-For falsifié ignoré", r.status_code == 403, r.status_code)
+journal = c.get("/admin/audit", headers=admin, params={"action": "securite"}).json().get("evenements", [])
+verifier("clé utilisée hors des adresses autorisées : notée dans le journal de sécurité",
+         any(e["action"] == "securite_ip_non_autorisee" for e in journal), [e["action"] for e in journal][:5])
 r = c.post("/api/v1/operations/score", headers={"X-Cle-API": k["cle"][:-2] + "xx"}, json=corps_op)
 verifier("clé d'API modifiée : refusée", r.status_code == 401, r.status_code)
 c.post(f"/sources/{SRC}/cles-api/{k['id']}/revoquer", headers=org76_admin)

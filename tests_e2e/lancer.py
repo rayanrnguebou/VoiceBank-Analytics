@@ -38,7 +38,7 @@ SCENARIOS = [
     ("test_offre", {}), ("test_referentiel", {}), ("test_listes", {}),
     ("test_organisation", {}), ("test_connecteur", {}), ("test_risques_org", {}), ("test_surveillance", {}), ("test_recouvrement", {}),
     ("test_roles", {}), ("test_tableau_recuperation", {}), ("test_double_auth", {}),
-    ("test_2fa_obligatoire", {"DOUBLE_AUTH_ADMINS": "obligatoire"}),
+    ("test_2fa_obligatoire", {"DOUBLE_AUTH_ADMINS": "obligatoire", "DOUBLE_AUTH_ABONNES": "obligatoire"}),
     ("test_sso", {}), ("test_anglais", {}), ("test_confort", {}), ("test_approbation", {}), ("test_cookies", {}), ("test_compatibilite", {}),
     ("attaques", {}),
     ("captures_magasin", {}),           # lancé seulement à la demande : --seulement captures_magasin
@@ -166,7 +166,7 @@ def main():
                "WHISPER_LOCAL": "false", "RATE_LIMIT_ACTIF": "false", "PAIEMENT_SIMULATION": "true",
                "CONNECTEUR_RESEAU_PRIVE": "true", "URL_INTERFACE": "http://localhost:3000", "TACHES_AUTO": "false",
                "SMTP_HOTE": "localhost", "SMTP_PORT": "1025", "EMAIL_EXPEDITEUR": "voicebank@exemple.cm",
-               "DOUBLE_AUTH_ADMINS": "facultative", "GEMINI_API_KEY": "", "GROQ_API_KEY": "",
+               "DOUBLE_AUTH_ADMINS": "facultative", "DOUBLE_AUTH_ABONNES": "facultative", "GEMINI_API_KEY": "", "GROQ_API_KEY": "",
                "GOOGLE_CLIENT_ID": "e2e-google", "GOOGLE_CLIENT_SECRET": "e2e",
                "MICROSOFT_CLIENT_ID": "e2e-microsoft", "MICROSOFT_CLIENT_SECRET": "e2e",
                "TURNSTILE_SECRET": "", "SENTRY_DSN": ""}

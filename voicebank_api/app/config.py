@@ -104,6 +104,14 @@ RATE_LIMIT_ACTIF = _env("RATE_LIMIT_ACTIF", "true").lower() == "true"
 TURNSTILE_SECRET = _env("TURNSTILE_SECRET")
 # Double authentification (code à 6 chiffres) : « obligatoire » pour les administrateurs, ou « facultative »
 DOUBLE_AUTH_ADMINS = _env("DOUBLE_AUTH_ADMINS", "obligatoire").lower()
+# Abonnés individuels (sans organisation) : ils sont leur propre administrateur (bases branchées, clés d'API)
+DOUBLE_AUTH_ABONNES = _env("DOUBLE_AUTH_ABONNES", "obligatoire").lower()
+# Alertes de sécurité (rafales de refus, clé d'API utilisée hors des adresses autorisées…) : adresses séparées par des
+# virgules ; vide = e-mail des comptes administrateurs de la plateforme.
+ALERTES_SECURITE_EMAIL = [a.strip() for a in _env("ALERTES_SECURITE_EMAIL", "").split(",") if a.strip()]
+# Limite par COMPTE connecté (en plus de celle par adresse IP) : freine un compte volé ou un script qui aspire tout.
+LIMITE_COMPTE_MINUTE = int(_env("LIMITE_COMPTE_MINUTE", "240"))
+LIMITE_COMPTE_HEURE = int(_env("LIMITE_COMPTE_HEURE", "4000"))
 # Surveillance des erreurs (sentry.io, offre gratuite) : adresse DSN du projet. Vide : désactivé.
 SENTRY_DSN = _env("SENTRY_DSN")
 # Connexion avec un compte d'entreprise (OpenID Connect). Vide : bouton masqué. Adresse de retour à déclarer

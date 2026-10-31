@@ -108,12 +108,12 @@ export function EcranDoubleAuthObligatoire({ session, onTermine, onDeconnexion }
         <div className="flex items-center gap-3 mb-4">
           <Logo />
           <div>
-            <h1 className="text-white font-bold">{tx("Protège ton compte administrateur")}</h1>
+            <h1 className="text-white font-bold">{tx("Protège ton compte")}</h1>
             <p className="text-gray-400 text-xs">{session.utilisateur}</p>
           </div>
         </div>
         <p className="text-sm text-gray-300 mb-5">
-          {tx("Les comptes administrateurs doivent utiliser la")}{" "}<strong>{tx("double authentification")}</strong>{" "}{tx(": en plus du mot de passe, un code à 6 chiffres donné par une application de ton téléphone. Un mot de passe volé ne suffit alors plus.")}
+          {tx("Ton compte gère des données bancaires (bases branchées, clés d'API ou membres) : il doit utiliser la")}{" "}<strong>{tx("double authentification")}</strong>{" "}{tx(": en plus du mot de passe, un code à 6 chiffres donné par une application de ton téléphone. Un mot de passe volé ne suffit alors plus.")}
         </p>
         <ActivationDoubleAuth sombre onActive={onTermine} onAnnuler={onDeconnexion} />
       </div>

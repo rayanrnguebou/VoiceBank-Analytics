@@ -35,7 +35,9 @@ def journal_audit(action: str | None = Query(None, max_length=40), utilisateur: 
     conditions, params = ["TRUE"], {"limit": limit}
     if u.externe:          # un visiteur ne voit que sa propre activité
         utilisateur = u.nom
-    if action:
+    if action == "securite":                  # tous les événements de sécurité (vigilance)
+        conditions.append("action LIKE 'securite\\_%'")
+    elif action:
         conditions.append("action = :a"); params["a"] = action
     if utilisateur:
         conditions.append("utilisateur = :u"); params["u"] = utilisateur

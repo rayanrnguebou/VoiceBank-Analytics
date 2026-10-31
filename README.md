@@ -737,6 +737,18 @@ les lance à chaque modification (job « Bout en bout ») et garde captures et j
   la vérification est simplement désactivée.
 - **Connexion vérifiée aux bases des organisations** : l'option SSL « Vérifié » contrôle le certificat du serveur
   (autorité reconnue, nom du serveur) en plus du chiffrement ; à préférer dès que la base a un certificat valide.
+- **Limite par compte** (en plus de celle par adresse IP) : 240 requêtes par minute et 4 000 par heure
+  (`LIMITE_COMPTE_MINUTE`, `LIMITE_COMPTE_HEURE`) ; un compte volé ou un script ne peut pas tout aspirer.
+- **Double authentification obligatoire** pour les administrateurs (plateforme et organisations) et pour les abonnés
+  individuels, qui branchent eux-mêmes leurs bases et créent leurs clés d'API (`DOUBLE_AUTH_ABONNES`).
+- **Vigilance** : connexions refusées, clés d'API refusées, clé utilisée hors des adresses autorisées et dépassements
+  de limite sont notés dans le journal (Administration → Journal → « Sécurité ») ; en cas de rafale, un e-mail
+  part aux administrateurs (`ALERTES_SECURITE_EMAIL`, sinon e-mail des comptes admin) et, pour une clé d'API, à
+  la personne qui l'a créée. Une même alerte au plus une fois par heure.
+- **Taille des requêtes** limitée avant lecture (61 Mo) ; connexions par nom protégées contre le réaiguillage DNS.
+- **Test de restauration mensuel** (GitHub Actions « Test de restauration ») : la dernière sauvegarde de la nuit est
+  déchiffrée, restaurée dans une base jetable et comparée à la base en ligne ; résultat par e-mail.
+- Signaler une faille : voir [SECURITE.md](SECURITE.md) (et `/.well-known/security.txt` sur le site).
 - **Rotation de la clé des identifiants** (`CLE_SOURCES`) : mets la nouvelle clé dans `CLE_SOURCES` et l'ancienne
   dans `CLE_SOURCES_ANCIENNES`, redémarre, lance `python -m app.outils.rechiffrer_sources`, puis vide
   `CLE_SOURCES_ANCIENNES`. Aucune coupure : les deux clés fonctionnent pendant l'opération.

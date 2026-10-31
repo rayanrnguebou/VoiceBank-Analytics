@@ -1,4 +1,11 @@
 {
+ "Sécurité : tous les événements": "Security: all events",
+ "Sécurité : connexion refusée": "Security: sign-in refused",
+ "Sécurité : clé d'API refusée": "Security: API key refused",
+ "Sécurité : clé utilisée hors des adresses autorisées": "Security: key used outside allowed addresses",
+ "Sécurité : limite du compte dépassée": "Security: account limit exceeded",
+ "Protège ton compte": "Protect your account",
+ "Ton compte gère des données bancaires (bases branchées, clés d'API ou membres) : il doit utiliser la": "Your account manages banking data (connected databases, API keys or members): it must use",
  "Ce navigateur ne permet pas d'enregistrer la voix : écris ta question, ou ouvre VoiceBank dans Chrome, Safari récent, Edge ou Firefox.": "This browser cannot record your voice: type your question, or open VoiceBank in Chrome, a recent Safari, Edge or Firefox.",
  "Actif : la décision s'applique": "Active: the decision applies",
  "Activer le blocage": "Turn on blocking",

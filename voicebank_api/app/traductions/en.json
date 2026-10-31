@@ -1,4 +1,5 @@
 {
+ "Trop de requêtes pour ce compte : ralentis un instant, puis réessaie.": "Too many requests for this account: slow down for a moment, then try again.",
  "Adresse IP non autorisée pour cette clé : {ip}. Ajoute-la dans VoiceBank → API.": "IP address not allowed for this key: {ip}. Add it in VoiceBank → API.",
  "Adresse IP ou réseau invalide : {m} (exemples : 41.202.10.5 ou 41.202.0.0/16)": "Invalid IP address or network: {m} (examples: 41.202.10.5 or 41.202.0.0/16)",
  "20 adresses ou réseaux au plus par clé.": "20 addresses or networks at most per key.",

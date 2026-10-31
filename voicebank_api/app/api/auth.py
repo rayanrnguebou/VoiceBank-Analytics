@@ -7,7 +7,7 @@ from dataclasses import replace
 import jwt
 from pydantic import BaseModel, Field
 
-from .. import antirobot, approbation, double_auth, protection, sessions, sso
+from .. import antirobot, approbation, double_auth, protection, sessions, sso, vigilance
 
 from .commun import (  # noqa: F401
     ChangementMdp,
@@ -91,6 +91,7 @@ def login(request: Request, body: Identifiants):
     if not resultat:
         log.warning("Échec de connexion pour '%s' depuis %s", body.nom, ip)
         audit.journaliser(body.nom[:64], "connexion_refusee", None, ip)
+        vigilance.signaler("connexion_refusee", ip, {"identifiant": body.nom[:64]}, None, ip)
         if securite.mode_base():
             protection.echec(body.nom, ip)
         raise HTTPException(401, "Identifiants incorrects.")

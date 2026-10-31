@@ -67,3 +67,29 @@ def test_inspection_mysql_tolerante():
         nom = b"famille_\x8b"
     r = _DecodingRow(Ligne((b"s\x8bx", "ok")), "utf8mb4")
     assert r[0] == "s�x" and r[1] == "ok" and r.nom == "famille_�"
+
+
+def test_message_encodage_indique_le_lieu():
+    def fautif():
+        b"s\x8b".decode("utf-8")
+    try:
+        fautif()
+    except UnicodeDecodeError as e:
+        m = C.message_erreur(e)
+    assert "encodage inattendu" in m and "fautif" in m and "test_connexion_messages.py" in m
+
+
+def test_mysql_reessaie_en_latin1():
+    """Test de connexion MySQL : erreur d'encodage en UTF-8, réussite en Latin-1 → réglage gardé."""
+    from app.connecteur import service as S
+    essais = []
+
+    def faux(type_source, cfg):
+        essais.append(cfg.get("jeu_caracteres"))
+        if not cfg.get("jeu_caracteres"):
+            raise S.SourceRefusee("Le serveur renvoie du texte dans un encodage inattendu.")
+        return {"ok": True}
+    cfg = {"hote": "h"}
+    with patch.object(S, "_tester", side_effect=faux):
+        assert S.tester("mysql", cfg) == {"ok": True}
+    assert essais == [None, "latin1"] and cfg["jeu_caracteres"] == "latin1"

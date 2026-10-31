@@ -221,7 +221,7 @@ def moteur(type_source: str, cfg: dict, chemin_fichier: Path | None = None):
     elif type_source == "mysql":
         # En mode vérifié, le certificat est contrôlé au nom de l'hôte : une redirection DNS vers une autre machine
         # échouerait faute de certificat valide pour ce nom.
-        url = URL.create("mysql+pymysql", host=cfg["hote"] if ssl == "verifie" else ip, query={"charset": "utf8mb4"},
+        url = URL.create("mysql+pymysql", host=cfg["hote"] if ssl == "verifie" else ip, query={"charset": cfg.get("jeu_caracteres") or "utf8mb4"},
                          **commun)
         args = {"connect_timeout": 10, "read_timeout": t + 5, "write_timeout": t + 5}
         if ssl == "exige":
@@ -310,6 +310,23 @@ def _detail(e: Exception) -> str:
     return ligne[:200]
 
 
+def _lieu(e: Exception) -> str:
+    """Où l'erreur s'est produite (bibliothèque et fonction), pour la corriger sans accès au serveur."""
+    import traceback
+    from pathlib import Path
+    for x in (e, getattr(e, "orig", None), e.__cause__, e.__context__):
+        if x is not None and x.__traceback__ is not None:
+            pile = traceback.extract_tb(x.__traceback__)
+            if pile:
+                f = pile[-1]
+                return f" (détail technique : {Path(f.filename).parent.name}/{Path(f.filename).name}, {f.name}, ligne {f.lineno})"
+    return ""
+
+
+def est_erreur_encodage(e: Exception) -> bool:
+    return isinstance(e, UnicodeDecodeError) or "codec can't decode" in str(e).lower()
+
+
 def message_erreur(e: Exception) -> str:
     """Erreur de connexion lisible, sans fuite d'informations internes."""
     if isinstance(e, ConnexionRefusee):
@@ -321,8 +338,8 @@ def message_erreur(e: Exception) -> str:
             or "ora-01017" in t or "ora-28000" in t):
         return "Identifiant ou mot de passe refusé par la base."
     if "codec can't decode" in t:
-        return ("Le serveur renvoie du texte dans un encodage inattendu. Réessaie ; si l'erreur persiste, choisis l'option "
-                "SSL « Exigé » ou vérifie le jeu de caractères de la base.")
+        return ("Le serveur renvoie du texte dans un encodage inattendu" + _lieu(e) + ". Réessaie ; si l'erreur persiste, "
+                "choisis l'option SSL « Exigé » ou vérifie le jeu de caractères de la base.")
     if "endpoint id" in t or "endpoint is not specified" in t:
         return ("Neon demande le nom complet du serveur : saisis l'adresse entière (ep-….neon.tech), pas une adresse IP.")
     if "unsupported startup parameter" in t:

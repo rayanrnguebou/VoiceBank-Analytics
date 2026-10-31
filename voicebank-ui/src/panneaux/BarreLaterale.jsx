@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { tx } from "../i18n";
 import SelecteurLangue from "../SelecteurLangue";
 import {
-  AudioLines, HandCoins, TrendingUp, LayoutDashboard, ShieldAlert, ScanSearch, Landmark, History,
+  AudioLines, HandCoins, TrendingUp, Plug, LayoutDashboard, ShieldAlert, ScanSearch, Landmark, History,
   GraduationCap, Target, DatabaseZap, ScrollText, ChartColumn, ExternalLink, LogOut, X, UsersRound, KeyRound, CreditCard, Wallet,
   Building2, Wrench, ClipboardCheck, BellRing } from "lucide-react";
 
@@ -76,6 +76,7 @@ export default function BarreLaterale({ page, allerA, estAdmin, voitAdmin, exter
           <Lien id="assistant" libelle={tx("Assistant vocal")} Icone={AudioLines} {...props} />
           <Lien id="tableau" libelle={tx("Tableau de bord")} Icone={LayoutDashboard} {...props} />
           <Lien id="donnees" libelle={tx("Mes données")} Icone={DatabaseZap} {...props} />
+          <Lien id="api" libelle={tx("Logiciel bancaire")} Icone={Plug} {...props} />
 
           <p className="px-4 pt-5 pb-1.5 text-xs text-foret-100/45">{tx("Risques")}</p>
           <Lien id="alertes" libelle={tx("Alertes de fraude")} Icone={ShieldAlert}

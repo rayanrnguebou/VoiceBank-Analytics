@@ -124,8 +124,10 @@ with sync_playwright() as p:
     assert r.json()["decision"] in ("verifier", "bloquer") and r.json()["raisons"], r.json()
     assert requests.post(f"{API}/api/v1/operations/score", json={"montant": 1}, timeout=30).status_code == 401
     page.reload()
-    nav("Analyse de transaction").click()
+    nav("Logiciel bancaire").click()                     # page dédiée du menu
+    expect(page.get_by_text("Brancher votre logiciel bancaire")).to_be_visible(timeout=20000)
     expect(page.get_by_text(re.compile(r"1 appel\(s\)"))).to_be_visible(timeout=60000)
+    page.screenshot(path="logiciel_bancaire.png", full_page=True)
     print(f"5 quater. clé d'API créée ; score en temps réel : décision « {r.json()['decision']} », appel compté")
 
     # 6. Mobile

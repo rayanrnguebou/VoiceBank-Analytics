@@ -1,4 +1,9 @@
 {
+ "Logiciel bancaire": "Banking software",
+ "Brancher votre logiciel : score de fraude en temps réel avant chaque opération": "Connect your software: real-time fraud score before each transaction",
+ "Branchez la base de votre organisation dans « Mes données » (administrateur de l'organisation).": "Connect your organisation's database in “My data” (organisation administrator).",
+ "Choisissez-la dans « Données interrogées », puis revenez ici : créez une clé et donnez-la à votre prestataire informatique.": "Select it in “Data queried”, then come back here: create a key and give it to your IT provider.",
+ "Votre logiciel appelle l'adresse ci-dessous avant de valider chaque opération.": "Your software calls the address below before validating each transaction.",
  "Document indisponible pour le moment.": "Document unavailable for now.",
  "Projet de déclaration de soupçon (PDF)": "Draft suspicious activity report (PDF)",
  "État du portefeuille (PDF)": "Portfolio quality report (PDF)",

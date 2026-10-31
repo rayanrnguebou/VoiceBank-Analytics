@@ -12,6 +12,7 @@ import hashlib
 import ipaddress
 import json
 import logging
+import re
 import socket
 import sqlite3
 import ssl as ssl_mod
@@ -93,7 +94,8 @@ def verifier_hote(hote: str) -> str:
         if interdite and not config.CONNECTEUR_RESEAU_PRIVE:
             raise ConnexionRefusee("Adresse privée ou locale refusée : la base doit être joignable sur Internet "
                                    "(ou utilise l'outil en local pour une base du réseau de l'entreprise).")
-    return sorted(adresses)[0]
+    # IPv4 d'abord : beaucoup d'hébergeurs (Render…) n'ont pas de sortie IPv6, une adresse IPv6 échouerait.
+    return sorted(adresses, key=lambda a: (":" in a, a))[0]
 
 
 # ── Moteurs ──────────────────────────────────────────────────────────
@@ -147,7 +149,10 @@ def moteur(type_source: str, cfg: dict, chemin_fichier: Path | None = None):
         raise ConnexionRefusee("La vérification du certificat n'est pas encore disponible pour SQL Server : "
                                "choisis « Exigé ».")
     if type_source == "postgresql":
-        url = URL.create("postgresql+psycopg2", host=cfg["hote"], **commun)
+        hote = hote_direct(cfg["hote"])
+        if hote != cfg["hote"].strip():
+            ip = verifier_hote(hote)
+        url = URL.create("postgresql+psycopg2", host=hote, **commun)
         args = {"hostaddr": ip, "connect_timeout": 10,
                 "sslmode": {"verifie": "verify-full", "exige": "require", "desactive": "disable"}.get(ssl, "prefer"),
                 "options": f"-c default_transaction_read_only=on -c statement_timeout={t * 1000}",
@@ -226,6 +231,26 @@ def executer(eng, type_source: str, sql: str, max_lignes: int = 1000) -> tuple[l
     return colonnes, lignes
 
 
+def hote_direct(hote: str) -> str:
+    """Neon : l'adresse « -pooler » passe par PgBouncer, qui refuse les options de lecture seule ; l'adresse directe
+    est la même sans « -pooler »."""
+    h = (hote or "").strip()
+    premier, _, reste = h.partition(".")
+    if reste.endswith("neon.tech") and premier.endswith("-pooler"):
+        return premier[: -len("-pooler")] + "." + reste
+    return h
+
+
+def _detail(e: Exception) -> str:
+    """Première ligne du message du serveur, sans mot de passe ni adresse de connexion."""
+    brut = str(getattr(e, "orig", None) or e).strip().splitlines()
+    ligne = next((l for l in brut if l.strip() and not l.startswith("(Background")), "")
+    ligne = re.sub(r"\(psycopg2\.[\w.]+\)\s*", "", ligne)
+    ligne = re.sub(r"(password|mot_de_passe|pwd)\s*[=:]\s*\S+", r"\1=***", ligne, flags=re.I)
+    ligne = re.sub(r"\w+://\S+", "***", ligne)
+    return ligne[:200]
+
+
 def message_erreur(e: Exception) -> str:
     """Erreur de connexion lisible, sans fuite d'informations internes."""
     if isinstance(e, ConnexionRefusee):
@@ -236,6 +261,17 @@ def message_erreur(e: Exception) -> str:
     if ("password" in t or "authentication" in t or "access denied" in t or "login failed" in t or "18456" in t
             or "ora-01017" in t or "ora-28000" in t):
         return "Identifiant ou mot de passe refusé par la base."
+    if "endpoint id" in t or "endpoint is not specified" in t:
+        return ("Neon demande le nom complet du serveur : saisis l'adresse entière (ep-….neon.tech), pas une adresse IP.")
+    if "unsupported startup parameter" in t:
+        return ("Adresse « pooler » refusée : utilise l'adresse directe de la base (sans « -pooler » dans le nom), "
+                "« Connection pooling » décoché chez Neon.")
+    if "role" in t and "does not exist" in t:
+        return "Cet utilisateur n'existe pas sur cette base : vérifie son nom (majuscules comprises)."
+    if "network is unreachable" in t or "no route to host" in t:
+        return "Le serveur n'est pas joignable depuis VoiceBank (réseau inaccessible) : vérifie l'adresse et le pare-feu."
+    if "permission denied for database" in t or "pg_hba" in t or "no pg_hba.conf entry" in t:
+        return "La base refuse cette connexion (droits ou liste d'adresses autorisées) : vérifie GRANT CONNECT et le pare-feu."
     if "timeout" in t or "timed out" in t:
         return "Le serveur ne répond pas (délai dépassé) : vérifie l'adresse, le port et le pare-feu."
     if "refused" in t or "dpy-6005" in t or "could not connect" in t or "can't connect" in t or "unable to connect" in t or "20009" in t:
@@ -247,4 +283,5 @@ def message_erreur(e: Exception) -> str:
             return ("Certificat du serveur non reconnu (autorité inconnue ou nom différent) : la connexion « vérifiée » "
                     "a été refusée par sécurité. Utilise le nom exact du serveur, ou l'option « Exigé ».")
         return "Problème de chiffrement SSL : essaie l'option SSL « préféré » ou « exigé »."
-    return "Connexion impossible à la base. Vérifie les informations saisies."
+    detail = _detail(e)
+    return "Connexion impossible à la base. Vérifie les informations saisies." + (f" Message du serveur : {detail}" if detail else "")

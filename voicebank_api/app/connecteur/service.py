@@ -5,14 +5,15 @@ import json
 import logging
 import threading
 import time
+from datetime import datetime
 
 from .. import catalogue, config, db, devises, resume
 from ..garde_sql import message_refus
 from ..masquage import est_colonne_personnelle, masquer_valeur
 from . import analyse, fichiers, garde
 from . import questions as Q
-from .connexion import (TYPES, _lieu, chiffrer, connexion_lecture, dechiffrer, est_erreur_encodage, executer,
-                        message_erreur, moteur)
+from .connexion import (TYPES, _lieu, chiffrer, connexion_lecture, dechiffrer, delai_long, est_erreur_encodage,
+                        executer, message_erreur, moteur)
 
 log = logging.getLogger("voicebank")
 
@@ -418,6 +419,12 @@ def repondre(id_source: int, proprietaire: str, role: str, question: str, devise
             "devise": devise, "devise_base": devise_base, "colonnes_monetaires": [c for c in colonnes if c.lower() in monetaires]}
 
 
+DELAI_COMPLET_S = 600                        # une requête du calcul complet peut prendre jusqu'à 10 minutes
+FRAICHEUR_COMPLET_H = 6                      # au-delà, le résultat complet s'affiche toujours, et se recalcule en fond
+_complets_en_cours: set[int] = set()
+_verrou_complets = threading.Lock()
+
+
 def _preparer_tableau(id_source: int, proprietaire: str):
     try:
         tableau_de_bord(id_source, proprietaire)
@@ -425,8 +432,48 @@ def _preparer_tableau(id_source: int, proprietaire: str):
         log.info("Préparation du tableau de bord de la source %s impossible : %s", id_source, e)
 
 
+def _ranger_tableau(id_source: int, cle_stock: str, res: dict):
+    db.ecrire("UPDATE voicebank.sources_donnees SET tableau = CAST(:t AS JSONB), tableau_cle = :c, "
+              "tableau_date = LOCALTIMESTAMP WHERE id_source = :i",
+              {"i": id_source, "c": cle_stock, "t": json.dumps(res, ensure_ascii=False, default=str)})
+
+
+def _lancer_calcul_complet(id_source: int, proprietaire: str, cle_stock: str, rapide: dict):
+    """Toutes les lignes, en arrière-plan, avec un délai long ; remplace l'aperçu quand c'est fini. Un graphique qui
+    n'aboutit pas garde sa version sur échantillon."""
+    from . import tableau
+    with _verrou_complets:
+        if id_source in _complets_en_cours:
+            return
+        _complets_en_cours.add(id_source)
+
+    def calcul():
+        try:
+            with delai_long(DELAI_COMPLET_S):
+                l = _ligne(id_source, proprietaire)
+                res = tableau.calculer(_moteur_source(l), l.type_source, l.profil, complet=True)
+            ids = {g["id"] for g in res["graphiques"]}
+            res["graphiques"] += [g for g in rapide.get("graphiques", []) if g["id"] not in ids][:max(0, 4 - len(res["graphiques"]))]
+            titres = {i["titre"] for i in res["indicateurs"]}
+            res["indicateurs"] += [i for i in rapide.get("indicateurs", []) if i["titre"] not in titres][:max(0, 4 - len(res["indicateurs"]))]
+            res["complet"] = not any(x.get("echantillon") for x in res["indicateurs"] + res["graphiques"])
+            res["complet_le"] = datetime.now().isoformat(timespec="seconds")
+            _ranger_tableau(id_source, cle_stock, res)
+            tableau.oublier(id_source)
+            log.info("Tableau de bord complet de la source %s prêt", id_source)
+        except Exception as e:
+            log.warning("Tableau de bord complet de la source %s impossible : %s", id_source, e)
+        finally:
+            with _verrou_complets:
+                _complets_en_cours.discard(id_source)
+    threading.Thread(target=calcul, daemon=True, name=f"tableau-complet-{id_source}").start()
+
+
 def tableau_de_bord(id_source: int, proprietaire: str, devise: str = "XAF") -> dict:
-    """Indicateurs et graphiques adaptés à la base, montants dans la monnaie choisie."""
+    """Indicateurs et graphiques adaptés à la base, montants dans la monnaie choisie.
+
+    Grandes tables : un aperçu sur échantillon s'affiche en quelques secondes, pendant que le calcul sur TOUTES les
+    lignes tourne en arrière-plan ; le résultat complet est gardé en base et s'affiche ensuite immédiatement."""
     from . import tableau
     if id_source == DEMO_ID:
         profil, type_source, eng, devise_base, nom = profil_demo(), "demo", db.moteur_lecture, "XAF", "Démonstration VoiceBank"
@@ -439,20 +486,27 @@ def tableau_de_bord(id_source: int, proprietaire: str, devise: str = "XAF") -> d
         profil, type_source, devise_base, nom = l.profil, l.type_source, devise_source(l), l.nom
         date_analyse = l.date_analyse.isoformat() if l.date_analyse else None
         eng = None
+    cle_stock = f"{date_analyse}|{devise_base}"[:80]
+
     def calcul():
         if id_source == DEMO_ID:
             return tableau.calculer(eng, type_source, profil)
-        # Résultat gardé en base pour la même analyse et de moins d'une heure : affichage immédiat, même après un
-        # redémarrage du serveur (offre gratuite) ; sinon calcul, puis rangement pour les prochaines fois.
-        cle_stock = f"{date_analyse}|{devise_base}"[:80]
-        r = db.ecrire("SELECT tableau FROM voicebank.sources_donnees WHERE id_source = :i AND tableau_cle = :c "
-                      "AND tableau_date > LOCALTIMESTAMP - INTERVAL '1 hour'", {"i": id_source, "c": cle_stock}).lignes
-        if r and r[0].tableau:
-            return r[0].tableau
-        res = tableau.calculer(_moteur_source(l), type_source, profil)
-        db.ecrire("UPDATE voicebank.sources_donnees SET tableau = CAST(:t AS JSONB), tableau_cle = :c, "
-                  "tableau_date = LOCALTIMESTAMP WHERE id_source = :i",
-                  {"i": id_source, "c": cle_stock, "t": json.dumps(res, ensure_ascii=False, default=str)})
+        r = db.ecrire("SELECT tableau, tableau_cle = :c AS meme, tableau_date > LOCALTIMESTAMP - INTERVAL '1 hour' AS recent, "
+                      f"tableau_date > LOCALTIMESTAMP - INTERVAL '{FRAICHEUR_COMPLET_H} hours' AS frais "
+                      "FROM voicebank.sources_donnees WHERE id_source = :i", {"i": id_source, "c": cle_stock}).lignes
+        stock = r[0] if r and r[0].tableau and r[0].meme else None
+        # Résultat complet de la même analyse : toujours affiché tout de suite (recalculé en fond s'il vieillit)
+        if stock and stock.tableau.get("complet"):
+            if not stock.frais:
+                _lancer_calcul_complet(id_source, proprietaire, cle_stock, stock.tableau)
+            return stock.tableau
+        if stock and stock.recent:
+            res = stock.tableau
+        else:
+            res = tableau.calculer(_moteur_source(l), type_source, profil)
+            _ranger_tableau(id_source, cle_stock, res)
+        if not res.get("complet", True):
+            _lancer_calcul_complet(id_source, proprietaire, cle_stock, res)
         return res
     try:
         brut = tableau.tableau((id_source, proprietaire, date_analyse, devise_base), calcul)
@@ -466,7 +520,9 @@ def tableau_de_bord(id_source: int, proprietaire: str, devise: str = "XAF") -> d
         cles = {s["cle"] for s in g["series"] if s.get("montant")}
         graphiques.append({**g, "donnees": [{k: conv(v) if k in cles else v for k, v in p.items()} for p in g["donnees"]]})
     return {"source": {"id": id_source, "nom": nom}, "devise": devise, "devise_base": devise_base,
-            "domaine": profil.get("domaine"), "indicateurs": indicateurs, "graphiques": graphiques}
+            "domaine": profil.get("domaine"), "indicateurs": indicateurs, "graphiques": graphiques,
+            "complet": brut.get("complet", True), "complet_le": brut.get("complet_le"),
+            "calcul_complet_en_cours": id_source in _complets_en_cours}
 
 
 # ── Risques adaptés à la base (fraude, crédit) ───────────────────────

@@ -160,3 +160,38 @@ def test_tableau_de_bord_grande_table_sur_echantillon(tmp_path):
     assert rep["echantillon"] == 120 and sum(p["nb"] for p in rep["donnees"]) == 120
     petit = tableau.calculer(eng, "fichier", profil)                       # seuil normal : toute la table
     assert next(i for i in petit["indicateurs"] if i["type"] == "montant")["valeur"] == 300 * 1000.0
+
+
+def test_tableau_de_bord_complet_en_arriere_plan(tmp_path):
+    """Grande table : aperçu sur échantillon tout de suite, puis calcul sur toutes les lignes en arrière-plan, rangé
+    en base et affiché ensuite immédiatement."""
+    import sqlite3
+    import time as _t
+    from types import SimpleNamespace
+
+    from app.connecteur import analyse, service, tableau
+    chemin = tmp_path / "banque.sqlite"
+    c = sqlite3.connect(chemin)
+    c.execute("CREATE TABLE transactions (id INTEGER PRIMARY KEY, montant REAL, ville TEXT, date_operation TEXT)")
+    c.executemany("INSERT INTO transactions VALUES (?, ?, ?, ?)",
+                  [(i, 1000.0, ["Douala", "Yaoundé"][i % 2], f"2026-{1 + i % 9:02d}-15") for i in range(300)])
+    c.commit(); c.close()
+    eng = C.moteur("fichier", {}, chemin)
+    profil = analyse.analyser(eng, "fichier", "sqlite", None)
+    profil["tables"][0]["lignes"] = 300
+    ligne = SimpleNamespace(type_source="fichier", profil=profil)
+    ranges = []
+    with patch.object(tableau, "GRANDE_TABLE", 100), patch.object(tableau, "ECHANTILLON_TABLEAU", 120), \
+            patch.object(service, "_ligne", return_value=ligne), patch.object(service, "_moteur_source", return_value=eng), \
+            patch.object(service, "_ranger_tableau", side_effect=lambda i, c, r: ranges.append(r)):
+        rapide = tableau.calculer(eng, "fichier", profil)
+        assert rapide["complet"] is False
+        service._lancer_calcul_complet(987654, "x", "cle", rapide)
+        service._lancer_calcul_complet(987654, "x", "cle", rapide)          # déjà en cours : pas de second calcul
+        for _ in range(100):
+            if 987654 not in service._complets_en_cours:
+                break
+            _t.sleep(0.05)
+    assert len(ranges) == 1 and ranges[0]["complet"] is True and ranges[0]["complet_le"]
+    montant = next(i for i in ranges[0]["indicateurs"] if i["type"] == "montant")
+    assert montant["valeur"] == 300 * 1000.0 and not montant.get("echantillon")

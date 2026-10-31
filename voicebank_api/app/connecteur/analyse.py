@@ -36,7 +36,10 @@ def _echantillon(conn, nom, schema, dialecte, colonnes):
     sql = (exp.select(*[exp.column(exp.to_identifier(c, quoted=True)) for c in lisibles])
            .from_(_table_sql(nom, schema, dialecte)).limit(ECHANTILLON).sql(dialect=dialecte))
     res = conn.exec_driver_sql(sql)
-    return pd.DataFrame(res.fetchall(), columns=list(res.keys()))
+    # Colonnes binaires (BLOB, fichiers compressés…) : remplacées par leur taille, jamais lues comme du texte
+    lignes = [tuple(f"<{len(bytes(v))} octets>" if isinstance(v, (bytes, bytearray, memoryview)) else v for v in l)
+              for l in res.fetchall()]
+    return pd.DataFrame(lignes, columns=list(res.keys()))
 
 
 def _compter(conn, nom, schema, dialecte, type_source) -> int | None:

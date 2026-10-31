@@ -15,12 +15,14 @@
     {
       "src": "logo192.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any"
     },
     {
       "src": "logo512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any"
     },
     {
       "src": "icone-adaptative-192.png",
@@ -49,5 +51,40 @@
     "finance",
     "business",
     "productivity"
-  ]
+  ],
+  "screenshots": [
+    {
+      "src": "captures/telephone-assistant.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Assistant vocal : une question en français, une réponse chiffrée et parlée"
+    },
+    {
+      "src": "captures/telephone-alertes.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Alertes de fraude classées par niveau de risque"
+    },
+    {
+      "src": "captures/ordinateur-assistant.png",
+      "sizes": "1440x900",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Assistant vocal avec graphique et requête SQL vérifiée"
+    },
+    {
+      "src": "captures/ordinateur-alertes.png",
+      "sizes": "1440x900",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Traitement des alertes de fraude"
+    }
+  ],
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  "handle_links": "preferred",
+  "prefer_related_applications": false
 }

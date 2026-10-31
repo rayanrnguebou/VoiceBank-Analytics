@@ -41,6 +41,7 @@ SCENARIOS = [
     ("test_2fa_obligatoire", {"DOUBLE_AUTH_ADMINS": "obligatoire"}),
     ("test_sso", {}), ("test_anglais", {}), ("test_confort", {}), ("test_approbation", {}),
     ("attaques", {}),
+    ("captures_magasin", {}),           # lancé seulement à la demande : --seulement captures_magasin
 ]
 
 
@@ -192,7 +193,7 @@ def main():
     captures.mkdir(exist_ok=True)
     try:
         for nom, reglages in SCENARIOS:
-            if choix and nom not in choix:
+            if (choix and nom not in choix) or (not choix and nom == "captures_magasin"):
                 continue
             api.assurer(reglages)
             print(f"\n══ {nom}", flush=True)

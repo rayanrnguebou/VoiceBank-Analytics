@@ -229,7 +229,11 @@ def moteur(type_source: str, cfg: dict, chemin_fichier: Path | None = None):
         elif ssl == "verifie":
             args["ssl"] = {"ca": certifi.where(), "check_hostname": True}
     elif type_source == "sqlserver":
-        url = URL.create("mssql+pymssql", host=ip, **commun)
+        # Azure SQL (et ses passerelles) aiguille la connexion d'après le NOM du serveur : par l'adresse IP seule, il
+        # répond « Cannot open server requested by the login » (40532). Le nom a été vérifié (adresse publique).
+        hote = (cfg.get("hote") or "").strip().lower()
+        azure = hote.endswith((".database.windows.net", ".database.chinacloudapi.cn", ".database.usgovcloudapi.net"))
+        url = URL.create("mssql+pymssql", host=hote if azure else ip, **commun)
         args = {"login_timeout": 10, "timeout": t + 5, "appname": "VoiceBank Analytics"}
     elif type_source == "oracle":
         # « base » = nom du service (ex. ORCLPDB1, XEPDB1, FREEPDB1). Chiffrement TLS (TCPS) en « exigé » / « vérifié » :
@@ -340,6 +344,13 @@ def message_erreur(e: Exception) -> str:
     if "codec can't decode" in t:
         return ("Le serveur renvoie du texte dans un encodage inattendu" + _lieu(e) + ". Réessaie ; si l'erreur persiste, "
                 "choisis l'option SSL « Exigé » ou vérifie le jeu de caractères de la base.")
+    if "40615" in t or "is not allowed to access the server" in t:
+        m = re.search(r"client with ip address '([\d.:a-f]+)'", t)
+        return ("Le pare-feu Azure refuse la connexion" + (f" depuis l'adresse {m.group(1)}" if m else "") + " : dans le portail "
+                "Azure, ouvre le serveur SQL → Mise en réseau, et ajoute une règle de pare-feu pour cette adresse.")
+    if "40532" in t or "cannot open server" in t:
+        return ("Azure SQL ne reconnaît pas le serveur demandé : saisis l'adresse complète du serveur "
+                "(tonserveur.database.windows.net), pas une adresse IP.")
     if "endpoint id" in t or "endpoint is not specified" in t:
         return ("Neon demande le nom complet du serveur : saisis l'adresse entière (ep-….neon.tech), pas une adresse IP.")
     if "unsupported startup parameter" in t:

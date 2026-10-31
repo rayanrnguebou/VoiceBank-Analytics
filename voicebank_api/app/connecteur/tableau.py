@@ -23,6 +23,10 @@ ORDRE = ["clients", "comptes", "transactions", "ventes", "crédits", "contrats",
 FAITS = ["transactions", "ventes", "remboursements", "crédits", "sinistres", "alertes", "contrats", "épargne"]
 VRAI = {"1", "true", "t", "oui", "yes", "y", "o", "vrai", "fraude", "fraud", "suspect", "suspecte"}
 _memoire = Memoire(frais=600, garde=24 * 3600)
+# Au-delà, les répartitions et évolutions sont calculées sur les lignes les plus récentes lues (échantillon) :
+# quelques secondes au lieu de plusieurs minutes sur une grosse base distante. C'est indiqué sous le graphique.
+GRANDE_TABLE = 100_000
+ECHANTILLON_TABLEAU = 100_000
 
 
 def _titre(t: dict) -> str:
@@ -80,6 +84,14 @@ def _nombre(v):
         return None
 
 
+def _depuis(t: dict, schema: str | None, colonnes: list[str]):
+    """La table, ou pour une grande table un échantillon de ses lignes (sous-requête limitée)."""
+    if (t.get("lignes") or 0) <= GRANDE_TABLE:
+        return _table(t, schema), None
+    sous = exp.select(*[_c(c) for c in dict.fromkeys(colonnes)]).from_(_table(t, schema)).limit(ECHANTILLON_TABLEAU)
+    return sous.subquery("echantillon"), ECHANTILLON_TABLEAU
+
+
 def calculer(eng, type_source: str, profil: dict) -> dict:
     """Indicateurs et graphiques, montants dans la monnaie de la base."""
     req = _Executeur(eng, type_source, profil)
@@ -105,11 +117,13 @@ def calculer(eng, type_source: str, profil: dict) -> dict:
         f = _col(t, "drapeau_fraude")
         if not f:
             continue
+        depuis, ech = _depuis(t, req.schema, [f["nom"]])
         lignes = req(exp.select(_c(f["nom"]).as_("v"), exp.Count(this=exp.Star()).as_("nb"))
-                     .from_(_table(t, req.schema)).group_by(_c(f["nom"])))
+                     .from_(depuis).group_by(_c(f["nom"])))
         if lignes is not None:
             nb = sum(int(_nombre(l["nb"]) or 0) for l in lignes if str(l["v"]).strip().lower() in VRAI)
-            indicateurs.append({"titre": "Fraudes", "valeur": nb, "type": "nombre", "entite": "alertes", "table": t["nom"]})
+            indicateurs.append({"titre": "Fraudes", "valeur": nb, "type": "nombre", "entite": "alertes", "table": t["nom"],
+                                "echantillon": ech})
             break
 
     # 3. Montant total de la table la plus parlante (crédits d'abord : l'encours)
@@ -117,11 +131,12 @@ def calculer(eng, type_source: str, profil: dict) -> dict:
                        key=lambda t: (0 if t.get("entite") == "crédits" else 1 if t.get("entite") in FAITS else 2, _rang(t)))
     for t in candidats[:2]:
         m = _col(t, "montant")
-        lignes = req(exp.select(exp.Sum(this=_c(m["nom"])).as_("total")).from_(_table(t, req.schema)), 1)
+        depuis, ech = _depuis(t, req.schema, [m["nom"]])
+        lignes = req(exp.select(exp.Sum(this=_c(m["nom"])).as_("total")).from_(depuis), 1)
         total = _nombre(lignes[0]["total"]) if lignes else None
         if total is not None:
             indicateurs.append({"titre": f"Montant des {(t.get('entite') or sem.en_francais(t['nom']))}", "valeur": total, "type": "montant",
-                                "entite": t.get("entite"), "table": t["nom"], "colonne": m["nom"]})
+                                "entite": t.get("entite"), "table": t["nom"], "colonne": m["nom"], "echantillon": ech})
             break
 
     # 4. Compléter jusqu'à 4 avec d'autres entités
@@ -140,7 +155,8 @@ def calculer(eng, type_source: str, profil: dict) -> dict:
         selection = [annee.copy().as_("annee"), mois.copy().as_("mois"), exp.Count(this=exp.Star()).as_("nb")]
         if m:
             selection.append(exp.Sum(this=_c(m["nom"])).as_("total"))
-        lignes = req(exp.select(*selection).from_(_table(t, req.schema))
+        depuis, ech = _depuis(t, req.schema, [d["nom"]] + ([m["nom"]] if m else []))
+        lignes = req(exp.select(*selection).from_(depuis)
                      .where(exp.and_(_c(d["nom"]).is_(exp.null()).not_(),
                                      exp.LTE(this=_c(d["nom"]), expression=exp.CurrentDate())))  # pas de dates futures
                      .group_by(annee.copy(), mois.copy())
@@ -153,11 +169,11 @@ def calculer(eng, type_source: str, profil: dict) -> dict:
                                "total": _nombre(l.get("total"))})
         if len(points) >= 2:
             graphiques.append({"id": "evolution", "titre": f"{_titre(t)} par mois", "type": "line", "donnees": points,
-                               "series": [{"cle": "nb", "nom": "Nombre"}], "temps": True})
+                               "series": [{"cle": "nb", "nom": "Nombre"}], "temps": True, "echantillon": ech})
             if m and any(p["total"] for p in points):
                 graphiques.append({"id": "montant_mois", "titre": f"Montant des {(t.get('entite') or sem.en_francais(t['nom']))} par mois",
                                    "type": "bar", "donnees": points, "series": [{"cle": "total", "nom": "Montant", "montant": True}],
-                                   "temps": True})
+                                   "temps": True, "echantillon": ech})
             break
 
     # Graphiques : répartition par lieu, statut ou catégorie (2 au plus, tables différentes si possible)
@@ -169,7 +185,8 @@ def calculer(eng, type_source: str, profil: dict) -> dict:
         if not c or c["role"] == "drapeau_fraude" or (t["nom"], c["nom"]) in deja:
             continue
         nb = exp.Count(this=exp.Star())
-        lignes = req(exp.select(_c(c["nom"]).as_("label"), nb.copy().as_("nb")).from_(_table(t, req.schema))
+        depuis, ech = _depuis(t, req.schema, [c["nom"]])
+        lignes = req(exp.select(_c(c["nom"]).as_("label"), nb.copy().as_("nb")).from_(depuis)
                      .where(_c(c["nom"]).is_(exp.null()).not_()).group_by(_c(c["nom"]))
                      .order_by(exp.Ordered(this=nb.copy(), desc=True)), 8)
         if lignes and len(lignes) >= 2:
@@ -177,7 +194,7 @@ def calculer(eng, type_source: str, profil: dict) -> dict:
             graphiques.append({"id": f"repartition_{len(deja)}",
                                "titre": f"{_titre(t)} par {sem.en_francais(c['nom'])}", "type": "bar",
                                "donnees": [{"label": str(l["label"])[:30], "nb": int(_nombre(l["nb"]) or 0)} for l in lignes],
-                               "series": [{"cle": "nb", "nom": "Nombre"}], "temps": False})
+                               "series": [{"cle": "nb", "nom": "Nombre"}], "temps": False, "echantillon": ech})
 
     return {"indicateurs": indicateurs, "graphiques": graphiques[:4]}
 

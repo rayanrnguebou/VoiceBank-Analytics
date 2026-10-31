@@ -237,6 +237,9 @@ def analyser(id_source: int, proprietaire: str):
         profil["devise_detectee"] = devises.detecter_devise(profil)
         db.ecrire("UPDATE voicebank.sources_donnees SET statut = 'pret', profil = CAST(:p AS JSONB), date_analyse = NOW() "
                   "WHERE id_source = :i", {"i": id_source, "p": json.dumps(profil, ensure_ascii=False, default=str)})
+        # Tableau de bord préparé tout de suite : il sera prêt quand l'utilisateur l'ouvrira
+        threading.Thread(target=_preparer_tableau, args=(id_source, proprietaire), daemon=True,
+                         name=f"tableau-{id_source}").start()
     except Exception as e:
         log.warning("Analyse de la source %s impossible : %s", id_source, e, exc_info=True)
         db.ecrire("UPDATE voicebank.sources_donnees SET statut = 'erreur', erreur = :e WHERE id_source = :i",
@@ -415,6 +418,13 @@ def repondre(id_source: int, proprietaire: str, role: str, question: str, devise
             "devise": devise, "devise_base": devise_base, "colonnes_monetaires": [c for c in colonnes if c.lower() in monetaires]}
 
 
+def _preparer_tableau(id_source: int, proprietaire: str):
+    try:
+        tableau_de_bord(id_source, proprietaire)
+    except Exception as e:                      # l'utilisateur verra l'erreur en ouvrant le tableau de bord
+        log.info("Préparation du tableau de bord de la source %s impossible : %s", id_source, e)
+
+
 def tableau_de_bord(id_source: int, proprietaire: str, devise: str = "XAF") -> dict:
     """Indicateurs et graphiques adaptés à la base, montants dans la monnaie choisie."""
     from . import tableau
@@ -429,7 +439,21 @@ def tableau_de_bord(id_source: int, proprietaire: str, devise: str = "XAF") -> d
         profil, type_source, devise_base, nom = l.profil, l.type_source, devise_source(l), l.nom
         date_analyse = l.date_analyse.isoformat() if l.date_analyse else None
         eng = None
-    calcul = lambda: tableau.calculer(eng if eng is not None else _moteur_source(l), type_source, profil)  # noqa: E731
+    def calcul():
+        if id_source == DEMO_ID:
+            return tableau.calculer(eng, type_source, profil)
+        # Résultat gardé en base pour la même analyse et de moins d'une heure : affichage immédiat, même après un
+        # redémarrage du serveur (offre gratuite) ; sinon calcul, puis rangement pour les prochaines fois.
+        cle_stock = f"{date_analyse}|{devise_base}"[:80]
+        r = db.ecrire("SELECT tableau FROM voicebank.sources_donnees WHERE id_source = :i AND tableau_cle = :c "
+                      "AND tableau_date > LOCALTIMESTAMP - INTERVAL '1 hour'", {"i": id_source, "c": cle_stock}).lignes
+        if r and r[0].tableau:
+            return r[0].tableau
+        res = tableau.calculer(_moteur_source(l), type_source, profil)
+        db.ecrire("UPDATE voicebank.sources_donnees SET tableau = CAST(:t AS JSONB), tableau_cle = :c, "
+                  "tableau_date = LOCALTIMESTAMP WHERE id_source = :i",
+                  {"i": id_source, "c": cle_stock, "t": json.dumps(res, ensure_ascii=False, default=str)})
+        return res
     try:
         brut = tableau.tableau((id_source, proprietaire, date_analyse, devise_base), calcul)
     except Exception as e:

@@ -854,3 +854,8 @@ CREATE TABLE IF NOT EXISTS voicebank.appels_api (
 );
 CREATE INDEX IF NOT EXISTS idx_appels_api_cle ON voicebank.appels_api (id_cle, id_appel DESC);
 CREATE INDEX IF NOT EXISTS idx_appels_api_date ON voicebank.appels_api (date_appel);
+
+-- Tableau de bord d'une base connectée, gardé pour un affichage immédiat (même après un redémarrage du serveur)
+ALTER TABLE voicebank.sources_donnees ADD COLUMN IF NOT EXISTS tableau JSONB;
+ALTER TABLE voicebank.sources_donnees ADD COLUMN IF NOT EXISTS tableau_cle VARCHAR(80);
+ALTER TABLE voicebank.sources_donnees ADD COLUMN IF NOT EXISTS tableau_date TIMESTAMP;

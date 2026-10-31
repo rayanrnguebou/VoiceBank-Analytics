@@ -124,7 +124,9 @@ with sync_playwright() as p:
     r = requests.post(f"{API}/api/v1/operations/score", headers={"Authorization": f"Bearer {cle}"},
                       json={"reference": "CORE-0001", "montant": 980_000_000, "heure": 3}, timeout=60)
     assert r.status_code == 200, r.text
-    assert r.json()["decision"] in ("verifier", "bloquer") and r.json()["raisons"], r.json()
+    # Clé créée en observation (choix par défaut) : rien n'est bloqué, l'avis de VoiceBank est donné à part
+    assert r.json()["mode"] == "observation" and r.json()["decision"] == "accepter", r.json()
+    assert r.json()["decision_voicebank"] in ("verifier", "bloquer") and r.json()["raisons"], r.json()
     assert requests.post(f"{API}/api/v1/operations/score", json={"montant": 1}, timeout=30).status_code == 401
     page.reload()
     # Annonce du premier appel, badge vert « en ligne » dans le menu
@@ -142,10 +144,19 @@ with sync_playwright() as p:
                   json={"reference": "CORE-0002", "montant": 5000, "heure": 11}, timeout=60)
     expect(page.get_by_role("cell", name="CORE-0002")).to_be_visible(timeout=15000)
     expect(page.get_by_text(re.compile(r"Dernière opération : CORE-0002"))).to_be_visible()
+    expect(page.get_by_text("Aurait bloqué").first).to_be_visible()        # observation : ce que VoiceBank aurait fait
     page.wait_for_timeout(1300)
     page.screenshot(path="logiciel_en_direct.png", full_page=True)
+    # Après comparaison : activation du blocage, la même opération est désormais bloquée
+    page.get_by_role("button", name="Tous les logiciels").click()
+    page.get_by_role("button", name="Activer le blocage").click(timeout=20000)
+    expect(page.get_by_role("button", name="Repasser en observation")).to_be_visible(timeout=20000)
+    r2 = requests.post(f"{API}/api/v1/operations/score", headers={"Authorization": f"Bearer {cle}"},
+                       json={"reference": "CORE-0003", "montant": 980_000_000, "heure": 3}, timeout=60).json()
+    assert r2["mode"] == "actif" and r2["decision"] == r2["decision_voicebank"] != "accepter", r2
+    print("5 sexies. mode observation (« aurait bloqué »), puis blocage activé : la décision s'applique")
     print("5 quinquies. logiciel « en ligne », tableau de bord en direct : le nouvel appel apparaît sans recharger")
-    print(f"5 quater. clé d'API créée ; score en temps réel : décision « {r.json()['decision']} », appel compté")
+    print(f"5 quater. clé d'API créée ; score en temps réel : avis « {r.json()['decision_voicebank']} », appel compté")
 
     # 6. Mobile
     nav("Recouvrement").click()

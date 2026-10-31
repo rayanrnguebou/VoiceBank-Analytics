@@ -1,5 +1,5 @@
 // Brancher le logiciel bancaire : clés d'API et exemple d'appel du score de fraude en temps réel.
-// Visible par l'administrateur de l'organisation seulement (l'API répond 403 aux autres : la carte ne s'affiche pas).
+// L'administrateur de l'organisation crée les clés ; les autres voient la carte avec la marche à suivre.
 import { useCallback, useEffect, useState } from "react";
 import { KeyRound, Copy, Check, Plug } from "lucide-react";
 import { http, API, messageErreur } from "../api";
@@ -14,18 +14,17 @@ function Copier({ texte, dark }) {
   );
 }
 
-export function ClesApi({ source, dark, categories = [] }) {
+export function ClesApi({ source, dark, categories = [], onMesDonnees }) {
   const [cles, setCles] = useState(null);
   const [nom, setNom] = useState("");
   const [nouvelle, setNouvelle] = useState(null);
   const [erreur, setErreur] = useState(null);
-  const [masquer, setMasquer] = useState(false);
+  const [refus, setRefus] = useState(null);
   const charger = useCallback(() => {
     http.get(`/sources/${source.id}/cles-api`, { silencieux: true }).then(r => setCles(r.data.data))
-      .catch(e => { if (e.response?.status === 403) setMasquer(true); else setErreur(messageErreur(e)); });
+      .catch(e => { if (e.response?.status === 403) setRefus(messageErreur(e)); else setErreur(messageErreur(e)); });
   }, [source.id]);
   useEffect(() => { charger(); }, [charger]);
-  if (masquer) return null;
 
   const creer = async e => {
     e.preventDefault(); setErreur(null);
@@ -43,11 +42,22 @@ export function ClesApi({ source, dark, categories = [] }) {
   -d '{"reference": "OP-2026-0001", "montant": 250000, "heure": 14${categories.slice(0, 2).map(c => `, "categories": {"${c.colonne}": "${c.valeurs[0]}"}`).slice(0, 1).join("")}}'`;
 
   return (
-    <div className={`${carte(dark)} mt-4`}>
+    <div className={`${carte(dark)} ${onMesDonnees ? "" : "mt-4"}`}>
       <h2 className={`${titre(dark)} flex items-center gap-2`}><Plug size={18} />{" "}{tx("Brancher votre logiciel bancaire")}</h2>
       <p className={`${texteDiscret(dark)} mt-1`}>
         {tx("Votre logiciel envoie chaque opération avant de la valider ; VoiceBank répond en moins d'une seconde : accepter, vérifier ou bloquer, avec les raisons. Les opérations à vérifier ou à bloquer arrivent aussi dans « Alertes de fraude » pour l'équipe.")}
       </p>
+      {refus && (
+        <div className={`mt-4 rounded-xl p-4 text-sm ${dark ? "bg-gray-700/50 text-gray-200" : "bg-gray-50 text-gray-700"}`}>
+          <p>{refus}</p>
+          <ol className="mt-2 list-decimal pl-5 space-y-1 text-xs">
+            <li>{tx("Branchez la base de votre organisation dans « Mes données » (administrateur de l'organisation).")}</li>
+            <li>{tx("Choisissez-la dans « Données interrogées », puis revenez ici : créez une clé et donnez-la à votre prestataire informatique.")}</li>
+            <li>{tx("Votre logiciel appelle l'adresse ci-dessous avant de valider chaque opération.")}</li>
+          </ol>
+          {onMesDonnees && <button onClick={onMesDonnees} className={`${boutonPrincipal} mt-3`}>{tx("Mes données")}</button>}
+        </div>
+      )}
       {nouvelle && (
         <div role="status" className="mt-4 rounded-xl border border-laiton-400/40 bg-laiton-400/10 p-4">
           <p className="text-sm font-semibold">{tx("Clé « {nom} » créée : copiez-la maintenant, elle ne sera plus jamais affichée.", { nom: nouvelle.nom })}</p>
@@ -57,12 +67,12 @@ export function ClesApi({ source, dark, categories = [] }) {
           </div>
         </div>
       )}
-      <form onSubmit={creer} className="mt-4 flex flex-wrap gap-2">
+      {!refus && <form onSubmit={creer} className="mt-4 flex flex-wrap gap-2">
         <input value={nom} onChange={e => setNom(e.target.value)} required minLength={2} maxLength={80}
           placeholder={tx("Nom de la clé (ex. : Logiciel Amplitude, agence de Douala)")} aria-label={tx("Nom de la clé")}
           className={`${champ(dark)} flex-1 min-w-[14rem]`} />
         <button type="submit" className={boutonPrincipal}><KeyRound size={14} className="inline mr-1" />{tx("Créer une clé")}</button>
-      </form>
+      </form>}
       {erreur && <p role="alert" className="mt-2 text-xs text-red-500">{erreur}</p>}
       {cles?.length > 0 && (
         <ul className="mt-4 space-y-2">

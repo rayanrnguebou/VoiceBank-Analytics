@@ -6,6 +6,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { LienCookies } from "./consentement";
 import { PanelRecouvrement } from "./panneaux/Recouvrement";
 import { PanelValeur } from "./panneaux/Valeur";
+import { ClesApi } from "./panneaux/ClesApi";
 import { http, lireSession, deconnexion, messageErreur, appliquerJeton } from "./api";
 import EcranAccueil from "./panneaux/Accueil";
 import { BandeauAcces, PanelAbonnement, PanelAbonnements } from "./panneaux/Abonnement";
@@ -364,6 +365,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
     analyse:       { titre: tx("Analyse de transaction"),  sousTitre: tx("Estimer le risque de fraude d'une opération") },
     credit:        { titre: tx("Score de crédit"),         sousTitre: sourceActive ? tx("Portefeuille de crédits de « {nom} »", { nom: sourceActive.nom }) : tx("Risque de défaut d'une demande ou d'un crédit en cours") },
     recouvrement:  { titre: tx("Recouvrement"),            sousTitre: tx("Crédits en retard de « {nom} » : qui relancer d'abord, promesses et paiements", { nom: sourceActive?.nom || tx("Démonstration VoiceBank") }) },
+    api:           { titre: tx("Logiciel bancaire"),       sousTitre: tx("Brancher votre logiciel : score de fraude en temps réel avant chaque opération") },
     valeur:        { titre: tx("Valeur créée"),            sousTitre: tx("Argent récupéré, fraude évitée et temps gagné, chiffres à l'appui") },
     historique:    { titre: tx("Historique"),              sousTitre: tx("Questions de la session et rapport PDF") },
     modeles:       { titre: tx("Fiche des modèles"),       sousTitre: sourceActive ? tx("Modèles d'IA appris sur « {nom} » : données, fiabilité, dérive", { nom: sourceActive.nom }) : tx("Modèles d'IA de la démonstration : données, fiabilité, limites") },
@@ -614,7 +616,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
             </>
           )}
           {page === "donnees"    && <PanelSources dark={dark} onInterroger={choisirSource} onAbonnement={() => allerA("abonnement")} />}
-          {["alertes", "analyse", "credit", "recouvrement", "valeur"].includes(page) && (
+          {["alertes", "analyse", "credit", "recouvrement", "valeur", "api"].includes(page) && (
             <BarreSourceRisque dark={dark} sourceActive={sourceActive} sourcesPretes={sourcesPretes} externe={externe}
               onChoisir={s => choisirSource(s, null, true)} onMesDonnees={() => allerA("donnees")} />
           )}
@@ -622,6 +624,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
                                                   : <PanelAlertes dark={dark} onChange={rafraichirCompteurs} />)}
           {page === "analyse"    && (sourceActive ? <PanelAnalyseSource key={sourceActive.id} source={sourceActive} dark={dark} />
                                                   : <PanelAnalyse dark={dark} />)}
+          {page === "api"        && <ClesApi key={sourceActive?.id || 0} source={sourceActive || { id: 0 }} dark={dark} onMesDonnees={() => allerA("donnees")} />}
           {page === "credit"     && (sourceActive ? <PanelCreditSource key={sourceActive.id} source={sourceActive} dark={dark} />
                                                   : <PanelCredit dark={dark} />)}
           {page === "recouvrement" && <PanelRecouvrement key={sourceActive?.id || 0} source={sourceActive} dark={dark} onValeur={() => allerA("valeur")} />}

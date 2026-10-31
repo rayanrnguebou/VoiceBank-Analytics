@@ -211,7 +211,7 @@ export function PanelAnalyseSource({ source, dark }) {
       {res && <p className={`${texteDiscret(dark)} mt-4`}>{res.explication}</p>}
       <ResultatRisque resultat={res} dark={dark} type="fraude" />
     </div>
-    {source.id !== 0 && <ClesApi source={source} dark={dark} categories={f.categories} />}
+    <ClesApi source={source} dark={dark} categories={f.categories} />
     </>
   );
 }

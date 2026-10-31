@@ -4,6 +4,7 @@ Tout est calculé sur un ÉCHANTILLON (500 lignes par table au plus) et quelques
 avec des délais limités : l'analyse reste rapide et légère, même sur une grosse base de production.
 """
 import logging
+import time
 import re
 from datetime import date, datetime, timedelta
 
@@ -297,17 +298,26 @@ def analyser(eng, type_source: str, dialecte: str, schema: str | None, tables_pe
     tables = {}
     with connexion_lecture(eng, type_source) as conn:
         for nom in noms:
-            try:
-                cols_sql = insp.get_columns(nom, schema=schema)
+            for _ in range(3):
                 try:
-                    pk = insp.get_pk_constraint(nom, schema=schema).get("constrained_columns") or []
-                except Exception:
-                    pk = []
-                df = _echantillon(conn, nom, schema, dialecte, [c["name"] for c in cols_sql])
-                lignes = _compter(conn, nom, schema, dialecte, type_source)
-            except Exception as e:
-                conn.rollback()
-                log.warning("Analyse impossible de la table %s : %s", nom, e)
+                    cols_sql = insp.get_columns(nom, schema=schema)
+                    try:
+                        pk = insp.get_pk_constraint(nom, schema=schema).get("constrained_columns") or []
+                    except Exception:
+                        pk = []
+                    df = _echantillon(conn, nom, schema, dialecte, [c["name"] for c in cols_sql])
+                    lignes = _compter(conn, nom, schema, dialecte, type_source)
+                    erreur = None
+                    break
+                except Exception as e:
+                    conn.rollback()
+                    erreur = e
+                    # Oracle, table recréée il y a quelques secondes (ORA-01466) : la lecture redevient possible juste après
+                    if "ORA-01466" not in str(e):
+                        break
+                    time.sleep(2)
+            if erreur is not None:
+                log.warning("Analyse impossible de la table %s : %s", nom, erreur)
                 tables[nom] = {"nom": nom, "erreur": "Lecture impossible (droits insuffisants ?)", "colonnes": [],
                                "cle_primaire": [], "lignes": None, "entite": sem.entite_table(nom), "doublons": 0}
                 continue

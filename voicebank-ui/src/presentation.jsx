@@ -1,16 +1,14 @@
 // Présentation animée « VoiceBank aussi sur ton téléphone » : à CHAQUE ouverture du site dans un navigateur (y compris
-// un rechargement), tant que personne ne s'est encore connecté depuis cet appareil. Jamais dans l'application installée
-// (Android, écran d'accueil), jamais une fois connecté. Le bandeau des cookies s'affiche juste après sa fermeture.
+// un rechargement), pour tout le monde, avec ou sans compte, connecté ou non. Seule exception : l'application installée
+// (Android, écran d'accueil), où proposer de l'installer n'aurait pas de sens. Le bandeau des cookies suit sa fermeture.
 // Motifs : géométrie originale inspirée des tissus d'Afrique (ndop camerounais : losanges, damiers, cercles indigo),
 // salutations africaines et internationales, silhouette de grande ville.
 import { useEffect, useRef, useState } from "react";
 import { Download, Monitor, Play, Share, Smartphone, SquarePlus, X } from "lucide-react";
 import { tx } from "./i18n";
-import { lireSession } from "./api";
 import { Film, STYLE_FILM, TEXTE_FIN, dire, taire } from "./film";
 
 const PLAY_STORE = import.meta.env.REACT_APP_PLAY_STORE_URL || "";
-const CLE_COMPTE = "voicebank_compte_connu";
 export const EVENEMENT_FERMEE = "voicebank-presentation-fermee";
 
 export const SALUTATIONS = ["Bienvenue", "Mbolo", "Akwaba", "Jambo", "Sannu", "Dalal ak jamm", "Welcome", "Bienvenidos", "Willkommen"];
@@ -19,10 +17,6 @@ export const SALUTATIONS = ["Bienvenue", "Mbolo", "Akwaba", "Jambo", "Sannu", "D
 let invitation = null;
 if (typeof window !== "undefined") {
   window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); invitation = e; });
-}
-
-function lire(stockage, cle) {
-  try { return stockage.getItem(cle); } catch (e) { return null; }
 }
 
 export function appareil() {
@@ -38,7 +32,8 @@ export function applicationInstallee() {
 }
 
 export function doitPresenter() {
-  return !lireSession() && lire(localStorage, CLE_COMPTE) !== "1" && !applicationInstallee();
+  // window.__voicebankSansPresentation : posé uniquement par les tests de bout en bout, pour ne pas couvrir leurs écrans
+  return !applicationInstallee() && !window.__voicebankSansPresentation;
 }
 
 function Motif() {

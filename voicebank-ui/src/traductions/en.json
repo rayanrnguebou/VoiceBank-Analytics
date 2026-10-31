@@ -40,7 +40,7 @@
  "Sécurité": "Security",
  "l'identifiant de cet appareil (« Mes appareils ») et, si tu l'as activée, l'approbation par téléphone": "this device's identifier (“My devices”) and, if you turned it on, phone approval",
  "Tes choix": "Your choices",
- "langue, voix, mode conversation, base de données choisie, ce choix de cookies et le fait que tu as déjà un compte": "language, voice, conversation mode, selected database, this cookie choice and whether you already have an account",
+ "langue, voix, mode conversation, base de données choisie et ce choix de cookies": "language, voice, conversation mode, selected database and this cookie choice",
  "Rapports d'erreurs anonymes": "Anonymous error reports",
  "En cas de plantage, une description technique part chez notre prestataire Sentry : jamais ton nom, ton adresse IP, ce que tu tapes ni tes données bancaires.": "If something crashes, a technical description is sent to our provider Sentry: never your name, IP address, what you type or your banking data.",
  "Tout refuser": "Reject all",

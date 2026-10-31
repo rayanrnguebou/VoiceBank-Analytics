@@ -1,4 +1,4 @@
-// Présentation des applications : à chaque ouverture tant qu'aucun compte n'a servi sur l'appareil, après les cookies.
+// Présentation des applications : à chaque ouverture, pour tout le monde ; le bandeau des cookies vient après.
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { PresentationApplications, doitPresenter } from "./presentation";
 
@@ -28,11 +28,10 @@ test("s'affiche même si les cookies ne sont pas encore choisis, et prévient le
   window.removeEventListener("voicebank-presentation-fermee", fermee);
 });
 
-test("plus jamais une fois qu'un compte s'est connecté sur l'appareil", () => {
-  consentir();
-  localStorage.setItem("voicebank_compte_connu", "1");
+test("toujours affichée, même avec un compte et une session ouverte", () => {
+  sessionStorage.setItem("voicebank_jeton", JSON.stringify({ token: "x", expire: Date.now() + 3600000 }));
   render(<PresentationApplications />);
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.getByRole("dialog", { name: "VoiceBank, aussi dans ta poche" })).toBeInTheDocument();
 });
 
 test("le film enchaîne ses scènes puis montre la carte finale ; la voix lit chaque scène quand le son est activé", async () => {

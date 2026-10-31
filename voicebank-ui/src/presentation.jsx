@@ -4,10 +4,11 @@
 // Motifs : géométrie originale inspirée des tissus d'Afrique (ndop camerounais : losanges, damiers, cercles indigo),
 // salutations africaines et internationales, silhouette de grande ville.
 import { useEffect, useRef, useState } from "react";
-import { Download, Monitor, Share, Smartphone, SquarePlus, X } from "lucide-react";
+import { Download, Monitor, Play, Share, Smartphone, SquarePlus, X } from "lucide-react";
 import { tx } from "./i18n";
 import { lireSession } from "./api";
 import { EVENEMENT_CHOISI, lireConsentement } from "./consentement";
+import { Film, STYLE_FILM, TEXTE_FIN, dire, taire } from "./film";
 
 const PLAY_STORE = import.meta.env.REACT_APP_PLAY_STORE_URL || "";
 const CLE_COMPTE = "voicebank_compte_connu";
@@ -139,8 +140,11 @@ function Action({ type, onFermer }) {
   );
 }
 
+const mouvementReduit = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
 export function PresentationApplications() {
   const [ouvert, setOuvert] = useState(false);
+  const [phase, setPhase] = useState(() => (mouvementReduit() ? "fin" : "film"));     // film, puis carte finale
   const titre = useRef(null);
   const type = appareil();
 
@@ -153,17 +157,19 @@ export function PresentationApplications() {
   }, []);
   useEffect(() => {
     if (!ouvert) return undefined;
-    titre.current?.focus();
+    if (phase === "fin") titre.current?.focus();
     const echap = e => { if (e.key === "Escape") fermer(); };
     window.addEventListener("keydown", echap);
     return () => window.removeEventListener("keydown", echap);
-  }, [ouvert]);
+  }, [ouvert, phase]);
 
   if (!ouvert) return null;
   function fermer() {
+    taire();
     try { sessionStorage.setItem(CLE_VUE, "1"); } catch (e) { /* rien */ }
     setOuvert(false);
   }
+  const finFilm = son => { setPhase("fin"); if (son) dire(tx(TEXTE_FIN)); };
   const plateformes = [["android", "Android"], ["ios", "iPhone"], ["ordinateur", tx("Ordinateur")]];
 
   return (
@@ -177,9 +183,10 @@ export function PresentationApplications() {
         .vb-flotte { animation: vb-flotte 6s ease-in-out infinite; }
         .vb-salut { animation: vb-salut .45s ease-out; }
         .vb-entree { animation: vb-entree .5s cubic-bezier(.2,.8,.2,1); }
+        ${STYLE_FILM}
         @media (prefers-reduced-motion: reduce) { .vb-motif, .vb-flotte, .vb-salut, .vb-entree { animation: none; } }
       `}</style>
-      <section role="dialog" aria-modal="true" aria-labelledby="presentation-titre" onClick={e => e.stopPropagation()}
+      <section role="dialog" aria-modal="true" aria-label={tx("VoiceBank, aussi dans ta poche")} onClick={e => e.stopPropagation()}
         className="vb-entree relative w-full max-w-3xl overflow-hidden rounded-3xl border border-laiton-400/30 bg-gradient-to-br from-[#0E332D] via-[#123F37] to-[#0B2A25] text-white shadow-2xl">
         <Motif />
         <Ville />
@@ -187,7 +194,8 @@ export function PresentationApplications() {
         <button type="button" onClick={fermer} aria-label={tx("Fermer")}
           className="absolute right-3 top-4 z-20 rounded-full bg-black/30 p-1.5 text-gray-200 hover:bg-black/50 hover:text-white"><X size={18} /></button>
 
-        <div className="relative z-10 grid gap-6 px-6 pb-20 pt-9 sm:grid-cols-[1.15fr_1fr] sm:items-center sm:px-10 sm:pb-24">
+        {phase === "film" ? <Film onFin={finFilm} /> : (
+        <div className="vb-entree relative z-10 grid gap-6 px-6 pb-20 pt-9 sm:grid-cols-[1.15fr_1fr] sm:items-center sm:px-10 sm:pb-24">
           <div>
             <Salutations />
             <h2 id="presentation-titre" ref={titre} tabIndex={-1} className="mt-2 text-2xl font-extrabold leading-tight focus:outline-none sm:text-3xl">
@@ -202,12 +210,19 @@ export function PresentationApplications() {
               ))}
             </ul>
             <div className="mt-5"><Action type={type} onFermer={fermer} /></div>
-            <button type="button" onClick={fermer} className="mt-4 text-sm text-gray-300 underline-offset-4 hover:text-white hover:underline">
-              {tx("Continuer sur le site")}
-            </button>
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+              <button type="button" onClick={fermer} className="text-sm text-gray-300 underline-offset-4 hover:text-white hover:underline">
+                {tx("Continuer sur le site")}
+              </button>
+              <button type="button" onClick={() => { taire(); setPhase("film"); }}
+                className="inline-flex items-center gap-1.5 text-sm text-gray-300 hover:text-white">
+                <Play size={14} />{tx("Revoir la vidéo")}
+              </button>
+            </div>
           </div>
           <div className="hidden sm:block"><Telephone /></div>
         </div>
+        )}
       </section>
     </div>
   );

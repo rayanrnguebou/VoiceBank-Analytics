@@ -1,5 +1,5 @@
 // Bandeau des cookies : refus aussi simple que l'acceptation, choix mémorisé, rapports d'erreurs seulement avec accord.
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { BandeauCookies, lireConsentement, ouvrirGestionCookies } from "./consentement";
 
 const demarrer = vi.fn();
@@ -7,11 +7,11 @@ vi.mock("./alertesErreurs", () => ({ demarrerAlertesErreurs: () => demarrer() })
 
 beforeEach(() => { localStorage.clear(); demarrer.mockClear(); });
 
-test("premier passage : bandeau visible ; « Tout refuser » mémorise le refus sans démarrer Sentry", () => {
+test("premier passage : bandeau visible ; « Tout refuser » mémorise le refus sans démarrer Sentry", async () => {
   render(<BandeauCookies />);
   expect(screen.getByRole("dialog", { name: "Ta vie privée, tes choix" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Tout refuser" }));
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   expect(lireConsentement().erreurs).toBe(false);
   expect(demarrer).not.toHaveBeenCalled();
 });

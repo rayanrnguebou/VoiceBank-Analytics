@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
-from .. import audit, cles_api, devises, suivi
+from .. import audit, cles_api, devises, suivi, vigilance
 from ..connecteur import service as sources
 from ..limites import ip_client, limiter
 from ..securite import Utilisateur, utilisateur_courant
@@ -113,11 +113,17 @@ async def scorer_operation(request: Request, body: OperationAScorer, authorizati
     VoiceBank est dans `decision_voicebank`, pour comparer avant d'activer. Clé de test (« vb_test_… ») : même
     réponse qu'en réel, mais aucune alerte n'est créée."""
     debut = time.perf_counter()
+    ip = ip_client(request)
+    cle = _cle(authorization, x_cle_api)
     try:
-        k = await run_in_threadpool(cles_api.verifier, _cle(authorization, x_cle_api), ip_client(request))
+        k = await run_in_threadpool(cles_api.verifier, cle, ip)
     except cles_api.IpRefusee as e:
+        # Bonne clé, mauvaise adresse : elle a peut-être fuité → alerte immédiate (créateur de la clé et plateforme)
+        await run_in_threadpool(vigilance.signaler, "ip_non_autorisee", f"{e.id_cle}|{ip}",
+                                {"cle": e.prefixe, "nom de la clé": e.nom}, None, ip, e.cree_par)
         raise HTTPException(403, str(e))
     except cles_api.CleRefusee as e:
+        await run_in_threadpool(vigilance.signaler, "cle_api_refusee", ip, {"cle": (cle or "")[:12] or "absente"}, None, ip)
         raise HTTPException(401, str(e), headers={"WWW-Authenticate": "Bearer"})
     id_source, compte, id_cle = k["source"], k["nom"], k["id_cle"]
     base = sources.monnaie(id_source, compte)

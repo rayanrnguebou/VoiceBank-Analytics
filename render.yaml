@@ -19,6 +19,8 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
+      - key: ALERTES_SECURITE_EMAIL    # alertes de sécurité (facultatif ; sinon e-mail des comptes administrateurs)
+        sync: false
       - key: VOICEBANK_USERS
         sync: false
       - key: ALLOWED_ORIGINS           # ex. https://voicebank-ui.onrender.com

@@ -163,13 +163,18 @@ def revoquer(id_source: int, id_cle: int) -> None:
 class IpRefusee(CleRefusee):
     """Clé valide, mais appel depuis une adresse non autorisée (403)."""
 
+    def __init__(self, message: str, id_cle: int = 0, prefixe: str = "", nom: str = "", cree_par: str | None = None):
+        super().__init__(message)
+        self.id_cle, self.prefixe, self.nom, self.cree_par = id_cle, prefixe, nom, cree_par
+
 
 def verifier(cle: str, ip: str | None = None) -> dict:
     """{source, nom (compte au nom duquel lire la base), id_cle, mode, test} ; lève CleRefusee sinon. Compte l'appel."""
     if not cle or not cle.startswith("vb_") or len(cle) > 80:
         raise CleRefusee("Clé d'API absente ou invalide.")
     r = db.ecrire(
-        "SELECT k.id_cle, k.id_source, k.revoquee, k.cree_par AS nom, k.mode, k.test, k.ips_autorisees, "
+        "SELECT k.id_cle, k.id_source, k.revoquee, k.cree_par AS nom, k.mode, k.test, k.ips_autorisees, k.prefixe, "
+        "k.nom AS nom_cle, "
         "(SELECT actif FROM voicebank.utilisateurs WHERE nom = k.cree_par) AS actif, "
         f"(SELECT {_SQL_ACCES_EXPIRE} FROM voicebank.utilisateurs WHERE nom = k.cree_par) AS expire "
         "FROM voicebank.cles_api k WHERE k.empreinte = :e", {"e": _empreinte(cle)}).lignes
@@ -178,7 +183,8 @@ def verifier(cle: str, ip: str | None = None) -> dict:
     if r[0].expire:
         raise CleRefusee("Abonnement échu : renouvelle-le pour continuer à utiliser l'API.")
     if not ip_autorisee(ip or "", r[0].ips_autorisees):
-        raise IpRefusee(f"Adresse IP non autorisée pour cette clé : {(ip or '?')[:64]}. Ajoute-la dans VoiceBank → API.")
+        raise IpRefusee(f"Adresse IP non autorisée pour cette clé : {(ip or '?')[:64]}. Ajoute-la dans VoiceBank → API.",
+                        r[0].id_cle, r[0].prefixe, r[0].nom_cle, r[0].nom)
     db.ecrire("UPDATE voicebank.cles_api SET nb_appels = nb_appels + 1, derniere_utilisation = LOCALTIMESTAMP, "
               "premiere_utilisation = COALESCE(premiere_utilisation, LOCALTIMESTAMP) WHERE id_cle = :i", {"i": r[0].id_cle})
     return {"source": r[0].id_source, "nom": r[0].nom, "id_cle": r[0].id_cle, "mode": r[0].mode, "test": r[0].test}

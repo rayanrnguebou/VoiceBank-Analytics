@@ -17,7 +17,8 @@ from . import alertes_erreurs, config, i18n, credit, fraude, maintenance, securi
 from .api import (abonnement, admin, assistant, auth, demo, donnees, favoris, organisation, recouvrement, score,
                   sources, surveillance, systeme)
 from .api.commun import VERSION_API, _lire, _SQL_CREDIT, reponse_maintenance  # noqa: F401  (utilisés par les tests)
-from .limites import limiter
+from . import limites
+from .limites import ip_client, limiter
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("voicebank")
@@ -78,6 +79,39 @@ async def mode_maintenance(request: Request, call_next):
         etat = await run_in_threadpool(maintenance.etat)
         if etat["active"] and _role_du_jeton(request) != "admin":
             return reponse_maintenance(etat)
+    return await call_next(request)
+
+
+def _compte_du_jeton(request: Request) -> str | None:
+    """Compte du jeton (signature vérifiée) ; None sans jeton valide."""
+    auth = request.headers.get("authorization") or ""
+    if not auth.lower().startswith("bearer "):
+        return None
+    try:
+        return jwt.decode(auth[7:], config.JWT_SECRET, algorithms=[securite.ALGO]).get("sub")
+    except jwt.PyJWTError:
+        return None
+
+
+_LIBRES = ("/health", "/taches", "/api/v1/", "/auth/")      # API de score : limite propre à la clé ; connexion : à part
+
+
+@app.middleware("http")
+
+
+async def limite_par_compte(request: Request, call_next):
+    """Limite par COMPTE (en plus de celle par adresse IP) : un compte volé ou un script ne peut pas aspirer les
+    données à grande vitesse, même en changeant d'adresse IP. Les dépassements sont signalés (vigilance)."""
+    if config.RATE_LIMIT_ACTIF and request.method != "OPTIONS" and not request.url.path.startswith(_LIBRES):
+        compte = _compte_du_jeton(request)
+        if compte:
+            refus = limites.compte_depasse(compte)
+            if refus:
+                from . import vigilance
+                await run_in_threadpool(vigilance.signaler, "limite_compte", compte, {"limite": refus},
+                                        compte, ip_client(request))
+                return JSONResponse({"detail": "Trop de requêtes pour ce compte : ralentis un instant, puis réessaie."},
+                                    status_code=429, headers={"Retry-After": "60"})
     return await call_next(request)
 
 

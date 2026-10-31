@@ -1,0 +1,5 @@
+Contact: mailto:rayannnguebou@gmail.com
+Expires: 2027-10-31T00:00:00.000Z
+Preferred-Languages: fr, en
+Policy: https://github.com/rayanrnguebou/VoiceBank-Analytics/blob/main/SECURITE.md
+Canonical: https://voicebank-ui.onrender.com/.well-known/security.txt

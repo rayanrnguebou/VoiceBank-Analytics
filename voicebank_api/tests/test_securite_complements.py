@@ -113,3 +113,48 @@ def test_methodes_http_autorisees_par_cors():
     from app.main import app
     methodes = {m for r in app.routes for m in (getattr(r, "methods", None) or set())}
     assert methodes <= {"GET", "POST", "HEAD"}, methodes
+
+
+def test_limite_par_compte(client, analyste, monkeypatch):
+    """Au-delà de la limite par minute, le COMPTE est ralenti (429), même depuis plusieurs adresses ; signalé."""
+    from app import config, limites, vigilance
+    monkeypatch.setattr(config, "RATE_LIMIT_ACTIF", True)
+    monkeypatch.setattr(config, "LIMITE_COMPTE_MINUTE", 5)
+    signales = []
+    monkeypatch.setattr(vigilance, "signaler", lambda *a, **k: signales.append(a))
+    limites.oublier_comptes()
+    codes = [client.get("/auth/moi", headers=analyste).status_code for _ in range(2)]        # /auth/ : non compté
+    codes += [client.get("/clients", headers={**analyste, "X-Forwarded-For": f"41.202.0.{i}"}).status_code for i in range(7)]
+    assert codes[:7] == [200] * 7 and codes[7:] == [429, 429]
+    assert signales and signales[0][0] == "limite_compte" and signales[0][1] == "analyste1"
+    r = client.get("/clients", headers=analyste)
+    assert r.status_code == 429 and "ce compte" in r.json()["detail"]
+    limites.oublier_comptes()
+
+
+def test_vigilance_alerte_une_fois_par_rafale(monkeypatch):
+    from app import config, courriel, vigilance
+    envois = []
+    monkeypatch.setattr(courriel, "disponible", lambda: True)
+    monkeypatch.setattr(courriel, "envoyer_en_arriere_plan", lambda dest, m: envois.append((dest, m)))
+    monkeypatch.setattr(config, "ALERTES_SECURITE_EMAIL", ["securite@voicebank.test"])
+    vigilance.oublier()
+    for _ in range(vigilance.SEUILS["connexion_refusee"] + 5):
+        vigilance.signaler("connexion_refusee", "203.0.113.9", {"identifiant": "rayan"}, None, "203.0.113.9")
+    assert len(envois) == 1 and envois[0][0] == "securite@voicebank.test"
+    assert "connexions refusées" in envois[0][1].sujet
+    # Clé utilisée hors des adresses autorisées : alerte dès le premier appel
+    vigilance.signaler("ip_non_autorisee", "7|8.8.8.8", {"cle": "vb_abc"}, None, "8.8.8.8")
+    assert len(envois) == 2 and "fuité" in " ".join(envois[1][1].paragraphes)
+    vigilance.oublier()
+
+
+def test_double_auth_obligatoire_pour_abonne_individuel(monkeypatch):
+    from app import config, double_auth
+    monkeypatch.setattr(config, "DOUBLE_AUTH_ABONNES", "obligatoire")
+    monkeypatch.setattr(config, "DOUBLE_AUTH_ADMINS", "obligatoire")
+    assert double_auth.requise("client", None)                 # abonné individuel : son propre administrateur
+    assert double_auth.requise("client", "admin") and double_auth.requise("admin", None)
+    assert not double_auth.requise("client", "analyste") and not double_auth.requise("visiteur", None)
+    monkeypatch.setattr(config, "DOUBLE_AUTH_ABONNES", "facultative")
+    assert not double_auth.requise("client", None)

@@ -22,7 +22,7 @@ with sync_playwright() as p:
     page.goto(URL); page.get_by_role("button", name="Organisation").click()
     page.get_by_label("Identifiant ou e-mail").fill(ADMIN); page.get_by_label("Mot de passe").fill(MDP)
     page.get_by_role("button", name="Se connecter").click()
-    expect(page.get_by_role("heading", name="Protège ton compte administrateur")).to_be_visible(timeout=20000)
+    expect(page.get_by_role("heading", name="Protège ton compte")).to_be_visible(timeout=20000)
     assert page.get_by_role("navigation").count() == 0
     secret = page.get_by_label("Clé secrète").inner_text(timeout=15000)
     page.screenshot(path="2fa_obligatoire.png")

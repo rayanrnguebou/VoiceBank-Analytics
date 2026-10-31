@@ -60,7 +60,11 @@ def _empreinte(code: str) -> str:
 
 
 def requise(role: str, role_org: str | None) -> bool:
-    """Les administrateurs doivent l'activer (sauf si la configuration la rend facultative)."""
+    """Les administrateurs doivent l'activer (sauf si la configuration la rend facultative) : administrateurs de la
+    plateforme et des organisations, et abonnés individuels (client sans organisation, donc sans rôle d'organisation),
+    qui branchent eux-mêmes leurs bases et créent leurs clés d'API."""
+    if role == "client" and role_org is None:
+        return config.DOUBLE_AUTH_ABONNES == "obligatoire"
     return config.DOUBLE_AUTH_ADMINS == "obligatoire" and (role == "admin" or (role == "client" and role_org == "admin"))
 
 

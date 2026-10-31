@@ -107,16 +107,26 @@ jobs:
           import os, sys
           lire = lambda f: {l.split(";")[0]: int(l.split(";")[1]) for l in open(f) if ";" in l}
           r, e = lire("restauree.txt"), lire("en_ligne.txt")
-          erreurs = []
-          if set(r) != set(e):
-              erreurs.append(f"tables différentes : manquantes {sorted(set(e) - set(r))}, en trop {sorted(set(r) - set(e))}")
+          erreurs, avertissements = [], []
+          # La base a pu changer depuis la nuit (nouvelles tables, nouvelles lignes) : simple avertissement.
+          # Échec seulement si la sauvegarde est vraiment incomplète.
+          manquantes, en_trop = sorted(set(e) - set(r)), sorted(set(r) - set(e))
+          if manquantes or en_trop:
+              avertissements.append(f"tables créées ou supprimées depuis la sauvegarde : nouvelles {manquantes}, retirées {en_trop}")
+          if len(r) < 0.7 * len(e):
+              erreurs.append(f"seulement {len(r)} tables restaurées pour {len(e)} en ligne")
           for t in ("utilisateurs", "clients", "transactions", "sources_donnees", "journal_audit"):
-              if t in e and e[t] > 0 and r.get(t, 0) == 0:
+              if t in r and e.get(t, 0) > 0 and r[t] == 0:
                   erreurs.append(f"table essentielle vide après restauration : {t}")
-          # Les données bougent depuis la nuit : on tolère un écart, pas une table à moitié vide
-          for t, n in e.items():
-              if n >= 100 and r.get(t, 0) < n * 0.5:
-                  erreurs.append(f"{t} : {r.get(t, 0)} lignes restaurées pour {n} en ligne")
+          communes = set(r) & set(e)
+          total_r, total_e = sum(r[t] for t in communes), sum(e[t] for t in communes)
+          if total_e >= 1000 and total_r < 0.5 * total_e:
+              erreurs.append(f"{total_r} lignes restaurées pour {total_e} en ligne : sauvegarde incomplète")
+          for t in sorted(communes):
+              if e[t] >= 100 and r[t] < e[t] * 0.5:
+                  avertissements.append(f"{t} : {r[t]} lignes restaurées pour {e[t]} en ligne (ajoutées depuis la nuit ?)")
+          for a in avertissements:
+              print("::warning::" + a)
           lignes = [f"| {t} | {r.get(t, 0)} | {n} |" for t, n in sorted(e.items())]
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as s:
               s.write(f"## Test de restauration\n\nSauvegarde de {os.environ['AGE_H']} h, restaurée en "

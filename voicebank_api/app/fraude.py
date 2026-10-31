@@ -80,8 +80,9 @@ LIBELLES = {"montant_log": "Montant", "heure_num": "Heure", "est_nuit": "Opérat
             "ville_enc": "Ville", "est_internationale_enc": "Opération internationale"}
 
 
-def _facteurs(X: pd.DataFrame, valeurs: dict) -> list[dict]:
-    """Contributions SHAP natives de XGBoost, regroupées et traduites (heure + nuit = « Heure »)."""
+def _facteurs(X: pd.DataFrame, valeurs: dict, toujours: tuple = ()) -> list[dict]:
+    """Contributions SHAP natives de XGBoost, regroupées et traduites (heure + nuit = « Heure »).
+    `toujours` : variables montrées même hors des 5 premières (une banque ou une ville inconnue du modèle)."""
     if "xgb" not in modeles:
         return []
     import xgboost as xgb
@@ -92,8 +93,9 @@ def _facteurs(X: pd.DataFrame, valeurs: dict) -> list[dict]:
         nom = "Heure" if f in ("heure_num", "est_nuit") else LIBELLES[f]
         groupes[nom] = groupes.get(nom, 0.0) + float(v)
     res = []
-    for nom, v in sorted(groupes.items(), key=lambda kv: abs(kv[1]), reverse=True)[:5]:
-        if abs(v) < 0.02:
+    tries = sorted(groupes.items(), key=lambda kv: abs(kv[1]), reverse=True)
+    for rang, (nom, v) in enumerate(tries):
+        if nom not in toujours and (rang >= 5 or abs(v) < 0.02):
             continue
         res.append({"variable": nom, "valeur": valeurs.get(nom), "impact": round(v, 3),
                     "effet": "augmente le risque" if v > 0 else "réduit le risque"})
@@ -178,8 +180,8 @@ def analyser(montant_fcfa: float, type_transaction: str, canal: str, banque: str
     valeurs_aff = {"Montant": montant_txt, "Heure": f"{h:02d} h" + (" (nuit)" if ligne["est_nuit"] else ""),
                    "Jour": "week-end" if ligne["est_weekend"] else "semaine", "Type d'opération": type_transaction,
                    "Canal": canal, "Banque": banque, "Ville": ville, "Opération internationale": est_internationale}
-    facteurs = _facteurs(X, valeurs_aff)
     noms = {"banque": "banque", "ville": "ville"}
+    facteurs = _facteurs(X, valeurs_aff, tuple(noms[c].capitalize() for c in inconnues))
     avertissement = None
     if inconnues:
         quoi = " et ".join(f"la {noms[c]} « {valeurs[c]} »" for c in inconnues)

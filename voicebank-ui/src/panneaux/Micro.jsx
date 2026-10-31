@@ -45,6 +45,11 @@ export function BoutonMicro({ onDebut, onTexteEnDirect, onTranscription, onErreu
   };
 
   const demarrer = async () => {
+    // Navigateur sans enregistrement audio (anciens iPhone, certains navigateurs intégrés) : message clair
+    if (!navigator.mediaDevices?.getUserMedia || typeof window.MediaRecorder === "undefined") {
+      onErreur(tx("Ce navigateur ne permet pas d'enregistrer la voix : écris ta question, ou ouvre VoiceBank dans Chrome, Safari récent, Edge ou Firefox."));
+      return;
+    }
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -52,19 +57,25 @@ export function BoutonMicro({ onDebut, onTexteEnDirect, onTranscription, onErreu
       onErreur(tx("Microphone inaccessible. Autorise le micro dans ton navigateur."));
       return;
     }
-    const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
-      : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm"
-      : MediaRecorder.isTypeSupported("audio/ogg") ? "audio/ogg" : "audio/mp4";
-    const extension = mimeType.includes("webm") ? "webm" : mimeType.includes("ogg") ? "ogg" : "mp4";
-
-    const recorder = new MediaRecorder(stream, { mimeType });
+    const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg", "audio/mp4"]
+      .find(t => window.MediaRecorder.isTypeSupported?.(t)) || "";
+    let recorder;
+    try {
+      recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    } catch (e) {
+      stream.getTracks().forEach(t => t.stop());
+      onErreur(tx("Ce navigateur ne permet pas d'enregistrer la voix : écris ta question, ou ouvre VoiceBank dans Chrome, Safari récent, Edge ou Firefox."));
+      return;
+    }
+    const type = mimeType || recorder.mimeType || "audio/mp4";
+    const extension = type.includes("webm") ? "webm" : type.includes("ogg") ? "ogg" : "mp4";
     chunksRef.current = [];
     recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     recorder.onstop = async () => {
       stream.getTracks().forEach(t => t.stop());
       setStatut("processing");
       const formData = new FormData();
-      formData.append("fichier", new Blob(chunksRef.current, { type: mimeType }), `audio.${extension}`);
+      formData.append("fichier", new Blob(chunksRef.current, { type }), `audio.${extension}`);
       const texteDirect = texteDirectRef.current;
       try {
         // Délai long : le Whisper local peut devoir charger son modèle à la 1re utilisation

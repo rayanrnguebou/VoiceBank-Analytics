@@ -39,7 +39,7 @@ SCENARIOS = [
     ("test_organisation", {}), ("test_connecteur", {}), ("test_risques_org", {}), ("test_surveillance", {}), ("test_recouvrement", {}),
     ("test_roles", {}), ("test_tableau_recuperation", {}), ("test_double_auth", {}),
     ("test_2fa_obligatoire", {"DOUBLE_AUTH_ADMINS": "obligatoire"}),
-    ("test_sso", {}), ("test_anglais", {}), ("test_confort", {}), ("test_approbation", {}), ("test_cookies", {}),
+    ("test_sso", {}), ("test_anglais", {}), ("test_confort", {}), ("test_approbation", {}), ("test_cookies", {}), ("test_compatibilite", {}),
     ("attaques", {}),
     ("captures_magasin", {}),           # lancé seulement à la demande : --seulement captures_magasin
 ]

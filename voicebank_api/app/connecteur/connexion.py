@@ -270,7 +270,43 @@ def moteur(type_source: str, cfg: dict, chemin_fichier: Path | None = None):
             args.update(protocol="tcps", ssl_context=ctx, ssl_server_dn_match=verifie)
     else:
         raise ConnexionRefusee("Type de source inconnu")
-    return create_engine(url, poolclass=NullPool, connect_args=args)
+    eng = create_engine(url, poolclass=NullPool, connect_args=args)
+    if url.host != ip and not config.CONNECTEUR_RESEAU_PRIVE:
+        _garder_contre_reaiguillage(eng, url.host)
+    return eng
+
+
+def _ip_publique(adresse: str) -> bool:
+    ip = ipaddress.ip_address(adresse.split("%")[0])
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return ip.is_global and not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved)
+
+
+def _garder_contre_reaiguillage(eng, hote: str):
+    """Connexion par NOM (certificat vérifié, Azure) : le pilote résout le nom lui-même. Un DNS piégé pourrait alors
+    répondre une adresse publique au contrôle puis une adresse interne au pilote (« DNS rebinding »). On revérifie le
+    nom juste avant chaque connexion et, quand le pilote le permet, l'adresse réellement jointe juste après."""
+    from sqlalchemy import event
+
+    @event.listens_for(eng, "do_connect")
+    def _avant(dialect, conn_rec, cargs, cparams):
+        verifier_hote(hote)
+
+    @event.listens_for(eng, "connect")
+    def _apres(dbapi_conn, conn_rec):
+        sock = getattr(dbapi_conn, "_sock", None)            # PyMySQL
+        if sock is None:
+            return
+        try:
+            pair = sock.getpeername()[0]
+        except OSError:
+            return
+        if not _ip_publique(pair):
+            try:
+                dbapi_conn.close()
+            finally:
+                raise ConnexionRefusee("Adresse privée ou locale refusée : la base doit être joignable sur Internet.")
 
 
 def _preparer_session(conn, type_source: str):

@@ -7,7 +7,7 @@ import json
 import logging
 
 import jwt
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
@@ -127,6 +127,37 @@ async def entetes_securite(request: Request, call_next):
     if config.EST_PROD:
         rep.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return rep
+
+
+class LimiteCorps:
+    """Taille maximale d'une requête, vérifiée AVANT de lire le corps : sans elle, un envoi de plusieurs Go (même
+    sans être connecté : le formulaire est lu avant le contrôle du compte) remplirait le disque du serveur."""
+
+    def __init__(self, app, maximum: int):
+        self.app, self.maximum = app, maximum
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        longueur = dict(scope.get("headers") or []).get(b"content-length")
+        if longueur is not None and (not longueur.isdigit() or int(longueur) > self.maximum):
+            return await JSONResponse({"detail": "Requête trop volumineuse"}, status_code=413)(scope, receive, send)
+        recu = 0
+
+        async def lire():
+            nonlocal recu
+            message = await receive()
+            if message["type"] == "http.request":
+                recu += len(message.get("body", b""))
+                if recu > self.maximum:          # corps envoyé « par morceaux », sans longueur annoncée
+                    raise HTTPException(413, "Requête trop volumineuse")
+            return message
+        await self.app(scope, lire, send)
+
+
+# 6 fichiers de données au plus (le surplus est ignoré), ou un enregistrement audio, plus l'enveloppe du formulaire
+app.add_middleware(LimiteCorps, maximum=max(6 * config.CONNECTEUR_TAILLE_FICHIER_MO * 1024 * 1024,
+                                            config.TAILLE_MAX_AUDIO) + 1024 * 1024)
 
 
 fraude.charger()

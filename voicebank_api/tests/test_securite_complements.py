@@ -92,3 +92,24 @@ def test_rotation_de_la_cle_des_sources(monkeypatch):
     assert connexion.dechiffrer(neuf)["mot_de_passe"] == "Secret-2026"   # la nouvelle clé seule suffit
     with pytest.raises(InvalidToken):
         connexion.rechiffrer("jeton-invalide")
+
+
+def test_corps_trop_volumineux_refuse_avant_lecture(client):
+    """Un envoi énorme est refusé d'après sa longueur annoncée, avant d'être lu (même sans être connecté)."""
+    r = client.post("/sources/fichiers", headers={"Content-Length": str(10 * 1024 ** 3), "Content-Type": "multipart/form-data; boundary=x"},
+                    content=b"--x--")
+    assert r.status_code == 413
+    gros = b"0" * (70 * 1024 * 1024)
+
+    def morceaux():                                  # sans longueur annoncée (envoi « par morceaux »)
+        for i in range(0, len(gros), 1024 * 1024):
+            yield gros[i:i + 1024 * 1024]
+    r = client.post("/sources/fichiers", headers={"Content-Type": "multipart/form-data; boundary=x"}, content=morceaux())
+    assert r.status_code in (400, 413)
+
+
+def test_methodes_http_autorisees_par_cors():
+    """Toutes les routes utilisent GET ou POST : une autre méthode serait bloquée par le navigateur (CORS)."""
+    from app.main import app
+    methodes = {m for r in app.routes for m in (getattr(r, "methods", None) or set())}
+    assert methodes <= {"GET", "POST", "HEAD"}, methodes

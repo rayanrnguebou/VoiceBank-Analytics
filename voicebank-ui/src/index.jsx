@@ -1,3 +1,4 @@
+import "./compatibilite";            // en premier : complète les navigateurs anciens
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
@@ -11,8 +12,9 @@ if (lireConsentement()?.erreurs) demarrerAlertesErreurs();
 
 // Travailleur du site : notifications d'approbation et page « hors ligne » (application Android, écran d'accueil).
 // Seulement sur le site construit : en développement, il gênerait le rechargement automatique.
-if (import.meta.env.PROD && "serviceWorker" in navigator) {
-  window.addEventListener("load", () => { navigator.serviceWorker.register("/sw-approbation.js").catch(() => {}); });
+// « serviceWorker » peut exister sans valeur (Firefox en navigation privée) : on vérifie la fonction elle-même.
+if (import.meta.env.PROD && navigator.serviceWorker?.register) {
+  window.addEventListener("load", () => { try { navigator.serviceWorker.register("/sw-approbation.js").catch(() => {}); } catch (e) { /* rien */ } });
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(

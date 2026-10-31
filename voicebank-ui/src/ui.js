@@ -42,7 +42,8 @@ function signalerLecture(enCours) {
 
 export function decouperPhrases(texte) {
   // Coupe après . ! ? … suivi d'une majuscule : « et à Douala ? » ou… reste d'un seul tenant.
-  return String(texte || "").split(/(?<=[.!?…])\s+(?=[A-ZÀ-ÖØ-Þ«"0-9])/).map(p => p.trim()).filter(Boolean);
+  // Sans « lookbehind » (?<=…) : Safari ne le connaît que depuis la version 16.4 (iPhone plus anciens)
+  return String(texte || "").replace(/([.!?…])\s+(?=[A-ZÀ-ÖØ-Þ«"0-9])/g, "$1\u0000").split("\u0000").map(p => p.trim()).filter(Boolean);
 }
 
 // options.onFin : appelé quand la lecture va jusqu'au bout (pas si elle est interrompue).

@@ -84,19 +84,111 @@ def _nombre(v):
         return None
 
 
-def _depuis(t: dict, schema: str | None, colonnes: list[str]):
-    """La table, ou pour une grande table un échantillon de ses lignes (sous-requête limitée)."""
-    if (t.get("lignes") or 0) <= GRANDE_TABLE:
+def _depuis(t: dict, schema: str | None, colonnes: list[str], complet: bool = False):
+    """La table, ou pour une grande table un échantillon de ses lignes (sous-requête limitée) — sauf calcul complet."""
+    if complet or (t.get("lignes") or 0) <= GRANDE_TABLE:
         return _table(t, schema), None
     sous = exp.select(*[_c(c) for c in dict.fromkeys(colonnes)]).from_(_table(t, schema)).limit(ECHANTILLON_TABLEAU)
     return sous.subquery("echantillon"), ECHANTILLON_TABLEAU
 
 
-def calculer(eng, type_source: str, profil: dict) -> dict:
-    """Indicateurs et graphiques, montants dans la monnaie de la base."""
+def calculer(eng, type_source: str, profil: dict, complet: bool = False) -> dict:
+    """Indicateurs et graphiques, montants dans la monnaie de la base. `complet` : toutes les lignes, même des
+    grandes tables (calcul plus long, fait en arrière-plan). Les quatre familles de requêtes partent en parallèle :
+    le temps total est celui de la plus lente, pas leur somme."""
     req = _Executeur(eng, type_source, profil)
     tables = sorted([t for t in profil.get("tables", []) if not t.get("erreur") and t.get("lignes")], key=_rang)
-    indicateurs, graphiques, entites_vues = [], [], set()
+
+    def fraudes():
+        for t in tables:
+            f = _col(t, "drapeau_fraude")
+            if not f:
+                continue
+            depuis, ech = _depuis(t, req.schema, [f["nom"]], complet)
+            lignes = req(exp.select(_c(f["nom"]).as_("v"), exp.Count(this=exp.Star()).as_("nb"))
+                         .from_(depuis).group_by(_c(f["nom"])))
+            if lignes is not None:
+                nb = sum(int(_nombre(l["nb"]) or 0) for l in lignes if str(l["v"]).strip().lower() in VRAI)
+                return {"titre": "Fraudes", "valeur": nb, "type": "nombre", "entite": "alertes", "table": t["nom"],
+                        "echantillon": ech}
+        return None
+
+    def montant():
+        # Montant total de la table la plus parlante (crédits d'abord : l'encours)
+        candidats = sorted([t for t in tables if _col(t, "montant")],
+                           key=lambda t: (0 if t.get("entite") == "crédits" else 1 if t.get("entite") in FAITS else 2, _rang(t)))
+        for t in candidats[:2]:
+            m = _col(t, "montant")
+            depuis, ech = _depuis(t, req.schema, [m["nom"]], complet)
+            lignes = req(exp.select(exp.Sum(this=_c(m["nom"])).as_("total")).from_(depuis), 1)
+            total = _nombre(lignes[0]["total"]) if lignes else None
+            if total is not None:
+                return {"titre": f"Montant des {(t.get('entite') or sem.en_francais(t['nom']))}", "valeur": total,
+                        "type": "montant", "entite": t.get("entite"), "table": t["nom"], "colonne": m["nom"], "echantillon": ech}
+        return None
+
+    def evolution():
+        # Évolution mensuelle d'une table de faits datée
+        datees = sorted([t for t in tables if _col(t, "date")],
+                        key=lambda t: (FAITS.index(t["entite"]) if t.get("entite") in FAITS else len(FAITS), -(t["lignes"] or 0)))
+        for t in datees[:2]:
+            d, m = _col(t, "date"), _col(t, "montant")
+            annee, mois = exp.Year(this=_c(d["nom"])), exp.Month(this=_c(d["nom"]))
+            selection = [annee.copy().as_("annee"), mois.copy().as_("mois"), exp.Count(this=exp.Star()).as_("nb")]
+            if m:
+                selection.append(exp.Sum(this=_c(m["nom"])).as_("total"))
+            depuis, ech = _depuis(t, req.schema, [d["nom"]] + ([m["nom"]] if m else []), complet)
+            lignes = req(exp.select(*selection).from_(depuis)
+                         .where(exp.and_(_c(d["nom"]).is_(exp.null()).not_(),
+                                         exp.LTE(this=_c(d["nom"]), expression=exp.CurrentDate())))  # pas de dates futures
+                         .group_by(annee.copy(), mois.copy())
+                         .order_by(exp.Ordered(this=annee.copy(), desc=True), exp.Ordered(this=mois.copy(), desc=True)), 12)
+            points = []
+            for l in reversed(lignes or []):
+                a, mo = _nombre(l.get("annee")), _nombre(l.get("mois"))
+                if a and mo:
+                    points.append({"label": f"{int(a):04d}-{int(mo):02d}", "nb": int(_nombre(l["nb"]) or 0),
+                                   "total": _nombre(l.get("total"))})
+            if len(points) >= 2:
+                res = [{"id": "evolution", "titre": f"{_titre(t)} par mois", "type": "line", "donnees": points,
+                        "series": [{"cle": "nb", "nom": "Nombre"}], "temps": True, "echantillon": ech}]
+                if m and any(p["total"] for p in points):
+                    res.append({"id": "montant_mois", "titre": f"Montant des {(t.get('entite') or sem.en_francais(t['nom']))} par mois",
+                                "type": "bar", "donnees": points, "series": [{"cle": "total", "nom": "Montant", "montant": True}],
+                                "temps": True, "echantillon": ech})
+                return res
+        return []
+
+    def repartitions():
+        # Répartition par lieu, statut ou catégorie (2 au plus, tables différentes si possible)
+        res, deja = [], set()
+        for t in tables:
+            if len(res) >= 2:
+                break
+            c = _col(t, "geographie", "statut", "categorie", "drapeau_fraude", valeurs=True)
+            if not c or c["role"] == "drapeau_fraude" or (t["nom"], c["nom"]) in deja:
+                continue
+            nb = exp.Count(this=exp.Star())
+            depuis, ech = _depuis(t, req.schema, [c["nom"]], complet)
+            lignes = req(exp.select(_c(c["nom"]).as_("label"), nb.copy().as_("nb")).from_(depuis)
+                         .where(_c(c["nom"]).is_(exp.null()).not_()).group_by(_c(c["nom"]))
+                         .order_by(exp.Ordered(this=nb.copy(), desc=True)), 8)
+            if lignes and len(lignes) >= 2:
+                deja.add((t["nom"], c["nom"]))
+                res.append({"id": f"repartition_{len(deja)}",
+                            "titre": f"{_titre(t)} par {sem.en_francais(c['nom'])}", "type": "bar",
+                            "donnees": [{"label": str(l["label"])[:30], "nb": int(_nombre(l["nb"]) or 0)} for l in lignes],
+                            "series": [{"cle": "nb", "nom": "Nombre"}], "temps": False, "echantillon": ech})
+        return res
+
+    import contextvars
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=4, thread_name_prefix="tableau") as pool:
+        taches = [pool.submit(contextvars.copy_context().run, f) for f in (fraudes, montant, evolution, repartitions)]
+        r_fraudes, r_montant, r_evolution, r_repartitions = [x.result() for x in taches]
+
+    # Indicateurs : les deux entités principales, fraudes, montant, puis d'autres entités jusqu'à 4
+    indicateurs, entites_vues = [], set()
 
     def compter(t):
         cle = t.get("entite") or t["nom"]
@@ -105,98 +197,23 @@ def calculer(eng, type_source: str, profil: dict) -> dict:
         entites_vues.add(cle)
         indicateurs.append({"titre": _titre(t), "valeur": t["lignes"], "type": "nombre", "entite": t.get("entite"),
                             "table": t["nom"]})
-
-    # 1. Les deux entités principales (ex. clients, transactions)
     for t in tables:
         if len(indicateurs) >= 2:
             break
         compter(t)
-
-    # 2. Fraudes, s'il existe un drapeau de fraude
-    for t in tables:
-        f = _col(t, "drapeau_fraude")
-        if not f:
-            continue
-        depuis, ech = _depuis(t, req.schema, [f["nom"]])
-        lignes = req(exp.select(_c(f["nom"]).as_("v"), exp.Count(this=exp.Star()).as_("nb"))
-                     .from_(depuis).group_by(_c(f["nom"])))
-        if lignes is not None:
-            nb = sum(int(_nombre(l["nb"]) or 0) for l in lignes if str(l["v"]).strip().lower() in VRAI)
-            indicateurs.append({"titre": "Fraudes", "valeur": nb, "type": "nombre", "entite": "alertes", "table": t["nom"],
-                                "echantillon": ech})
-            break
-
-    # 3. Montant total de la table la plus parlante (crédits d'abord : l'encours)
-    candidats = sorted([t for t in tables if _col(t, "montant")],
-                       key=lambda t: (0 if t.get("entite") == "crédits" else 1 if t.get("entite") in FAITS else 2, _rang(t)))
-    for t in candidats[:2]:
-        m = _col(t, "montant")
-        depuis, ech = _depuis(t, req.schema, [m["nom"]])
-        lignes = req(exp.select(exp.Sum(this=_c(m["nom"])).as_("total")).from_(depuis), 1)
-        total = _nombre(lignes[0]["total"]) if lignes else None
-        if total is not None:
-            indicateurs.append({"titre": f"Montant des {(t.get('entite') or sem.en_francais(t['nom']))}", "valeur": total, "type": "montant",
-                                "entite": t.get("entite"), "table": t["nom"], "colonne": m["nom"], "echantillon": ech})
-            break
-
-    # 4. Compléter jusqu'à 4 avec d'autres entités
+    indicateurs += [x for x in (r_fraudes, r_montant) if x]
     for t in tables:
         if len(indicateurs) >= 4:
             break
         compter(t)
-    indicateurs = indicateurs[:4]
+    graphiques = r_evolution + r_repartitions
+    return {"indicateurs": indicateurs[:4], "graphiques": graphiques[:4], "complet": not any(
+        x.get("echantillon") for x in indicateurs[:4] + graphiques[:4])}
 
-    # Graphique : évolution mensuelle d'une table de faits datée
-    datees = sorted([t for t in tables if _col(t, "date")],
-                    key=lambda t: (FAITS.index(t["entite"]) if t.get("entite") in FAITS else len(FAITS), -(t["lignes"] or 0)))
-    for t in datees[:2]:
-        d, m = _col(t, "date"), _col(t, "montant")
-        annee, mois = exp.Year(this=_c(d["nom"])), exp.Month(this=_c(d["nom"]))
-        selection = [annee.copy().as_("annee"), mois.copy().as_("mois"), exp.Count(this=exp.Star()).as_("nb")]
-        if m:
-            selection.append(exp.Sum(this=_c(m["nom"])).as_("total"))
-        depuis, ech = _depuis(t, req.schema, [d["nom"]] + ([m["nom"]] if m else []))
-        lignes = req(exp.select(*selection).from_(depuis)
-                     .where(exp.and_(_c(d["nom"]).is_(exp.null()).not_(),
-                                     exp.LTE(this=_c(d["nom"]), expression=exp.CurrentDate())))  # pas de dates futures
-                     .group_by(annee.copy(), mois.copy())
-                     .order_by(exp.Ordered(this=annee.copy(), desc=True), exp.Ordered(this=mois.copy(), desc=True)), 12)
-        points = []
-        for l in reversed(lignes or []):
-            a, mo = _nombre(l.get("annee")), _nombre(l.get("mois"))
-            if a and mo:
-                points.append({"label": f"{int(a):04d}-{int(mo):02d}", "nb": int(_nombre(l["nb"]) or 0),
-                               "total": _nombre(l.get("total"))})
-        if len(points) >= 2:
-            graphiques.append({"id": "evolution", "titre": f"{_titre(t)} par mois", "type": "line", "donnees": points,
-                               "series": [{"cle": "nb", "nom": "Nombre"}], "temps": True, "echantillon": ech})
-            if m and any(p["total"] for p in points):
-                graphiques.append({"id": "montant_mois", "titre": f"Montant des {(t.get('entite') or sem.en_francais(t['nom']))} par mois",
-                                   "type": "bar", "donnees": points, "series": [{"cle": "total", "nom": "Montant", "montant": True}],
-                                   "temps": True, "echantillon": ech})
-            break
 
-    # Graphiques : répartition par lieu, statut ou catégorie (2 au plus, tables différentes si possible)
-    deja = set()
-    for t in tables:
-        if len([g for g in graphiques if g["id"].startswith("repartition")]) >= 2:
-            break
-        c = _col(t, "geographie", "statut", "categorie", "drapeau_fraude", valeurs=True)
-        if not c or c["role"] == "drapeau_fraude" or (t["nom"], c["nom"]) in deja:
-            continue
-        nb = exp.Count(this=exp.Star())
-        depuis, ech = _depuis(t, req.schema, [c["nom"]])
-        lignes = req(exp.select(_c(c["nom"]).as_("label"), nb.copy().as_("nb")).from_(depuis)
-                     .where(_c(c["nom"]).is_(exp.null()).not_()).group_by(_c(c["nom"]))
-                     .order_by(exp.Ordered(this=nb.copy(), desc=True)), 8)
-        if lignes and len(lignes) >= 2:
-            deja.add((t["nom"], c["nom"]))
-            graphiques.append({"id": f"repartition_{len(deja)}",
-                               "titre": f"{_titre(t)} par {sem.en_francais(c['nom'])}", "type": "bar",
-                               "donnees": [{"label": str(l["label"])[:30], "nb": int(_nombre(l["nb"]) or 0)} for l in lignes],
-                               "series": [{"cle": "nb", "nom": "Nombre"}], "temps": False, "echantillon": ech})
-
-    return {"indicateurs": indicateurs, "graphiques": graphiques[:4]}
+def oublier(id_source: int):
+    """Le prochain affichage relit le résultat gardé en base (ex. calcul complet qui vient de finir)."""
+    _memoire.oublier(lambda k: k[0] == id_source)
 
 
 def tableau(cle: tuple, calcul) -> dict:

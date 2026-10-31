@@ -1,4 +1,7 @@
 {
+ "Aperçu rapide affiché. Calcul sur toutes les lignes en cours : le tableau se met à jour tout seul dès qu'il est prêt.": "Quick preview shown. Calculation on all rows in progress: the dashboard updates itself as soon as it is ready.",
+ "Aperçu rapide affiché, calculé sur un échantillon des lignes.": "Quick preview shown, calculated on a sample of the rows.",
+ "Calculé sur toutes les lignes le {date}.": "Calculated on all rows on {date}.",
  "{titre} (échantillon)": "{titre} (sample)",
  "Grande table : calculé sur {x} lignes, pour un affichage rapide.": "Large table: computed on {x} rows for a quick display.",
  "risque {x}": "{x} risk",

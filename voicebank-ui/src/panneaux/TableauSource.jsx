@@ -16,18 +16,28 @@ const ICONES = {
   agences: [Building2, "#6B7280"], produits: [Package, "#6B7280"],
 };
 
+const ATTENTE_COMPLET_MS = 10000;   // grande base : on revient chercher le calcul sur toutes les lignes
+const ESSAIS_COMPLET = 90;           // soit 15 minutes au plus
+
 export function useTableauSource(source, devise) {
   const [etat, setEtat] = useState({ id: null, donnees: null, chargement: false, erreur: null });
   const id = source?.id;
   useEffect(() => {
     if (!id) { setEtat({ id: null, donnees: null, chargement: false, erreur: null }); return; }
-    let annule = false;
+    let annule = false, minuteur = null, essais = 0;
     // Autre base : on efface aussitôt les chiffres de la précédente ; autre monnaie : on les garde le temps du calcul
     setEtat(e => ({ id, donnees: e.id === id ? e.donnees : null, chargement: true, erreur: null }));
-    http.get(`/sources/${id}/tableau`, { params: { devise }, timeout: 90000 })
-      .then(r => !annule && setEtat({ id, donnees: r.data.data, chargement: false, erreur: null }))
-      .catch(err => !annule && setEtat({ id, donnees: null, chargement: false, erreur: messageErreur(err) }));
-    return () => { annule = true; };
+    const charger = premier => http.get(`/sources/${id}/tableau`, { params: { devise }, timeout: 90000 })
+      .then(r => {
+        if (annule) return;
+        const d = r.data.data;
+        setEtat({ id, donnees: d, chargement: false, erreur: null });
+        // Aperçu sur échantillon : le calcul sur toutes les lignes tourne sur le serveur, on l'affiche dès qu'il est prêt
+        if (d && d.complet === false && essais++ < ESSAIS_COMPLET) minuteur = setTimeout(() => charger(false), ATTENTE_COMPLET_MS);
+      })
+      .catch(err => { if (!annule && premier) setEtat({ id, donnees: null, chargement: false, erreur: messageErreur(err) }); });
+    charger(true);
+    return () => { annule = true; clearTimeout(minuteur); };
   }, [id, devise]);
   return etat;
 }
@@ -80,7 +90,20 @@ export function PanelTableauSource({ dark, etat, devise }) {
   const infobulle = { contentStyle: { backgroundColor: dark ? "#1F2937" : "#fff", border: "none", borderRadius: 8 },
                       labelStyle: { color: dark ? "#fff" : "#111" } };
   const couleurs = ["#1F654D", "#C9A13B", "#3E6FB0", "#EF4444"];
+  const d = etat.donnees;
   return (
+    <div className="space-y-3">
+    {d?.complet === false && (
+      <p role="status" className={`text-xs flex items-center gap-2 px-3 py-2 rounded-lg ${dark ? "bg-amber-900/30 text-amber-200" : "bg-amber-50 text-amber-800"}`}>
+        <RefreshCw size={13} className={d.calcul_complet_en_cours ? "animate-spin" : ""} />{" "}
+        {d.calcul_complet_en_cours
+          ? tx("Aperçu rapide affiché. Calcul sur toutes les lignes en cours : le tableau se met à jour tout seul dès qu'il est prêt.")
+          : tx("Aperçu rapide affiché, calculé sur un échantillon des lignes.")}
+      </p>)}
+    {d?.complet && d?.complet_le && (
+      <p className={`text-xs ${dark ? "text-gray-400" : "text-gray-500"}`}>
+        {tx("Calculé sur toutes les lignes le {date}.", { date: new Date(d.complet_le).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" }) })}
+      </p>)}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {graphiques.map((g, n) => {
         const montant = g.series.some(s => s.montant);
@@ -106,6 +129,7 @@ export function PanelTableauSource({ dark, etat, devise }) {
           </section>
         );
       })}
+    </div>
     </div>
   );
 }

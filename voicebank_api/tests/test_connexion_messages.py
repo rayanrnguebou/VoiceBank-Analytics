@@ -57,3 +57,13 @@ def test_mysql_valeur_texte_mal_encodee():
     r.converters = [("utf8", None), ("utf8", int)]
     paquet = MysqlPacket(b"\x03a\x8bz\x0242", "utf8")
     assert r._read_row_from_packet(paquet) == ("a�z", 42)
+
+
+def test_inspection_mysql_tolerante():
+    """Réponse binaire Latin-1 d'une commande d'inspection (vieux serveur) : lue avec un caractère de remplacement."""
+    from sqlalchemy.dialects.mysql.base import _DecodingRow
+
+    class Ligne(tuple):
+        nom = b"famille_\x8b"
+    r = _DecodingRow(Ligne((b"s\x8bx", "ok")), "utf8mb4")
+    assert r[0] == "s�x" and r[1] == "ok" and r.nom == "famille_�"

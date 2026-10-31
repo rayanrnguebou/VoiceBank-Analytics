@@ -209,7 +209,7 @@ def analyser(id_source: int, proprietaire: str):
         db.ecrire("UPDATE voicebank.sources_donnees SET statut = 'pret', profil = CAST(:p AS JSONB), date_analyse = NOW() "
                   "WHERE id_source = :i", {"i": id_source, "p": json.dumps(profil, ensure_ascii=False, default=str)})
     except Exception as e:
-        log.warning("Analyse de la source %s impossible : %s", id_source, e)
+        log.warning("Analyse de la source %s impossible : %s", id_source, e, exc_info=True)
         db.ecrire("UPDATE voicebank.sources_donnees SET statut = 'erreur', erreur = :e WHERE id_source = :i",
                   {"i": id_source, "e": message_erreur(e)[:500]})
 

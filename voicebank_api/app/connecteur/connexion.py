@@ -141,6 +141,17 @@ def _tolerer_mysql():
             return tuple(ligne)
     pc.MySQLResult._read_row_from_packet = _read_row_from_packet
     pc.Connection._voicebank_tolerant = True
+    # SQLAlchemy relit en UTF-8 strict les réponses binaires des commandes d'inspection (SHOW CREATE TABLE, SHOW FULL
+    # TABLES…) ; un commentaire ou un nom stocké en Latin-1 sur un vieux serveur faisait échouer toute l'analyse.
+    try:
+        from sqlalchemy.dialects.mysql.base import _DecodingRow
+    except ImportError:          # pragma: no cover
+        return
+
+    def _decoder(self, item):
+        return item.decode(self.charset, "replace") if self.charset and isinstance(item, bytes) else item
+    _DecodingRow.__getitem__ = lambda self, index: _decoder(self, self.rowproxy[index])
+    _DecodingRow.__getattr__ = lambda self, attr: _decoder(self, getattr(self.rowproxy, attr))
 
 
 _tolerer_mysql()

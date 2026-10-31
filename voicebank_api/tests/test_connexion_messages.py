@@ -55,6 +55,7 @@ def test_mysql_valeur_texte_mal_encodee():
     from pymysql.protocol import MysqlPacket
     r = MySQLResult.__new__(MySQLResult)
     r.converters = [("utf8", None), ("utf8", int)]
+    r.unbuffered_active = False
     paquet = MysqlPacket(b"\x03a\x8bz\x0242", "utf8")
     assert r._read_row_from_packet(paquet) == ("a�z", 42)
 
@@ -93,3 +94,26 @@ def test_mysql_reessaie_en_latin1():
     with patch.object(S, "_tester", side_effect=faux):
         assert S.tester("mysql", cfg) == {"ok": True}
     assert essais == [None, "latin1"] and cfg["jeu_caracteres"] == "latin1"
+
+
+def test_colonne_binaire_dans_l_analyse():
+    """Une colonne BLOB (octets gzip 0x1f 0x8b, comme sur la base Rfam) ne fait plus échouer le profil de la table."""
+    import pandas as pd
+    from app.connecteur import analyse
+
+    class Resultat:
+        def fetchall(self):
+            return [(i, b"\x1f\x8b\x08\x00" + bytes([i])) for i in range(30)]
+
+        def keys(self):
+            return ["id", "alignement"]
+
+    class Conn:
+        def exec_driver_sql(self, sql):
+            return Resultat()
+    df = analyse._echantillon(Conn(), "familles", None, "mysql", ["id", "alignement"])
+    assert df["alignement"].iloc[0] == "<5 octets>"
+    col = analyse._profil_colonne("alignement", "LONGBLOB", df["alignement"], len(df))
+    assert col["nature"] == "texte"
+    with pytest.raises(UnicodeDecodeError):                     # ce qui se passait avant
+        pd.Series([b"\x1f\x8b\x08"]).astype(str)

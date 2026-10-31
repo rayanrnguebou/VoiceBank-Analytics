@@ -98,6 +98,54 @@ def verifier_hote(hote: str) -> str:
     return sorted(adresses, key=lambda a: (":" in a, a))[0]
 
 
+# ── Serveurs MySQL anciens ou atypiques ──────────────────────────────
+# PyMySQL lit le nom du module d'authentification annoncé par le serveur en UTF-8 strict : certains serveurs anciens
+# (MySQL 5.x, mandataires) envoient là des octets qui ne sont pas du texte, et la connexion échouait (« 'utf-8' codec
+# can't decode byte 0x8b »). On retombe alors sur l'authentification standard. Même tolérance pour les valeurs texte
+# mal encodées dans les tables : caractère de remplacement plutôt qu'une erreur.
+def _tolerer_mysql():
+    try:
+        from pymysql import connections as pc
+    except ImportError:          # pragma: no cover
+        return
+    if getattr(pc.Connection, "_voicebank_tolerant", False):
+        return
+    lire_serveur = pc.Connection._get_server_information
+
+    def _get_server_information(self):
+        try:
+            lire_serveur(self)
+        except UnicodeDecodeError:
+            self._auth_plugin_name = ""          # tout le reste de la poignée de main est déjà lu
+    pc.Connection._get_server_information = _get_server_information
+    lire_ligne = pc.MySQLResult._read_row_from_packet
+
+    def _read_row_from_packet(self, packet):
+        debut = packet._position
+        try:
+            return lire_ligne(self, packet)
+        except UnicodeDecodeError:
+            packet._position = debut
+            ligne = []
+            for encodage, conv in self.converters:
+                try:
+                    v = packet.read_length_coded_string()
+                except IndexError:
+                    break
+                if v is not None:
+                    if encodage is not None:
+                        v = v.decode(encodage, "replace")
+                    if conv is not None:
+                        v = conv(v)
+                ligne.append(v)
+            return tuple(ligne)
+    pc.MySQLResult._read_row_from_packet = _read_row_from_packet
+    pc.Connection._voicebank_tolerant = True
+
+
+_tolerer_mysql()
+
+
 # ── Moteurs ──────────────────────────────────────────────────────────
 
 def _jsonable(v):
@@ -261,6 +309,9 @@ def message_erreur(e: Exception) -> str:
     if ("password" in t or "authentication" in t or "access denied" in t or "login failed" in t or "18456" in t
             or "ora-01017" in t or "ora-28000" in t):
         return "Identifiant ou mot de passe refusé par la base."
+    if "codec can't decode" in t:
+        return ("Le serveur renvoie du texte dans un encodage inattendu. Réessaie ; si l'erreur persiste, choisis l'option "
+                "SSL « Exigé » ou vérifie le jeu de caractères de la base.")
     if "endpoint id" in t or "endpoint is not specified" in t:
         return ("Neon demande le nom complet du serveur : saisis l'adresse entière (ep-….neon.tech), pas une adresse IP.")
     if "unsupported startup parameter" in t:

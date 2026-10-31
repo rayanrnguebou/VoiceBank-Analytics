@@ -1,5 +1,7 @@
 """Bandeau des cookies : premier passage, refus aussi simple que l'acceptation, choix conservé, réglage depuis le pied
-de page, détail dans la politique de confidentialité."""
+de page, détail dans la politique de confidentialité. Présentation des applications : film puis carte finale."""
+import re
+
 from playwright.sync_api import sync_playwright, expect
 from commun import *  # noqa: F401,F403  (URL, API, BASE, MAILS, sql, lancer…)
 
@@ -26,7 +28,15 @@ with sync_playwright() as p:
     # Après les cookies : présentation des applications (visiteur sans compte), une fois par ouverture
     pres = page.get_by_role("dialog", name="VoiceBank, aussi dans ta poche")
     expect(pres).to_be_visible(timeout=10000)
+    # D'abord le film, muet avec sous-titres (les navigateurs bloquent le son automatique)
+    expect(pres.get_by_role("button", name="Activer le son")).to_be_visible()
+    expect(pres.get_by_text("Bienvenue sur VoiceBank, la banque qui comprend ta voix.")).to_be_visible()
+    page.wait_for_timeout(2200); page.screenshot(path="film_1_accueil.png")
+    expect(pres.get_by_text(re.compile("Pose tes questions à la voix"))).to_be_visible(timeout=8000)
+    page.wait_for_timeout(4000); page.screenshot(path="film_2_voix.png")
+    pres.get_by_role("button", name="Passer la vidéo").click()
     expect(pres.get_by_role("button", name="Installer l'application")).to_be_visible()      # téléphone Android simulé
+    expect(pres.get_by_role("button", name="Revoir la vidéo")).to_be_visible()
     page.wait_for_timeout(700)
     page.screenshot(path="presentation_telephone.png")
     pres.get_by_role("button", name="Continuer sur le site").click()
@@ -57,7 +67,14 @@ with sync_playwright() as p:
     o.goto(URL)
     pres_o = o.get_by_role("dialog", name="VoiceBank, aussi dans ta poche")
     expect(pres_o).to_be_visible(timeout=20000)
-    expect(pres_o.get_by_role("button", name="Installer sur cet ordinateur")).to_be_visible()
+    # Le film enchaîne seul ses scènes (environ 25 s) : on en capture quelques-unes, puis la carte finale
+    expect(pres_o.get_by_text("VoiceBank repère les opérations suspectes et t'alerte aussitôt.")).to_be_visible(timeout=15000)
+    o.wait_for_timeout(3600); o.screenshot(path="film_3_fraude.png")
+    expect(pres_o.get_by_text(re.compile("choisis simplement le bon nombre"))).to_be_visible(timeout=8000)
+    o.wait_for_timeout(3300); o.screenshot(path="film_4_approbation.png")
+    expect(pres_o.get_by_text(re.compile("De Douala à Paris"))).to_be_visible(timeout=8000)
+    o.wait_for_timeout(3500); o.screenshot(path="film_5_monde.png")
+    expect(pres_o.get_by_role("button", name="Installer sur cet ordinateur")).to_be_visible(timeout=10000)
     o.wait_for_timeout(900)
     o.screenshot(path="presentation_ordinateur.png")
     o.keyboard.press("Escape")

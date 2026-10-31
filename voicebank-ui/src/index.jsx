@@ -4,6 +4,7 @@ import "./index.css";
 import App from "./App";
 import { demarrerAlertesErreurs } from "./alertesErreurs";
 import { BandeauCookies, lireConsentement } from "./consentement";
+import { PresentationApplications } from "./presentation";
 
 // Rapports d'erreurs (Sentry) : seulement avec l'accord donné dans le bandeau des cookies
 if (lireConsentement()?.erreurs) demarrerAlertesErreurs();
@@ -18,5 +19,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <App />
     <BandeauCookies />
+    <PresentationApplications />
   </React.StrictMode>
 );

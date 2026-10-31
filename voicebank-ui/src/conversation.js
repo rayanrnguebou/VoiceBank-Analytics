@@ -57,6 +57,9 @@ async function transcrire(blob, extension, texteNavigateur) {
  * `controle.annuler()` arrête l'écoute sans rien retourner.
  */
 export async function ecouterReponse({ onParole, onTexteEnDirect, onTranscription, controle = {} }) {
+  if (!navigator.mediaDevices?.getUserMedia || typeof window.MediaRecorder === "undefined") {
+    throw new Error(tx("Ce navigateur ne permet pas d'enregistrer la voix : écris ta question, ou ouvre VoiceBank dans Chrome, Safari récent, Edge ou Firefox."));
+  }
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });

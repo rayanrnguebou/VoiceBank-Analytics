@@ -172,7 +172,7 @@ const base64UrlVersOctets = b64 => {
 };
 
 export function notificationsPossibles() {
-  return typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  return typeof window !== "undefined" && !!navigator.serviceWorker?.register && "PushManager" in window && "Notification" in window;
 }
 const iosHorsEcranAccueil = () => /iPhone|iPad/.test(navigator.userAgent) && !window.matchMedia?.("(display-mode: standalone)").matches
   && !navigator.standalone;

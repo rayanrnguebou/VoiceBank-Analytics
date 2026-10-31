@@ -195,3 +195,21 @@ def test_tableau_de_bord_complet_en_arriere_plan(tmp_path):
     assert len(ranges) == 1 and ranges[0]["complet"] is True and ranges[0]["complet_le"]
     montant = next(i for i in ranges[0]["indicateurs"] if i["type"] == "montant")
     assert montant["valeur"] == 300 * 1000.0 and not montant.get("echantillon")
+
+
+def test_connexion_par_nom_protegee_contre_le_reaiguillage_dns():
+    """Mode « vérifié » (connexion par nom) : si le nom pointe soudain vers une adresse interne, la connexion est refusée."""
+    from app.connecteur.connexion import ConnexionRefusee
+    publique = [(None, None, None, None, ("93.184.216.34", 3306))]
+    interne = [(None, None, None, None, ("10.0.0.5", 3306))]
+    with patch.object(C.config, "CONNECTEUR_RESEAU_PRIVE", False), patch("socket.getaddrinfo", return_value=publique):
+        eng = C.moteur("mysql", {"hote": "base.exemple.com", "port": 3306, "base": "b", "utilisateur": "u",
+                                 "mot_de_passe": "p", "ssl": "verifie"})
+    assert eng.url.host == "base.exemple.com"
+    with patch.object(C.config, "CONNECTEUR_RESEAU_PRIVE", False), patch("socket.getaddrinfo", return_value=interne):
+        try:
+            eng.connect()
+            assert False, "connexion acceptée"
+        except ConnexionRefusee as e:
+            assert "privée" in str(e)
+    assert not C._ip_publique("127.0.0.1") and not C._ip_publique("::ffff:10.0.0.1") and C._ip_publique("93.184.216.34")

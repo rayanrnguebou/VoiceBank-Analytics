@@ -190,7 +190,7 @@ def test_cles_api_observation_test_et_adresses_ip(client, admin):
     act = client.get(f"/sources/0/cles-api/{obs['id']}/activite", headers=admin).json()["data"]
     assert act["appels"][0]["decision"] == r["decision_voicebank"] and act["appels"][0]["mode"] == "observation"
     # Activation : même opération, désormais bloquée ou à vérifier
-    m = client.patch(f"/sources/0/cles-api/{obs['id']}", headers=admin, json={"mode": "actif"})
+    m = client.post(f"/sources/0/cles-api/{obs['id']}/modifier", headers=admin, json={"mode": "actif"})
     assert m.status_code == 200 and m.json()["data"]["mode"] == "actif"
     r = client.post("/api/v1/operations/score", json=gros, headers={"X-Cle-API": obs["cle"]}).json()
     assert r["mode"] == "actif" and r["decision"] == r["decision_voicebank"] != "accepter"
@@ -208,7 +208,7 @@ def test_cles_api_observation_test_et_adresses_ip(client, admin):
     assert dedans.status_code == 200
     dehors = client.post("/api/v1/operations/score", json=gros, headers={"X-Cle-API": ip["cle"], "X-Forwarded-For": "8.8.8.8"})
     assert dehors.status_code == 403 and "8.8.8.8" in dehors.json()["detail"]
-    m = client.patch(f"/sources/0/cles-api/{ip['id']}", headers=admin, json={"changer_ips": True, "ips_autorisees": ""})
+    m = client.post(f"/sources/0/cles-api/{ip['id']}/modifier", headers=admin, json={"changer_ips": True, "ips_autorisees": ""})
     assert m.json()["data"]["ips_autorisees"] is None
     assert client.post("/api/v1/operations/score", json=gros, headers={"X-Cle-API": ip["cle"], "X-Forwarded-For": "8.8.8.8"}).status_code == 200
     for c in (obs, t, ip):

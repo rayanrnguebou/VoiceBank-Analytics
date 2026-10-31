@@ -68,7 +68,7 @@ def creer_cle(request: Request, body: NouvelleCle, id_source: int = Path(ge=0), 
     return {"status": "ok", "data": c}
 
 
-@router.patch("/sources/{id_source}/cles-api/{id_cle}")
+@router.post("/sources/{id_source}/cles-api/{id_cle}/modifier")
 def modifier_cle(request: Request, body: ModifCle, id_source: int = Path(ge=0), id_cle: int = Path(ge=1),
                  u: Utilisateur = Depends(utilisateur_courant)):
     """Passer une clé de l'observation au blocage réel (ou l'inverse), changer les adresses IP autorisées."""

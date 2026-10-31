@@ -39,7 +39,7 @@ export function ClesApi({ source, dark, categories = [], onMesDonnees, onChange 
   };
   const modifier = async (id, corps) => {
     setErreur(null);
-    try { await http.patch(`/sources/${source.id}/cles-api/${id}`, corps); setEditionIps(null); charger(); onChange?.(); }
+    try { await http.post(`/sources/${source.id}/cles-api/${id}/modifier`, corps); setEditionIps(null); charger(); onChange?.(); }
     catch (x) { setErreur(messageErreur(x)); }
   };
   const pastille = couleur => `inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${couleur}`;

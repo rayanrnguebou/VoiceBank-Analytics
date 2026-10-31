@@ -855,6 +855,13 @@ CREATE TABLE IF NOT EXISTS voicebank.appels_api (
 CREATE INDEX IF NOT EXISTS idx_appels_api_cle ON voicebank.appels_api (id_cle, id_appel DESC);
 CREATE INDEX IF NOT EXISTS idx_appels_api_date ON voicebank.appels_api (date_appel);
 
+-- Clés d'API : mode « observation » (VoiceBank note sans bloquer : la banque compare avant d'activer), clés de
+-- test (aucune alerte, aucune donnée comptée) et adresses IP autorisées (réseaux séparés par des virgules ; vide = toutes)
+ALTER TABLE voicebank.cles_api ADD COLUMN IF NOT EXISTS mode VARCHAR(12) NOT NULL DEFAULT 'actif';
+ALTER TABLE voicebank.cles_api ADD COLUMN IF NOT EXISTS test BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE voicebank.cles_api ADD COLUMN IF NOT EXISTS ips_autorisees VARCHAR(1000);
+ALTER TABLE voicebank.appels_api ADD COLUMN IF NOT EXISTS mode VARCHAR(12) NOT NULL DEFAULT 'actif';
+
 -- Tableau de bord d'une base connectée, gardé pour un affichage immédiat (même après un redémarrage du serveur)
 ALTER TABLE voicebank.sources_donnees ADD COLUMN IF NOT EXISTS tableau JSONB;
 ALTER TABLE voicebank.sources_donnees ADD COLUMN IF NOT EXISTS tableau_cle VARCHAR(80);

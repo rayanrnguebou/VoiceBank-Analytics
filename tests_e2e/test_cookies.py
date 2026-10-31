@@ -5,7 +5,9 @@ from commun import *  # noqa: F401,F403  (URL, API, BASE, MAILS, sql, lancer…)
 
 with sync_playwright() as p:
     b = lancer(p)
-    ctx = b.sans_consentement(viewport={"width": 390, "height": 844}, is_mobile=True)   # premier passage, téléphone
+    ctx = b.sans_consentement(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True,
+                              user_agent="Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) "
+                                         "Chrome/140.0 Mobile Safari/537.36")   # premier passage, téléphone
     page = ctx.new_page()
     erreurs = []; page.on("pageerror", lambda e: erreurs.append(str(e)))
 
@@ -21,6 +23,15 @@ with sync_playwright() as p:
 
     bandeau.get_by_role("button", name="Tout refuser").click()
     expect(bandeau).to_be_hidden()
+    # Après les cookies : présentation des applications (visiteur sans compte), une fois par ouverture
+    pres = page.get_by_role("dialog", name="VoiceBank, aussi dans ta poche")
+    expect(pres).to_be_visible(timeout=10000)
+    expect(pres.get_by_role("button", name="Installer l'application")).to_be_visible()      # téléphone Android simulé
+    page.wait_for_timeout(700)
+    page.screenshot(path="presentation_telephone.png")
+    pres.get_by_role("button", name="Continuer sur le site").click()
+    expect(pres).to_be_hidden()
+    print("1 bis. présentation « aussi dans ta poche » après les cookies, fermée par « Continuer sur le site »")
     page.reload()
     expect(page.get_by_role("button", name="Organisation")).to_be_visible(timeout=20000)
     expect(page.get_by_role("dialog", name="Ta vie privée, tes choix")).to_have_count(0)
@@ -38,6 +49,29 @@ with sync_playwright() as p:
     expect(gestion).to_be_hidden()
     assert page.evaluate("JSON.parse(localStorage.getItem('voicebank_consentement')).erreurs") is True
     print("3. « Gérer les cookies » en bas de page : accord modifiable à tout moment")
+
+    # Nouvelle ouverture sur ordinateur : la présentation revient ; après une connexion, plus jamais
+    ordi = b.sans_consentement(viewport={"width": 1366, "height": 860})
+    o = ordi.new_page()
+    o.add_init_script("localStorage.setItem('voicebank_consentement', JSON.stringify({version: 1, erreurs: false, date: new Date().toISOString()}))")
+    o.goto(URL)
+    pres_o = o.get_by_role("dialog", name="VoiceBank, aussi dans ta poche")
+    expect(pres_o).to_be_visible(timeout=20000)
+    expect(pres_o.get_by_role("button", name="Installer sur cet ordinateur")).to_be_visible()
+    o.wait_for_timeout(900)
+    o.screenshot(path="presentation_ordinateur.png")
+    o.keyboard.press("Escape")
+    expect(pres_o).to_be_hidden()
+    o.get_by_role("button", name="Organisation").click()
+    o.get_by_label("Identifiant ou e-mail").fill("rayan"); o.get_by_label("Mot de passe").fill("Test-Admin-2026!")
+    o.get_by_role("button", name="Se connecter").click()
+    expect(o.get_by_role("button", name="Se déconnecter")).to_be_visible(timeout=20000)
+    o.get_by_role("button", name="Se déconnecter").click()
+    nouvel_onglet = ordi.new_page(); nouvel_onglet.goto(URL)
+    expect(nouvel_onglet.get_by_role("button", name="Organisation")).to_be_visible(timeout=20000)
+    nouvel_onglet.wait_for_timeout(1500)
+    expect(nouvel_onglet.get_by_role("dialog", name="VoiceBank, aussi dans ta poche")).to_have_count(0)
+    print("5. sur ordinateur : présentation à l'ouverture ; plus jamais après une connexion sur l'appareil")
 
     page.goto(URL + "/confidentialite/#cookies")
     expect(page.locator("#cookies")).to_contain_text("Cookies et stockage")

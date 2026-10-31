@@ -11,6 +11,7 @@ const CLE = "voicebank_consentement";
 const VERSION = 1;
 const DUREE_MS = 182 * 24 * 3600 * 1000;          // environ 6 mois
 const EVENEMENT = "voicebank-cookies";
+export const EVENEMENT_CHOISI = "voicebank-cookies-choisis";
 
 export function lireConsentement() {
   try {
@@ -31,6 +32,7 @@ function enregistrer(erreurs) {
     // Retrait de l'accord : on arrête tout envoi immédiatement
     import("@sentry/browser").then(S => S.getClient()?.close()).catch(() => {});
   }
+  window.dispatchEvent(new Event(EVENEMENT_CHOISI));      // la présentation des applications peut s'afficher
   return c;
 }
 
@@ -46,7 +48,7 @@ export function LienCookies({ className = "hover:underline" }) {
 const NECESSAIRES = [
   ["Connexion", "ta session, effacée à la fermeture de l'onglet"],
   ["Sécurité", "l'identifiant de cet appareil (« Mes appareils ») et, si tu l'as activée, l'approbation par téléphone"],
-  ["Tes choix", "langue, voix, mode conversation, base de données choisie et ce choix de cookies"],
+  ["Tes choix", "langue, voix, mode conversation, base de données choisie, ce choix de cookies et le fait que tu as déjà un compte"],
 ];
 
 export function BandeauCookies() {

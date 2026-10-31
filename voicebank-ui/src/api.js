@@ -97,8 +97,6 @@ export function appliquerJeton(data) {
     expire: Date.now() + data.expire_dans_min * 60 * 1000,
   };
   ecrireSession(session);
-  // Cet appareil a déjà servi à un compte : la présentation des applications ne s'affiche plus
-  try { localStorage.setItem("voicebank_compte_connu", "1"); } catch (e) { /* stockage indisponible */ }
   return session;
 }
 

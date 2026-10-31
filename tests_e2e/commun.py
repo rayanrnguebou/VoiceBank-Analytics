@@ -27,10 +27,9 @@ NAVIGATEUR = {"executable_path": os.environ["E2E_CHROMIUM"]} if os.environ.get("
 
 
 # Choix de cookies déjà fait (refus) : le bandeau ne recouvre pas les écrans testés. test_cookies.py le vérifie à part.
-# Même chose pour la présentation des applications : l'appareil « connaît » déjà un compte. test_cookies.py la vérifie.
-CONSENTEMENT = ("try { localStorage.setItem('voicebank_consentement', JSON.stringify("
-                "{version: 1, erreurs: false, date: new Date().toISOString()})); "
-                "localStorage.setItem('voicebank_compte_connu', '1') } catch (e) {}")
+# Même chose pour la présentation des applications (indicateur réservé aux tests). test_cookies.py vérifie les deux.
+CONSENTEMENT = ("window.__voicebankSansPresentation = true; try { localStorage.setItem('voicebank_consentement', "
+                "JSON.stringify({version: 1, erreurs: false, date: new Date().toISOString()})) } catch (e) {}")
 
 
 def lancer(p, args=None):

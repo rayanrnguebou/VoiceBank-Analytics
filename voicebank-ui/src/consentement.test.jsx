@@ -5,8 +5,9 @@ import { BandeauCookies, lireConsentement, ouvrirGestionCookies } from "./consen
 const demarrer = vi.fn();
 vi.mock("./alertesErreurs", () => ({ demarrerAlertesErreurs: () => demarrer() }));
 
-// Appareil qui a déjà servi à un compte : pas de présentation des applications avant le bandeau
-beforeEach(() => { localStorage.clear(); localStorage.setItem("voicebank_compte_connu", "1"); demarrer.mockClear(); });
+// Sans la présentation des applications (comme dans l'application installée) : le bandeau s'affiche directement
+beforeEach(() => { localStorage.clear(); window.__voicebankSansPresentation = true; demarrer.mockClear(); });
+afterEach(() => { delete window.__voicebankSansPresentation; });
 
 test("premier passage : bandeau visible ; « Tout refuser » mémorise le refus sans démarrer Sentry", async () => {
   render(<BandeauCookies />);
@@ -47,7 +48,7 @@ test("choix de plus de 6 mois : redemandé", () => {
 });
 
 test("visiteur : le bandeau attend la fin de la présentation des applications, puis revient tant qu'aucun choix n'est fait", () => {
-  localStorage.removeItem("voicebank_compte_connu");
+  delete window.__voicebankSansPresentation;
   const { unmount } = render(<BandeauCookies />);
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   act(() => window.dispatchEvent(new Event("voicebank-presentation-fermee")));

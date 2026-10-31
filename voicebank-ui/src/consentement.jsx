@@ -48,7 +48,7 @@ export function LienCookies({ className = "hover:underline" }) {
 const NECESSAIRES = [
   ["Connexion", "ta session, effacée à la fermeture de l'onglet"],
   ["Sécurité", "l'identifiant de cet appareil (« Mes appareils ») et, si tu l'as activée, l'approbation par téléphone"],
-  ["Tes choix", "langue, voix, mode conversation, base de données choisie, ce choix de cookies et le fait que tu as déjà un compte"],
+  ["Tes choix", "langue, voix, mode conversation, base de données choisie et ce choix de cookies"],
 ];
 
 // Biscuit dessiné : il apparaît, se fait croquer (la bouchée grandit) et laisse tomber quelques miettes

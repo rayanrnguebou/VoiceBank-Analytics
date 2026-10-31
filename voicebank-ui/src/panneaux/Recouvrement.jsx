@@ -8,6 +8,7 @@ import { useDevise } from "../devise";
 import { carte, champ, etiquette, titre, texteDiscret, boutonPrincipal, boutonSecondaire, formaterDate,
   telechargerCsv, nomFichier } from "../ui";
 import { LOCALE, tx } from "../i18n";
+import { BoutonPdf } from "./Surveillance";
 
 const COULEURS_STATUT = {
   a_contacter: "bg-red-500/15 text-red-600", contacte: "bg-sky-500/15 text-sky-600",
@@ -251,6 +252,7 @@ export function PanelRecouvrement({ source, dark, onValeur }) {
             {onValeur && <button onClick={onValeur} className={boutonSecondaire(dark)}>{tx("Valeur créée")}</button>}
             {d.peut_traiter && <button onClick={() => setReglages(!reglages)} className={boutonSecondaire(dark)}>
               <Settings2 size={12} className="inline mr-1" />{tx("Message de relance")}</button>}
+            <BoutonPdf url={`/sources/${id}/etat-portefeuille`} dark={dark} libelle={tx("État du portefeuille (PDF)")} nomParDefaut="etat_portefeuille.pdf" />
             <button onClick={exporter} className={`${boutonSecondaire(dark)} flex items-center gap-1.5`}><Download size={13} />{" "}{tx("CSV")}</button>
           </div>
         </div>

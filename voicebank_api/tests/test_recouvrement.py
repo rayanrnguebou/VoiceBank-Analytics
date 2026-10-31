@@ -125,3 +125,73 @@ def test_synchronisation_et_taux_de_l_equipe():
                 if int(d["ref"][1:]) < 8 else R.agir(9901, d["id"], "test", "statut", statut="irrecouvrable", texte="Client parti")
     ch = R.chances(9901)
     assert ch["retard"]["source"] == "equipe" and ch["retard"]["taux"] == pytest.approx(900 / 1100, abs=0.002)   # A (régularisé) + 8 payés sur 11
+
+
+# ── Test sur l'historique ────────────────────────────────────────────
+
+def test_test_sur_l_historique_de_la_demonstration(client, analyste):
+    r = client.get("/sources/0/test-historique", headers=analyste)
+    assert r.status_code == 200, r.text
+    c, f = r.json()["data"]["credits"], r.json()["data"]["fraude"]
+    # Crédits : apprentissage sur les plus anciens, test sur les plus récents (dates en ordre)
+    assert c["apprentissage"] > c["test"] > 20 and c["colonne_date"] == "date_debut"
+    assert c["periode_apprentissage"][1] <= c["periode_test"][0]
+    # Verdict honnête, tiré de la mesure (les données des tests sont tirées au hasard : souvent « faible »)
+    assert c["verdict"] == ("bon" if c["auc"] >= 0.75 else "moyen" if c["auc"] >= 0.62 else "faible")
+    assert 0 <= c["defauts_reperes"] <= c["defauts_test"] and 0 <= c["taux_defaut_cible_pct"] <= 100
+    # Fraude : le détecteur ne voit pas les étiquettes ; part des fraudes et du montant parmi les 5 % les plus atypiques
+    assert f["fraudes_connues"] >= 5 and 0 <= f["fraudes_reperees_pct"] <= 100 and 0 <= f["montant_repere_pct"] <= 100
+
+
+# ── API de score en temps réel ───────────────────────────────────────
+
+def test_cles_api_et_score_en_temps_reel(client, admin, analyste):
+    assert client.post("/sources/0/cles-api", headers=analyste, json={"nom": "Core banking"}).status_code == 403
+    r = client.post("/sources/0/cles-api", headers=admin, json={"nom": "Core banking"})
+    assert r.status_code == 200, r.text
+    cle = r.json()["data"]["cle"]
+    assert cle.startswith("vb_") and len(cle) > 40
+    liste = client.get("/sources/0/cles-api", headers=admin).json()["data"]
+    assert liste[0]["prefixe"] == cle[:12] and "cle" not in liste[0]
+    # Sans clé, ou avec une fausse : refusé
+    corps = {"reference": "OP-1", "montant": 25000, "heure": 14}
+    assert client.post("/api/v1/operations/score", json=corps).status_code == 401
+    assert client.post("/api/v1/operations/score", json=corps, headers={"Authorization": "Bearer vb_faux"}).status_code == 401
+    # Opération ordinaire, puis opération énorme en pleine nuit
+    ok = client.post("/api/v1/operations/score", json=corps, headers={"Authorization": f"Bearer {cle}"})
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["decision"] in ("accepter", "verifier", "bloquer") and 0 <= ok.json()["score"] <= 1
+    gros = client.post("/api/v1/operations/score", headers={"X-Cle-API": cle},
+                       json={"reference": "OP-2", "montant": 950_000_000, "heure": 3}).json()
+    assert gros["decision"] in ("verifier", "bloquer") and gros["raisons"] and gros["score"] > ok.json()["score"]
+    assert client.get("/sources/0/cles-api", headers=admin).json()["data"][0]["nb_appels"] == 2
+    # Révocation : la clé ne marche plus
+    assert client.post(f"/sources/0/cles-api/{liste[0]['id']}/revoquer", headers=admin).status_code == 200
+    assert client.post("/api/v1/operations/score", json=corps, headers={"Authorization": f"Bearer {cle}"}).status_code == 401
+
+
+# ── Documents réglementaires ─────────────────────────────────────────
+
+def test_etat_du_portefeuille(client, analyste):
+    r = client.get("/sources/0/etat-portefeuille", headers=analyste)
+    assert r.status_code == 200, r.text
+    assert r.content[:4] == b"%PDF" and len(r.content) > 3000
+    assert r.headers["content-disposition"].startswith('attachment; filename="etat_portefeuille_')
+
+
+def test_projet_de_declaration_de_soupcon():
+    from app import reglementaire, suivi
+    db.ecrire("INSERT INTO voicebank.sources_donnees (id_source, nom, proprietaire, type_source, config_chiffree, statut) "
+              "VALUES (9902, 'Base test', 'rayan', 'postgresql', '', 'pret') ON CONFLICT DO NOTHING")
+    try:
+        a = suivi.enregistrer(9902, [{"id": "OP-77", "date": "2026-10-30T03:12:00", "montant": 2_500_000,
+                                      "niveau_risque": "Critique", "score": 0.998,
+                                      "raisons": [{"variable": "Montant", "detail": "40 fois le montant habituel"}],
+                                      "categories": {"Canal": "Mobile money"}}])[0]
+        with pytest.raises(reglementaire.DocumentRefuse):
+            reglementaire.declaration_soupcon(9902, a["id_suivi"], "rayan")       # pas encore confirmée
+        suivi.modifier(9902, a["id_suivi"], "rayan", statut="fraude_confirmee", commentaire="Client injoignable, compte vidé en 10 min")
+        contenu, nom = reglementaire.declaration_soupcon(9902, a["id_suivi"], "rayan")
+        assert contenu[:4] == b"%PDF" and nom.startswith("projet_declaration_soupcon_VB-9902-")
+    finally:
+        db.ecrire("DELETE FROM voicebank.sources_donnees WHERE id_source = 9902")

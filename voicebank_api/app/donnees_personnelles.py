@@ -118,6 +118,7 @@ def effacer(nom: str, par: str, ip: str | None = None) -> str:
         if not c.execute(text("SELECT 1 FROM voicebank.paiements WHERE utilisateur = :n AND statut = 'paye' LIMIT 1"),
                          {"n": nom}).first():
             x("DELETE FROM voicebank.profils_facturation WHERE utilisateur = :n")
+        x("UPDATE voicebank.cles_api SET revoquee = TRUE WHERE cree_par = :n")
         x("UPDATE voicebank.dossiers_recouvrement SET assigne_a = NULL WHERE assigne_a = :n "
           "AND statut NOT IN ('regle', 'irrecouvrable')")
         x("UPDATE voicebank.suivi_alertes SET assigne_a = NULL WHERE assigne_a = :n "
@@ -127,6 +128,7 @@ def effacer(nom: str, par: str, ip: str | None = None) -> str:
                                                 "OR (id_org IS NOT NULL AND id_org = :o)"), {"n": nom, "o": l["id_org"]})]
             if ids:
                 c.execute(text("DELETE FROM voicebank.dossiers_recouvrement WHERE id_source = ANY(:i)"), {"i": ids})
+                c.execute(text("DELETE FROM voicebank.cles_api WHERE id_source = ANY(:i)"), {"i": ids})
                 c.execute(text("DELETE FROM voicebank.sources_donnees WHERE id_source = ANY(:i)"), {"i": ids})
             if l["id_org"]:
                 c.execute(text("UPDATE voicebank.organisations SET actif = FALSE WHERE id_org = :o"), {"o": l["id_org"]})

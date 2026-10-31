@@ -256,6 +256,7 @@ def supprimer(id_source: int, proprietaire: str):
     if not r.rowcount:
         raise SourceRefusee("Source introuvable")
     db.ecrire("DELETE FROM voicebank.dossiers_recouvrement WHERE id_source = :i", {"i": id_source})
+    db.ecrire("DELETE FROM voicebank.cles_api WHERE id_source = :i", {"i": id_source})
     for f in fichiers.CACHE.glob(f"source_{int(id_source)}_*.sqlite"):
         f.unlink(missing_ok=True)
 
@@ -505,6 +506,20 @@ def credits_a_recouvrer(id_source: int, proprietaire: str, role: str) -> tuple[d
     profil, ts, eng, base, cle = _contexte(id_source, proprietaire)
     masquer = role != "admin" if id_source == DEMO_ID else bool(_ligne(id_source, proprietaire).masquer_pii)
     return _risque(lambda r: recouvrement.credits_a_recouvrer(eng, ts, profil, cle)), base, masquer
+
+
+def test_historique(id_source: int, proprietaire: str) -> tuple[dict, str]:
+    """Ce que les modèles auraient repéré sur l'historique de la base (crédits, fraude), chacun indépendant."""
+    from . import historique
+    profil, ts, eng, base, cle = _contexte(id_source, proprietaire)
+    res = {}
+    for nom, f in (("credits", lambda r: historique.credits(eng, ts, profil, cle)),
+                   ("fraude", lambda r: historique.fraude(eng, ts, profil, base, cle))):
+        try:
+            res[nom] = _risque(f)
+        except SourceRefusee as e:
+            res[nom] = {"indisponible": str(e)}
+    return res, base
 
 
 def operations_base(id_source: int, proprietaire: str) -> tuple[dict, str]:

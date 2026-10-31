@@ -8,6 +8,7 @@ import { Choix } from "../ChampListe";
 import ResultatRisque from "./Explication";
 import { SuiviAlerte, ChipStatut, BoutonsRapport, OUVERTS } from "./Surveillance";
 import { telechargerCsv, nomFichier } from "../ui";
+import { ClesApi } from "./ClesApi";
 import { LOCALE, tx } from "../i18n";
 
 const pct = v => `${(Number(v) * 100).toFixed(1).replace(".", ",")} %`;
@@ -178,6 +179,7 @@ export function PanelAnalyseSource({ source, dark }) {
   if (form.erreur) return <Indisponible dark={dark} message={form.erreur} />;
   if (!f) return <p className={texteDiscret(dark)}>{tx("Apprentissage des habitudes de « {nom} »…", { nom: source.nom })}</p>;
   return (
+    <>
     <div className={carte(dark)}>
       <h2 className={`${titre(dark)} flex items-center gap-2`}><ScanSearch size={19} />{" "}{tx("Analyser une opération")}</h2>
       <p className={`${texteDiscret(dark)} mb-4`}>
@@ -209,6 +211,8 @@ export function PanelAnalyseSource({ source, dark }) {
       {res && <p className={`${texteDiscret(dark)} mt-4`}>{res.explication}</p>}
       <ResultatRisque resultat={res} dark={dark} type="fraude" />
     </div>
+    {source.id !== 0 && <ClesApi source={source} dark={dark} categories={f.categories} />}
+    </>
   );
 }
 

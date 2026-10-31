@@ -85,8 +85,48 @@ with sync_playwright() as p:
     nav("Valeur créée").click()
     expect(page.get_by_text("Argent récupéré").first).to_be_visible(timeout=20000)
     expect(page.get_by_text(re.compile(r"1 dossier\(s\) réglé\(s\)"))).to_be_visible()
+    expect(page.get_by_text("Test sur votre historique")).to_be_visible()
+    expect(page.get_by_text("Défauts de crédit")).to_be_visible()
+    expect(page.get_by_text(re.compile(r"Appris sur les \d+ crédits les plus anciens"))).to_be_visible(timeout=60000)
+    page.wait_for_timeout(1500)
     page.screenshot(path="valeur_creee.png", full_page=True)
-    print("5. « Valeur créée » : argent récupéré, fraude évitée, temps gagné")
+    print("5. « Valeur créée » : argent récupéré, fraude évitée, temps gagné, test sur l'historique")
+
+    # 5 bis. État du portefeuille (PDF)
+    nav("Recouvrement").click()
+    with page.expect_download(timeout=120000) as tel:
+        page.get_by_role("button", name="État du portefeuille (PDF)").click()
+    contenu = open(tel.value.path(), "rb").read()
+    assert contenu[:4] == b"%PDF" and tel.value.suggested_filename.startswith("etat_portefeuille_")
+    print(f"5 bis. état de la qualité du portefeuille téléchargé ({len(contenu) // 1024} Ko)")
+
+    # 5 ter. Fraude confirmée → projet de déclaration de soupçon
+    nav("Alertes de fraude").click()
+    page.locator("button", has_text="Plus atypique que").first.click(timeout=60000)
+    page.get_by_placeholder(re.compile("client joint par téléphone")).fill("Client injoignable, compte vidé en dix minutes.")
+    page.get_by_role("button", name="Fraude confirmée").click()
+    with page.expect_download(timeout=120000) as tel:
+        page.get_by_role("button", name="Projet de déclaration de soupçon (PDF)").click(timeout=20000)
+    assert open(tel.value.path(), "rb").read()[:4] == b"%PDF"
+    assert tel.value.suggested_filename.startswith("projet_declaration_soupcon_VB-")
+    print("5 ter. fraude confirmée : projet de déclaration de soupçon téléchargé")
+
+    # 5 quater. Clé d'API et score en temps réel depuis « le logiciel bancaire »
+    nav("Analyse de transaction").click()
+    page.get_by_label("Nom de la clé").fill("Logiciel de la coopérative")
+    page.get_by_role("button", name="Créer une clé").click()
+    cle = page.locator("code", has_text=re.compile(r"^vb_")).first.inner_text(timeout=20000)
+    page.screenshot(path="cles_api.png", full_page=True)
+    import requests
+    r = requests.post(f"{API}/api/v1/operations/score", headers={"Authorization": f"Bearer {cle}"},
+                      json={"reference": "CORE-0001", "montant": 980_000_000, "heure": 3}, timeout=60)
+    assert r.status_code == 200, r.text
+    assert r.json()["decision"] in ("verifier", "bloquer") and r.json()["raisons"], r.json()
+    assert requests.post(f"{API}/api/v1/operations/score", json={"montant": 1}, timeout=30).status_code == 401
+    page.reload()
+    nav("Analyse de transaction").click()
+    expect(page.get_by_text(re.compile(r"1 appel\(s\)"))).to_be_visible(timeout=60000)
+    print(f"5 quater. clé d'API créée ; score en temps réel : décision « {r.json()['decision']} », appel compté")
 
     # 6. Mobile
     nav("Recouvrement").click()

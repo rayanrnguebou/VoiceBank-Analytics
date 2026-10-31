@@ -42,7 +42,15 @@ for meth, url, corps in [("get", f"/sources/{SRC}", None), ("get", f"/sources/{S
                          ("get", f"/sources/{SRC}/risques/operations", None), ("get", f"/sources/{SRC}/risques/credits", None),
                          ("post", f"/sources/{SRC}/question", {"texte": "Montant total"}),
                          ("post", f"/sources/{SRC}/supprimer", None), ("post", f"/sources/{SRC}/masquage", {"masquer": False}),
-                         ("get", f"/sources/{SRC_ADMIN}", None)]:
+                         ("get", f"/sources/{SRC_ADMIN}", None),
+                         # Recouvrement, valeur créée, test sur l'historique, documents, clés d'API
+                         ("get", f"/sources/{SRC}/recouvrement", None), ("get", f"/sources/{SRC}/recouvrement/1", None),
+                         ("post", f"/sources/{SRC}/recouvrement/1", {"nature": "paiement", "montant": 1}),
+                         ("post", f"/sources/{SRC}/recouvrement-reglages", {"paiement": "pirate"}),
+                         ("get", f"/sources/{SRC}/valeur", None), ("get", f"/sources/{SRC}/test-historique", None),
+                         ("get", f"/sources/{SRC}/etat-portefeuille", None), ("get", f"/sources/{SRC}/alertes/1/declaration", None),
+                         ("get", f"/sources/{SRC}/cles-api", None), ("post", f"/sources/{SRC}/cles-api", {"nom": "pirate"}),
+                         ("post", f"/sources/{SRC}/cles-api/1/revoquer", None)]:
     r = getattr(c, meth)(url, headers=org75_admin, **({"json": corps} if corps else {}))
     verifier(f"autre organisation : {meth.upper()} {url}", r.status_code in (403, 404), f"{r.status_code} {r.text[:120]}")
 r = c.post("/organisation/source-defaut", headers=org75_admin, json={"id_source": SRC})
@@ -59,7 +67,9 @@ for meth, url, corps in [("post", f"/sources/{SRC}/supprimer", None), ("post", f
                          ("post", "/organisation/source-defaut", {"id_source": None}),
                          ("post", "/organisation/membres", {"email": "pirate@exemple.cm", "nom_complet": "Pirate"}),
                          ("post", "/organisation/membres/direction@cooperative.cm/modifier", {"actif": False}),
-                         ("post", "/organisation/nom", {"nom": "Piratée"})]:
+                         ("post", "/organisation/nom", {"nom": "Piratée"}),
+                         ("post", f"/sources/{SRC}/cles-api", {"nom": "pirate"}),
+                         ("post", f"/sources/{SRC}/recouvrement-reglages", {"paiement": "pirate"})]:
     r = getattr(c, meth)(url, headers=org76_analyste, **({"json": corps} if corps else {}))
     verifier(f"analyste d'organisation : {url}", r.status_code == 403, f"{r.status_code} {r.text[:100]}")
 r = c.post(f"/sources/{SRC}/question", headers=org76_analyste, json={"texte": "Nombre de clients"})

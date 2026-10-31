@@ -812,3 +812,21 @@ CREATE TABLE IF NOT EXISTS voicebank.actions_recouvrement (
     date_action  TIMESTAMP     NOT NULL DEFAULT LOCALTIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_actions_recouvrement ON voicebank.actions_recouvrement (id_dossier, date_action);
+
+-- ══════════════════════════════════════════════════════════
+-- CLÉS D'API (score de fraude en temps réel, appelé par le logiciel bancaire avant de valider une opération)
+-- La clé n'est montrée qu'une fois ; seule son empreinte SHA-256 est gardée.
+-- ══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS voicebank.cles_api (
+    id_cle               SERIAL       PRIMARY KEY,
+    id_source            INTEGER      NOT NULL,
+    nom                  VARCHAR(80)  NOT NULL,
+    prefixe              VARCHAR(16)  NOT NULL,
+    empreinte            CHAR(64)     NOT NULL UNIQUE,
+    cree_par             VARCHAR(64)  NOT NULL,
+    date_creation        TIMESTAMP    NOT NULL DEFAULT LOCALTIMESTAMP,
+    derniere_utilisation TIMESTAMP,
+    nb_appels            BIGINT       NOT NULL DEFAULT 0,
+    revoquee             BOOLEAN      NOT NULL DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS idx_cles_api_source ON voicebank.cles_api (id_source);

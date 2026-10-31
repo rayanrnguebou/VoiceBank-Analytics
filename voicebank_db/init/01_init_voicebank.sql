@@ -774,3 +774,59 @@ CREATE TABLE IF NOT EXISTS voicebank.demandes_approbation (
     expire              TIMESTAMP    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_demandes_approbation ON voicebank.demandes_approbation (utilisateur, date_creation DESC);
+
+-- ══════════════════════════════════════════════════════════
+-- RECOUVREMENT DES CRÉDITS EN RETARD
+-- Un dossier par crédit en retard ou en défaut d'une base (id_source 0 : démonstration, d'où l'absence de clé
+-- étrangère ; les dossiers d'une base sont supprimés avec elle). Ni nom ni téléphone ici : ils sont relus dans la
+-- base de l'organisation à chaque affichage.
+-- ══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS voicebank.dossiers_recouvrement (
+    id_dossier       SERIAL        PRIMARY KEY,
+    id_source        INTEGER       NOT NULL,
+    ref_credit       VARCHAR(200)  NOT NULL,
+    etape            VARCHAR(10)   NOT NULL CHECK (etape IN ('retard', 'defaut', 'preventif')),
+    montant_du       NUMERIC(20, 2),
+    montant_recupere NUMERIC(20, 2) NOT NULL DEFAULT 0,
+    statut           VARCHAR(20)   NOT NULL DEFAULT 'a_contacter'
+                     CHECK (statut IN ('a_contacter', 'contacte', 'promesse', 'paiement_partiel', 'regle', 'injoignable',
+                                       'contentieux', 'irrecouvrable')),
+    assigne_a        VARCHAR(64),
+    promesse_date    DATE,
+    promesse_montant NUMERIC(20, 2),
+    date_ouverture   TIMESTAMP     NOT NULL DEFAULT LOCALTIMESTAMP,
+    date_maj         TIMESTAMP     NOT NULL DEFAULT LOCALTIMESTAMP,
+    date_cloture     TIMESTAMP,
+    maj_par          VARCHAR(64),
+    UNIQUE (id_source, ref_credit)
+);
+CREATE INDEX IF NOT EXISTS idx_dossiers_recouvrement ON voicebank.dossiers_recouvrement (id_source, statut);
+CREATE TABLE IF NOT EXISTS voicebank.actions_recouvrement (
+    id_action    SERIAL        PRIMARY KEY,
+    id_dossier   INTEGER       NOT NULL REFERENCES voicebank.dossiers_recouvrement(id_dossier) ON DELETE CASCADE,
+    auteur       VARCHAR(64)   NOT NULL,
+    nature       VARCHAR(12)   NOT NULL CHECK (nature IN ('appel', 'sms', 'whatsapp', 'promesse', 'paiement',
+                                                          'commentaire', 'statut', 'assignation')),
+    texte        TEXT          NOT NULL,
+    montant      NUMERIC(20, 2),
+    date_action  TIMESTAMP     NOT NULL DEFAULT LOCALTIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_actions_recouvrement ON voicebank.actions_recouvrement (id_dossier, date_action);
+
+-- ══════════════════════════════════════════════════════════
+-- CLÉS D'API (score de fraude en temps réel, appelé par le logiciel bancaire avant de valider une opération)
+-- La clé n'est montrée qu'une fois ; seule son empreinte SHA-256 est gardée.
+-- ══════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS voicebank.cles_api (
+    id_cle               SERIAL       PRIMARY KEY,
+    id_source            INTEGER      NOT NULL,
+    nom                  VARCHAR(80)  NOT NULL,
+    prefixe              VARCHAR(16)  NOT NULL,
+    empreinte            CHAR(64)     NOT NULL UNIQUE,
+    cree_par             VARCHAR(64)  NOT NULL,
+    date_creation        TIMESTAMP    NOT NULL DEFAULT LOCALTIMESTAMP,
+    derniere_utilisation TIMESTAMP,
+    nb_appels            BIGINT       NOT NULL DEFAULT 0,
+    revoquee             BOOLEAN      NOT NULL DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS idx_cles_api_source ON voicebank.cles_api (id_source);

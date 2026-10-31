@@ -89,6 +89,10 @@ export function SuiviAlerte({ source, idSuivi, dark, onChange }) {
             )}
             <button disabled={action.chargement || !commentaire.trim()} onClick={() => envoyer({ commentaire })}
               className={boutonSecondaire(dark)}>{tx("Ajouter le commentaire")}</button>
+            {a.statut === "fraude_confirmee" && (
+              <BoutonPdf url={`/sources/${source.id}/alertes/${idSuivi}/declaration`} dark={dark}
+                libelle={tx("Projet de déclaration de soupçon (PDF)")} nomParDefaut="projet_declaration_soupcon.pdf" />
+            )}
           </div>
           {action.erreur && <p role="alert" className="text-sm text-red-500">{action.erreur}</p>}
         </>
@@ -114,6 +118,33 @@ export function SuiviAlerte({ source, idSuivi, dark, onChange }) {
 }
 
 // ── Rapport PDF ────────────────────────────────────────────────────────
+// Téléchargement d'un PDF de l'API (rapport, état du portefeuille, projet de déclaration…)
+export function BoutonPdf({ url, libelle, nomParDefaut, dark, params }) {
+  const [en, setEn] = useState(false);
+  const [erreur, setErreur] = useState(null);
+  const telecharger = async () => {
+    setEn(true); setErreur(null);
+    try {
+      const r = await http.get(url, { params, responseType: "blob", timeout: 120000 });
+      const lien = URL.createObjectURL(r.data);
+      const a = document.createElement("a");
+      a.href = lien;
+      a.download = (r.headers["content-disposition"] || "").match(/filename="([^"]+)"/)?.[1] || nomParDefaut;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(lien), 1000);
+    } catch (e) { setErreur(tx("Document indisponible pour le moment.")); }
+    finally { setEn(false); }
+  };
+  return (
+    <span className="inline-flex items-center gap-2">
+      <button onClick={telecharger} disabled={en} className={`${boutonSecondaire(dark)} flex items-center gap-1.5`}>
+        <FileDown size={13} /> {en ? tx("Préparation…") : libelle}
+      </button>
+      {erreur && <span className="text-xs text-red-500">{erreur}</span>}
+    </span>
+  );
+}
+
 export function BoutonsRapport({ source, dark }) {
   const [en, setEn] = useState(null);
   const [erreur, setErreur] = useState(null);

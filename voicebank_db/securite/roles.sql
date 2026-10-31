@@ -84,6 +84,16 @@ GRANT USAGE ON SEQUENCE voicebank.suivi_alertes_id_suivi_seq,
                         voicebank.commentaires_alerte_id_commentaire_seq TO voicebank_app;
 REVOKE ALL ON voicebank.suivi_alertes, voicebank.commentaires_alerte, voicebank.preferences_notifications,
               voicebank.taches_planifiees FROM voicebank_reader;
+-- Recouvrement : dossiers modifiables, historique des actions en ajout seul
+GRANT SELECT, INSERT, UPDATE, DELETE ON voicebank.dossiers_recouvrement TO voicebank_app;
+GRANT SELECT, INSERT, DELETE ON voicebank.actions_recouvrement TO voicebank_app;
+GRANT USAGE ON SEQUENCE voicebank.dossiers_recouvrement_id_dossier_seq,
+                        voicebank.actions_recouvrement_id_action_seq TO voicebank_app;
+REVOKE ALL ON voicebank.dossiers_recouvrement, voicebank.actions_recouvrement FROM voicebank_reader;
+-- Clés d'API : empreintes seulement
+GRANT SELECT, INSERT, UPDATE, DELETE ON voicebank.cles_api TO voicebank_app;
+GRANT USAGE ON SEQUENCE voicebank.cles_api_id_cle_seq TO voicebank_app;
+REVOKE ALL ON voicebank.cles_api FROM voicebank_reader;
 -- Le journal d'audit est en ajout seul : ni UPDATE ni DELETE pour l'application.
 ALTER ROLE voicebank_app SET statement_timeout = '15s';
 

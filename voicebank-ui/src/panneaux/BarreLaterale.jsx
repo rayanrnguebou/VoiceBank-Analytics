@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { tx } from "../i18n";
 import SelecteurLangue from "../SelecteurLangue";
 import {
-  AudioLines, LayoutDashboard, ShieldAlert, ScanSearch, Landmark, History,
+  AudioLines, HandCoins, TrendingUp, LayoutDashboard, ShieldAlert, ScanSearch, Landmark, History,
   GraduationCap, Target, DatabaseZap, ScrollText, ChartColumn, ExternalLink, LogOut, X, UsersRound, KeyRound, CreditCard, Wallet,
   Building2, Wrench, ClipboardCheck, BellRing } from "lucide-react";
 
@@ -82,9 +82,11 @@ export default function BarreLaterale({ page, allerA, estAdmin, voitAdmin, exter
             badge={compteurs.alertes} badgeAlerte {...props} />
           <Lien id="analyse" libelle={tx("Analyse de transaction")} Icone={ScanSearch} {...props} />
           <Lien id="credit" libelle={tx("Score de crédit")} Icone={Landmark} {...props} />
+          <Lien id="recouvrement" libelle={tx("Recouvrement")} Icone={HandCoins} {...props} />
           <Lien id="modeles" libelle={tx("Fiche des modèles")} Icone={ClipboardCheck} {...props} />
 
           <p className="px-4 pt-5 pb-1.5 text-xs text-foret-100/45">{tx("Rapports")}</p>
+          <Lien id="valeur" libelle={tx("Valeur créée")} Icone={TrendingUp} {...props} />
           <Lien id="historique" libelle={tx("Historique")} Icone={History} badge={nbHistorique} {...props} />
           {!(acces?.type === "essai") && <Lien id="notifications" libelle={tx("Notifications")} Icone={BellRing} {...props} />}
           {POWER_BI_URL && (

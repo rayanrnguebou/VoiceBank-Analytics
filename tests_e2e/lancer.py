@@ -36,7 +36,7 @@ SCENARIOS = [
     ("test_ui", {}), ("test_v31", {}), ("test_v32", {}), ("test_finitions", {}), ("test_monnaie", {}),
     ("test_conversation", {}), ("test_dictee", {}), ("test_maintenance", {}),
     ("test_offre", {}), ("test_referentiel", {}), ("test_listes", {}),
-    ("test_organisation", {}), ("test_connecteur", {}), ("test_risques_org", {}), ("test_surveillance", {}),
+    ("test_organisation", {}), ("test_connecteur", {}), ("test_risques_org", {}), ("test_surveillance", {}), ("test_recouvrement", {}),
     ("test_roles", {}), ("test_tableau_recuperation", {}), ("test_double_auth", {}),
     ("test_2fa_obligatoire", {"DOUBLE_AUTH_ADMINS": "obligatoire"}),
     ("test_sso", {}), ("test_anglais", {}), ("test_confort", {}), ("test_approbation", {}), ("test_cookies", {}),

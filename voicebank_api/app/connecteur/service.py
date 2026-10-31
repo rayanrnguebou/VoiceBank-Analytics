@@ -255,8 +255,14 @@ def supprimer(id_source: int, proprietaire: str):
                   {"i": id_source, "p": proprietaire})
     if not r.rowcount:
         raise SourceRefusee("Source introuvable")
+    db.ecrire("DELETE FROM voicebank.dossiers_recouvrement WHERE id_source = :i", {"i": id_source})
     for f in fichiers.CACHE.glob(f"source_{int(id_source)}_*.sqlite"):
         f.unlink(missing_ok=True)
+
+
+def monnaie(id_source: int, proprietaire: str) -> str:
+    """Monnaie dans laquelle la base enregistre ses montants."""
+    return "XAF" if id_source == DEMO_ID else devise_source(_ligne(id_source, proprietaire))
 
 
 def devise_source(l) -> str:
@@ -491,6 +497,14 @@ def fiches_modeles(id_source: int, proprietaire: str) -> dict:
         except SourceRefusee as e:
             res[nom] = {"indisponible": str(e)}
     return res
+
+
+def credits_a_recouvrer(id_source: int, proprietaire: str, role: str) -> tuple[dict, str, bool]:
+    """(crédits en retard ou en défaut, monnaie de la base, données personnelles masquées pour cet utilisateur)."""
+    from . import recouvrement
+    profil, ts, eng, base, cle = _contexte(id_source, proprietaire)
+    masquer = role != "admin" if id_source == DEMO_ID else bool(_ligne(id_source, proprietaire).masquer_pii)
+    return _risque(lambda r: recouvrement.credits_a_recouvrer(eng, ts, profil, cle)), base, masquer
 
 
 def operations_base(id_source: int, proprietaire: str) -> tuple[dict, str]:

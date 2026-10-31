@@ -4,6 +4,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { LienCookies } from "./consentement";
+import { PanelRecouvrement } from "./panneaux/Recouvrement";
+import { PanelValeur } from "./panneaux/Valeur";
 import { http, lireSession, deconnexion, messageErreur, appliquerJeton } from "./api";
 import EcranAccueil from "./panneaux/Accueil";
 import { BandeauAcces, PanelAbonnement, PanelAbonnements } from "./panneaux/Abonnement";
@@ -361,6 +363,8 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
     alertes:       { titre: tx("Alertes de fraude"),       sousTitre: sourceActive ? tx("Opérations atypiques de « {nom} »", { nom: sourceActive.nom }) : tx("Alertes à vérifier et décisions prises") },
     analyse:       { titre: tx("Analyse de transaction"),  sousTitre: tx("Estimer le risque de fraude d'une opération") },
     credit:        { titre: tx("Score de crédit"),         sousTitre: sourceActive ? tx("Portefeuille de crédits de « {nom} »", { nom: sourceActive.nom }) : tx("Risque de défaut d'une demande ou d'un crédit en cours") },
+    recouvrement:  { titre: tx("Recouvrement"),            sousTitre: tx("Crédits en retard de « {nom} » : qui relancer d'abord, promesses et paiements", { nom: sourceActive?.nom || tx("Démonstration VoiceBank") }) },
+    valeur:        { titre: tx("Valeur créée"),            sousTitre: tx("Argent récupéré, fraude évitée et temps gagné, chiffres à l'appui") },
     historique:    { titre: tx("Historique"),              sousTitre: tx("Questions de la session et rapport PDF") },
     modeles:       { titre: tx("Fiche des modèles"),       sousTitre: sourceActive ? tx("Modèles d'IA appris sur « {nom} » : données, fiabilité, dérive", { nom: sourceActive.nom }) : tx("Modèles d'IA de la démonstration : données, fiabilité, limites") },
     journal:       { titre: tx("Journal de l'organisation"), sousTitre: tx("Traitement des alertes et activité des membres") },
@@ -610,7 +614,7 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
             </>
           )}
           {page === "donnees"    && <PanelSources dark={dark} onInterroger={choisirSource} onAbonnement={() => allerA("abonnement")} />}
-          {["alertes", "analyse", "credit"].includes(page) && (
+          {["alertes", "analyse", "credit", "recouvrement", "valeur"].includes(page) && (
             <BarreSourceRisque dark={dark} sourceActive={sourceActive} sourcesPretes={sourcesPretes} externe={externe}
               onChoisir={s => choisirSource(s, null, true)} onMesDonnees={() => allerA("donnees")} />
           )}
@@ -620,6 +624,8 @@ function Tableau({ session, onDeconnexion, onSession, maintenance }) {
                                                   : <PanelAnalyse dark={dark} />)}
           {page === "credit"     && (sourceActive ? <PanelCreditSource key={sourceActive.id} source={sourceActive} dark={dark} />
                                                   : <PanelCredit dark={dark} />)}
+          {page === "recouvrement" && <PanelRecouvrement key={sourceActive?.id || 0} source={sourceActive} dark={dark} onValeur={() => allerA("valeur")} />}
+          {page === "valeur"     && <PanelValeur key={sourceActive?.id || 0} source={sourceActive} dark={dark} />}
           {page === "modeles"    && <PanelFiches key={sourceActive ? sourceActive.id : 0} source={sourceActive} dark={dark} />}
           {page === "notifications" && <PanelNotifications dark={dark} />}
           {page === "historique" && (

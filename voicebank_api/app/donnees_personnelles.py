@@ -74,6 +74,9 @@ def exporter(nom: str) -> dict:
                                            "FROM voicebank.logs_vocaux WHERE utilisateur = :n ORDER BY date_requete DESC", n=nom),
             "commentaires_sur_alertes": _lignes(c, "SELECT date_commentaire, nature, texte FROM voicebank.commentaires_alerte "
                                                    "WHERE auteur = :n ORDER BY date_commentaire DESC", n=nom),
+            "actions_de_recouvrement": _lignes(c, "SELECT date_action, nature, texte, montant FROM "
+                                                  "voicebank.actions_recouvrement WHERE auteur = :n ORDER BY date_action DESC",
+                                               n=nom),
             "journal_d_activite": _lignes(c, "SELECT date_evenement, action, detail, adresse_ip FROM voicebank.journal_audit "
                                              "WHERE utilisateur = :n ORDER BY date_evenement DESC LIMIT 5000", n=nom),
             "durees_de_conservation": CONSERVATION,
@@ -115,12 +118,15 @@ def effacer(nom: str, par: str, ip: str | None = None) -> str:
         if not c.execute(text("SELECT 1 FROM voicebank.paiements WHERE utilisateur = :n AND statut = 'paye' LIMIT 1"),
                          {"n": nom}).first():
             x("DELETE FROM voicebank.profils_facturation WHERE utilisateur = :n")
+        x("UPDATE voicebank.dossiers_recouvrement SET assigne_a = NULL WHERE assigne_a = :n "
+          "AND statut NOT IN ('regle', 'irrecouvrable')")
         x("UPDATE voicebank.suivi_alertes SET assigne_a = NULL WHERE assigne_a = :n "
           "AND statut NOT IN ('fraude_confirmee', 'fausse_alerte', 'resolue')")
         if seul:                         # bases connectées : supprimées avec un compte seul dans son organisation
             ids = [r[0] for r in c.execute(text("SELECT id_source FROM voicebank.sources_donnees WHERE proprietaire = :n "
                                                 "OR (id_org IS NOT NULL AND id_org = :o)"), {"n": nom, "o": l["id_org"]})]
             if ids:
+                c.execute(text("DELETE FROM voicebank.dossiers_recouvrement WHERE id_source = ANY(:i)"), {"i": ids})
                 c.execute(text("DELETE FROM voicebank.sources_donnees WHERE id_source = ANY(:i)"), {"i": ids})
             if l["id_org"]:
                 c.execute(text("UPDATE voicebank.organisations SET actif = FALSE WHERE id_org = :o"), {"o": l["id_org"]})

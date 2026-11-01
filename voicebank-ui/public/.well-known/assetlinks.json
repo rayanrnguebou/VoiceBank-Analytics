@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.onrender.voicebank_ui.twa",
+      "sha256_cert_fingerprints": ["5B:79:B5:E8:12:02:65:C4:0E:82:1E:0D:54:D8:A6:19:08:E7:FC:AC:B8:A9:BC:1C:1C:9B:59:2C:46:2B:52:65"]
+    }
+  }
+]

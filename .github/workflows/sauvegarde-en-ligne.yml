@@ -61,7 +61,7 @@ jobs:
 
       - name: Conserver (30 jours)
         if: steps.config.outputs.actif == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.FICHIER }}
           path: ${{ env.FICHIER }}

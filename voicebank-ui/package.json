@@ -3,7 +3,7 @@
   "version": "3.3.0",
   "private": true,
   "dependencies": {
-    "@sentry/browser": "11.8.0",
+    "@sentry/browser": "11.10.0",
     "axios": "^1.20.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",

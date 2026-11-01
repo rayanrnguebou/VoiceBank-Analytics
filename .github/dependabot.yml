@@ -8,12 +8,20 @@ updates:
     open-pull-requests-limit: 5
     groups:
       securite-python: { applies-to: security-updates, patterns: ["*"] }
+    ignore:
+      # PyAV >= 16 casse le décodage audio de faster-whisper 1.2.1 (testé le 1er novembre 2026)
+      - dependency-name: av
+        versions: [">=16"]
   - package-ecosystem: npm
     directory: /voicebank-ui
     schedule: { interval: monthly }
     open-pull-requests-limit: 5
     groups:
       securite-npm: { applies-to: security-updates, patterns: ["*"] }
+    ignore:
+      # Tailwind 4 change toute la configuration (migration à faire à part)
+      - dependency-name: tailwindcss
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }

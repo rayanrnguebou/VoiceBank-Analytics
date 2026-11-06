@@ -23,7 +23,7 @@ services:
         sync: false
       - key: VOICEBANK_USERS
         sync: false
-      - key: ALLOWED_ORIGINS           # ex. https://voicebank-ui.onrender.com
+      - key: ALLOWED_ORIGINS           # https://voicebank-analytics.app,https://www.voicebank-analytics.app,https://voicebank-ui.onrender.com
         sync: false
       - key: GEMINI_API_KEY
         sync: false
@@ -31,8 +31,8 @@ services:
         sync: false
       - key: WHISPER_LOCAL              # offre gratuite (512 Mo) : transcription via Groq uniquement
         value: "false"
-      - key: URL_INTERFACE              # retour après paiement (adresse de l'interface)
-        value: https://voicebank-ui.onrender.com
+      - key: URL_INTERFACE              # liens des e-mails et retour après paiement : https://voicebank-analytics.app
+        sync: false                     # (à changer dans Render une fois le domaine en service)
       - key: TACHES_CLE                 # tâches automatiques : même valeur que le secret TACHES_CLE de GitHub
         generateValue: true
       - key: TURNSTILE_SECRET           # anti-robot (Cloudflare Turnstile) : clé secrète
@@ -91,9 +91,11 @@ services:
       # Si l'API change d'adresse (domaine personnalisé), mets-la aussi dans connect-src.
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://voicebank-api.onrender.com https://challenges.cloudflare.com https://*.ingest.sentry.io https://*.ingest.de.sentry.io https://*.ingest.us.sentry.io; frame-src https://challenges.cloudflare.com; media-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        value: "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.voicebank-analytics.app https://voicebank-api.onrender.com https://challenges.cloudflare.com https://*.ingest.sentry.io https://*.ingest.de.sentry.io https://*.ingest.us.sentry.io; frame-src https://challenges.cloudflare.com; media-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     envVars:
-      - key: REACT_APP_API_URL         # ex. https://voicebank-api.onrender.com
+      - key: REACT_APP_API_URL         # https://api.voicebank-analytics.app (avant le domaine : https://voicebank-api.onrender.com)
+        sync: false
+      - key: REACT_APP_DOMAINE_PRINCIPAL  # voicebank-analytics.app : l'ancienne adresse onrender.com y renvoie
         sync: false
       - key: REACT_APP_POWER_BI_URL
         sync: false

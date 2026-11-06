@@ -15,3 +15,11 @@ if (typeof window !== "undefined" && !window.structuredClone) {
   window.structuredClone = valeur => (valeur === undefined ? undefined : valeur instanceof Error
     ? Object.assign(new valeur.constructor(valeur.message), valeur) : JSON.parse(JSON.stringify(valeur)));
 }
+
+// Adresse principale : une fois le domaine à toi en service (REACT_APP_DOMAINE_PRINCIPAL, ex. voicebank-analytics.app),
+// l'ancienne adresse *.onrender.com renvoie vers lui (favoris, liens déjà partagés), en gardant la page demandée.
+const PRINCIPAL = (import.meta.env.REACT_APP_DOMAINE_PRINCIPAL || "").trim().toLowerCase();
+if (PRINCIPAL && typeof window !== "undefined" && window.location.hostname.endsWith(".onrender.com")
+    && window.location.hostname !== PRINCIPAL) {
+  window.location.replace(`https://${PRINCIPAL}${window.location.pathname}${window.location.search}${window.location.hash}`);
+}

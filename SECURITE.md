@@ -15,8 +15,8 @@ Ce qui suit sert de point de départ à un auditeur (test d'intrusion, revue de 
 
 | Élément | Adresse / dossier |
 |---|---|
-| Interface (React, site statique) | https://voicebank-ui.onrender.com — `voicebank-ui/` |
-| API (FastAPI) | https://voicebank-api.onrender.com — `voicebank_api/` |
+| Interface (React, site statique) | https://voicebank-analytics.app — `voicebank-ui/` |
+| API (FastAPI) | https://api.voicebank-analytics.app — `voicebank_api/` |
 | Base de données (PostgreSQL, Neon) | schéma `voicebank_db/init/`, droits `voicebank_db/securite/roles.sql` |
 | API publique de score (logiciels bancaires) | `POST /api/v1/operations/score`, clé `vb_…` |
 | Connecteur vers les bases des clients | `voicebank_api/app/connecteur/` (PostgreSQL, MySQL, SQL Server, Oracle, fichiers) |

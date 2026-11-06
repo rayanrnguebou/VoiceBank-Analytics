@@ -340,7 +340,7 @@ on en fait une vraie application Android avec [PWABuilder](https://www.pwabuilde
 *Trusted Web Activity* (Chrome sans barre d'adresse). Tout le site, ses mises à jour et les notifications
 d'approbation fonctionnent tels quels : pas de second code à maintenir.
 
-1. pwabuilder.com → adresse du site (`https://voicebank-ui.onrender.com`) → **Start** → **Package for stores** →
+1. pwabuilder.com → adresse du site (`https://voicebank-analytics.app`) → **Start** → **Package for stores** →
    **Android** → **Generate package** → *Options* :
    - **Package ID** : `com.rayannguebou.voicebank` (définitif : ne plus le changer ensuite) ;
    - **App name** `VoiceBank Analytics`, **Launcher name** `VoiceBank` ;
@@ -360,29 +360,42 @@ d'approbation fonctionnent tels quels : pas de second code à maintenir.
 de signature**, et un numéro de version plus grand ; publier `assetlinks.json` sur le nouveau domaine ; envoyer la
 mise à jour sur le Play Store. Les personnes qui ont l'application reçoivent la mise à jour normalement.
 
-## Nom de domaine à toi
+## Nom de domaine : voicebank-analytics.app
 
-L'application fonctionne avec les adresses `onrender.com`. Pour une adresse à toi (plus crédible, et des e-mails
-qui arrivent mieux grâce à l'authentification du domaine chez Brevo) :
-
-| Option | Coût | Remarques |
+| Adresse | Service Render | Enregistrement DNS (Namecheap → *Advanced DNS*) |
 |---|---|---|
-| [GitHub Student Developer Pack](https://education.github.com/pack) | gratuit 1 an (étudiants) | Un vrai domaine (`.me`, `.tech`…) puis renouvellement payant. |
-| [DigitalPlat FreeDomain](https://github.com/DigitalPlatDev/FreeDomain) | gratuit | Adresse en `.dpdns.org` (ex. `voicebank.dpdns.org`), inscription sur `dash.domain.digitalplat.org` avec GitHub, DNS chez Cloudflare possible ; à renouveler (gratuitement, à la main), une adresse par compte, pensé pour les projets personnels. |
-| Domaine `.com` (Cloudflare Registrar) | ≈ 10 $ / an | Aucune contrainte, prix coûtant. |
+| `voicebank-analytics.app` | voicebank-ui | `A`, hôte `@` → `216.24.57.1` |
+| `www.voicebank-analytics.app` | voicebank-ui (renvoie vers l'adresse principale) | `CNAME`, hôte `www` → `voicebank-ui.onrender.com` |
+| `api.voicebank-analytics.app` | voicebank-api | `CNAME`, hôte `api` → `voicebank-api.onrender.com` |
 
-Une fois le domaine obtenu (exemple `voicebank.exemple.org`) :
-1. Render → voicebank-ui → *Settings → Custom Domains* : `voicebank.exemple.org` ; voicebank-api :
-   `api.voicebank.exemple.org` (l'offre gratuite inclut 2 domaines). Crée chez ton DNS les enregistrements CNAME
-   indiqués par Render ; le certificat HTTPS est automatique.
-2. Render → voicebank-api → *Environment* : `ALLOWED_ORIGINS` et `URL_INTERFACE` = `https://voicebank.exemple.org`.
-   voicebank-ui : `REACT_APP_API_URL` = `https://api.voicebank.exemple.org`, et ajoute cette adresse dans la ligne
-   `connect-src` de `render.yaml`.
-3. Mets à jour les adresses de retour : Google Cloud (*Authorized redirect URIs* et domaine autorisé), Microsoft
-   Entra (*Redirect URI*), NotchPay (*webhook* : `https://api.voicebank.exemple.org/paiements/notchpay/webhook`),
-   Cloudflare Turnstile (*Hostnames*), UptimeRobot (sondes).
-4. Brevo → *Senders, Domains & Dedicated IPs → Domains* : ajoute le domaine, crée les enregistrements DKIM, SPF et
-   DMARC demandés, puis un expéditeur `no-reply@voicebank.exemple.org` (`EMAIL_EXPEDITEUR`).
+Le domaine `.app` n'accepte que le HTTPS (préchargé dans les navigateurs) : le site ne s'ouvre qu'une fois le
+certificat délivré par Render (automatique, quelques minutes après la vérification du DNS).
+
+1. **Render → voicebank-ui → Settings → Custom Domains** : ajoute `voicebank-analytics.app` (Render ajoute `www`
+   tout seul). **voicebank-api → Custom Domains** : ajoute `api.voicebank-analytics.app`.
+2. **Namecheap → Domain List → Manage → Advanced DNS** : supprime les enregistrements par défaut (`A` ou
+   *URL Redirect* sur `@`, `CNAME` sur `www`, tout `AAAA`), puis crée les trois enregistrements du tableau
+   (TTL : 1 min). Dans Render, clique **Verify** jusqu'à « Certificate issued ».
+3. **Render → voicebank-api → Environment** :
+   - `ALLOWED_ORIGINS` = `https://voicebank-analytics.app,https://www.voicebank-analytics.app,https://voicebank-ui.onrender.com`
+   - `URL_INTERFACE` = `https://voicebank-analytics.app`
+4. **Render → voicebank-ui → Environment** :
+   - `REACT_APP_API_URL` = `https://api.voicebank-analytics.app`
+   - `REACT_APP_DOMAINE_PRINCIPAL` = `voicebank-analytics.app` (l'ancienne adresse onrender.com y renvoie)
+   puis *Manual Deploy → Clear build cache & deploy*.
+5. **Adresses de retour** :
+   - Google Cloud → *Identifiants* → client OAuth : *Origines* `https://voicebank-analytics.app`,
+     *URI de redirection* `https://voicebank-analytics.app/connexion-sso` ;
+   - Microsoft Entra → *Authentification* → URI de redirection `https://voicebank-analytics.app/connexion-sso` ;
+   - NotchPay → *Webhooks* : `https://api.voicebank-analytics.app/paiements/notchpay/webhook` ;
+   - Cloudflare Turnstile → *Hostnames* : ajoute `voicebank-analytics.app` ;
+   - UptimeRobot : `https://api.voicebank-analytics.app/health/pret` ;
+   - GitHub → *Secrets* : `API_URL` = `https://api.voicebank-analytics.app` (tâches automatiques).
+6. **E-mails** : Brevo → *Senders, Domains & Dedicated IPs → Domains* → ajoute `voicebank-analytics.app`, crée
+   chez Namecheap les enregistrements DKIM, SPF et DMARC demandés, puis l'expéditeur
+   `no-reply@voicebank-analytics.app` (`EMAIL_EXPEDITEUR` sur Render et dans GitHub).
+7. **Application Android** : régénère-la sur PWABuilder avec l'adresse `https://voicebank-analytics.app` et
+   publie le nouveau `assetlinks.json` (voir « Application Android »).
 
 ## Connecteur : brancher les données d'une organisation
 
@@ -537,10 +550,10 @@ biais : l'adresse e-mail doit être celle d'un compte VoiceBank actif). Boutons 
 
 - **Google** : [console.cloud.google.com](https://console.cloud.google.com/apis/credentials) → *Créer des
   identifiants* → *ID client OAuth* → *Application Web*. URI de redirection autorisée :
-  `https://voicebank-ui.onrender.com/connexion-sso`. Renseigne `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` (API).
+  `https://voicebank-analytics.app/connexion-sso`. Renseigne `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` (API).
 - **Microsoft** : [portail Entra ID](https://entra.microsoft.com) → *Inscriptions d'applications* → *Nouvelle
   inscription* (comptes de n'importe quel annuaire d'organisation), plateforme **Web**, URI de redirection
-  `https://voicebank-ui.onrender.com/connexion-sso` ; puis *Certificats et secrets* → nouveau secret.
+  `https://voicebank-analytics.app/connexion-sso` ; puis *Certificats et secrets* → nouveau secret.
   Renseigne `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` et, pour n'accepter qu'un seul annuaire,
   `MICROSOFT_TENANT` (son identifiant ; par défaut `organizations`).
 
@@ -576,7 +589,7 @@ Intégration gratuite, sans abonnement : NotchPay prend seulement une commission
    identité (KYC) pour encaisser en réel.
 2. **Settings → API Keys** : copie la *Public key* (d'abord celle de **test**, qui contient `test_`)
    et la *Hash key* des webhooks.
-3. **Settings → Webhooks** : ajoute l'adresse `https://voicebank-api.onrender.com/paiements/notchpay/webhook`.
+3. **Settings → Webhooks** : ajoute l'adresse `https://api.voicebank-analytics.app/paiements/notchpay/webhook`.
 4. Render → voicebank-api → **Environment** : `NOTCHPAY_PUBLIC_KEY` et `NOTCHPAY_HASH_KEY`, puis Save.
 5. Teste un paiement en mode test, puis remplace par les clés **live**.
 
@@ -732,7 +745,7 @@ les lance à chaque modification (job « Bout en bout ») et garde captures et j
 - Session de 12 h au plus, renouvellements compris (`SESSION_MAX_HEURES`) : un jeton volé ne se prolonge pas.
 - Exports CSV protégés contre l'injection de formules ; fichiers Excel piégés (bombe de décompression) refusés.
 - **Anti-robot** (facultatif, gratuit) sur l'inscription à l'essai et le mot de passe oublié : crée un widget sur
-  [Cloudflare Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) (domaine `voicebank-ui.onrender.com`),
+  [Cloudflare Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) (domaines `voicebank-analytics.app` et `voicebank-ui.onrender.com`),
   puis renseigne `TURNSTILE_SECRET` (API) et `REACT_APP_TURNSTILE_SITE_KEY` (interface) sur Render. Sans ces clés,
   la vérification est simplement désactivée.
 - **Connexion vérifiée aux bases des organisations** : l'option SSL « Vérifié » contrôle le certificat du serveur
